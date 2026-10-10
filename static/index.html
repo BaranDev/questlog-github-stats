@@ -42,17 +42,21 @@
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
-fetch("/health").then((r) => r.json()).then((h) => {
-  for (const s of h.scenes) $("scene").add(new Option(s[0].toUpperCase() + s.slice(1), s));
+fetch("/health").then((r) => r.json()).then((h) => h.scenes || []).catch(() => []).then((scenes) => {
+  for (const s of scenes.length ? scenes : ["forest"]) $("scene").add(new Option(s[0].toUpperCase() + s.slice(1), s));
 });
 
 // Loads a card; while the server answers with the "inking" placeholder, shows it and retries every 5 s.
 async function load(img, url) {
-  for (let i = 0; i < 40; i++) {
-    const res = await fetch(url, { cache: "no-store" });
-    img.src = URL.createObjectURL(await res.blob());
-    if (res.headers.get("x-questlog") !== "placeholder") return;
-    await new Promise((r) => setTimeout(r, 5000));
+  try {
+    for (let i = 0; i < 40; i++) {
+      const res = await fetch(url, { cache: "no-store" });
+      img.src = URL.createObjectURL(await res.blob());
+      if (res.headers.get("x-questlog") !== "placeholder") return;
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  } catch (e) {
+    // network error: stop retrying
   }
 }
 
@@ -61,7 +65,7 @@ $("f").addEventListener("submit", (e) => {
   const user = $("user").value.trim(), scene = $("scene").value, base = location.origin;
   $("out").innerHTML = "";
   for (const box of document.querySelectorAll("input[name=w]:checked")) {
-    const w = box.value, q = `user=${encodeURIComponent(user)}&scene=${scene}`;
+    const w = box.value, q = `user=${encodeURIComponent(user)}&scene=${encodeURIComponent(scene)}`;
     const sec = document.createElement("section");
     sec.innerHTML = `<h2>${box.parentElement.textContent.trim()}</h2><div class="pair"><img alt="day"><img alt="night"></div><textarea readonly></textarea>`;
     const [day, night] = sec.querySelectorAll("img");
