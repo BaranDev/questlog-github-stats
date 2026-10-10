@@ -72,6 +72,21 @@ $("f").addEventListener("submit", (e) => {
   <source media="(prefers-color-scheme: dark)" srcset="${base}/${w}?${q}&time=night">
   <img alt="${user}'s ${w}" src="${base}/${w}?${q}&time=day">
 </picture>`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Copy";
+    btn.addEventListener("click", async () => {
+      const ta = sec.querySelector("textarea");
+      try {
+        await navigator.clipboard.writeText(ta.value);
+      } catch {
+        ta.select();
+        document.execCommand("copy");
+      }
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+    });
+    sec.append(btn);
     $("out").append(sec);
   }
 });
