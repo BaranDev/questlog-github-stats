@@ -1,0 +1,18 @@
+services:
+  questlog:
+    build: .
+    container_name: questlog
+    restart: unless-stopped
+    expose: ["8080"]
+    networks: [edge]
+    mem_limit: 256m
+    env_file: .env
+    volumes:
+      - questlog-data:/data
+
+volumes:
+  questlog-data: {}
+
+networks:
+  edge:
+    external: true
