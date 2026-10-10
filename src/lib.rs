@@ -5,6 +5,7 @@ pub mod encode;
 pub mod github;
 pub mod queue;
 pub mod raster;
+pub mod scene;
 pub mod stats;
 pub mod store;
 pub mod text;
