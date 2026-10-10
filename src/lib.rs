@@ -3,6 +3,7 @@ pub mod canvas;
 pub mod dates;
 pub mod encode;
 pub mod raster;
+pub mod stats;
 pub mod text;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
