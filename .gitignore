@@ -1,0 +1,4 @@
+# local only: design docs and dev notes
+docs/
+.dev/
+/target/
