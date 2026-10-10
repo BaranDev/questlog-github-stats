@@ -1,5 +1,6 @@
 //! HTTP: the card routes, the preview page and /health. Every card response is a 200 PNG, because a non-200
 //! shows as a broken image on GitHub. The X-Questlog header says which kind it is.
+use crate::canvas::Image;
 use crate::dates::now_secs;
 use crate::encode::encode;
 use crate::params::{self, Request};
@@ -14,7 +15,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Semaphore;
 
 pub const READY: &str = "public, max-age=43200";
@@ -98,8 +99,16 @@ fn png(bytes: Vec<u8>, cache: &'static str, kind: &'static str) -> Response {
     (headers, bytes).into_response()
 }
 
+/// A render or encode failure still answers 200 with a PNG, because anything else is a broken image on GitHub.
+/// The body is a plain dark panel that does not depend on the renderer.
 fn failed() -> Response {
-    (StatusCode::INTERNAL_SERVER_ERROR, "render failed").into_response()
+    static FALLBACK: OnceLock<Vec<u8>> = OnceLock::new();
+    let bytes = FALLBACK.get_or_init(|| {
+        let mut img = Image::new(320, 128);
+        img.px.fill([0x1C, 0x12, 0x0A, 0xFF]);
+        encode(&[img]).unwrap_or_default()
+    });
+    png(bytes.clone(), NO_CACHE, "error")
 }
 
 async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats) -> Response {
@@ -225,6 +234,18 @@ mod tests {
         let camo = [ip, ("user-agent", "github-camo (876543)")];
         assert_eq!(get(&format!("{base}/stats?user=a3"), &camo).await.0, "placeholder");
         assert_eq!(get(&format!("{base}/stats?user=a4"), &camo).await.0, "placeholder");
+    }
+
+    #[tokio::test]
+    async fn render_failure_is_a_fallback_image() {
+        let res = failed();
+        assert_eq!(res.status(), 200);
+        let h = |n: &str| res.headers().get(n).unwrap().to_str().unwrap().to_string();
+        assert_eq!(h("content-type"), "image/png");
+        assert_eq!(h("cache-control"), NO_CACHE);
+        assert_eq!(h("x-questlog"), "error");
+        let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        assert!(body.starts_with(b"\x89PNG"));
     }
 
     #[tokio::test]
