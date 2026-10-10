@@ -19,6 +19,8 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::Semaphore;
 
 pub const READY: &str = "public, max-age=43200";
+/// Stale cards (a refresh is queued) must not sit in edge caches for hours.
+pub const STALE: &str = "public, max-age=600";
 pub const NO_CACHE: &str = "no-cache";
 const INDEX: &str = include_str!("../static/index.html");
 const UNKNOWN: &str = "No adventurer by that name";
@@ -29,7 +31,7 @@ pub struct App<F: Fetcher> {
     pub assets: Arc<Assets>,
     pub store: Arc<Store>,
     pub queue: Queue<F>,
-    pub renders: Semaphore,
+    pub renders: Arc<Semaphore>,
 }
 
 pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
@@ -75,7 +77,7 @@ async fn card<F: Fetcher>(
         if !fresh {
             app.queue.enqueue(&req.user, None); // a refresh of a known user never counts against an IP
         }
-        return draw(&app, req, stats).await;
+        return draw(&app, req, stats, fresh).await;
     }
     if app.store.is_unknown(&req.user, now) {
         return message(&app, w, req.look, UNKNOWN.into(), "unknown").await;
@@ -111,27 +113,38 @@ fn failed() -> Response {
     png(bytes.clone(), NO_CACHE, "error")
 }
 
-async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats) -> Response {
-    let _permit = app.renders.acquire().await;
-    let assets = app.assets.clone();
+/// Runs a render on the blocking pool. The permit moves into the closure, so the 2-render cap holds until the
+/// render really ends, even when the client has already gone away.
+async fn render_png<F: Fetcher>(
+    app: &Arc<App<F>>,
+    cache: &'static str,
+    kind: &'static str,
+    job: impl FnOnce() -> Option<Vec<u8>> + Send + 'static,
+) -> Response {
+    let Ok(permit) = app.renders.clone().acquire_owned().await else { return failed() };
     let out = tokio::task::spawn_blocking(move || {
-        let frames = widgets::render(&assets, req.widget, &req.look, &stats)?;
-        encode(&frames).ok()
+        let _permit = permit;
+        job()
     });
     match out.await.ok().flatten() {
-        Some(bytes) => png(bytes, READY, "card"),
+        Some(bytes) => png(bytes, cache, kind),
         None => failed(),
     }
 }
 
-async fn message<F: Fetcher>(app: &Arc<App<F>>, w: Widget, look: Look, msg: String, kind: &'static str) -> Response {
-    let _permit = app.renders.acquire().await;
+async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, fresh: bool) -> Response {
     let assets = app.assets.clone();
-    let out = tokio::task::spawn_blocking(move || encode(&[widgets::message(&assets, w, &look, &msg)?]).ok());
-    match out.await.ok().flatten() {
-        Some(bytes) => png(bytes, NO_CACHE, kind),
-        None => failed(),
-    }
+    let cache = if fresh { READY } else { STALE };
+    render_png(app, cache, "card", move || {
+        let frames = widgets::render(&assets, req.widget, &req.look, &stats)?;
+        encode(&frames).ok()
+    })
+    .await
+}
+
+async fn message<F: Fetcher>(app: &Arc<App<F>>, w: Widget, look: Look, msg: String, kind: &'static str) -> Response {
+    let assets = app.assets.clone();
+    render_png(app, NO_CACHE, kind, move || encode(&[widgets::message(&assets, w, &look, &msg)?]).ok()).await
 }
 
 #[cfg(test)]
@@ -159,7 +172,7 @@ mod tests {
         let store = Arc::new(Store::open(temp_dir("srv")).unwrap());
         let queue = Queue::new(Fixed, store.clone(), cfg);
         queue.start();
-        let app = Arc::new(App { assets: Arc::new(Assets::embedded().unwrap()), store, queue, renders: Semaphore::new(2) });
+        let app = Arc::new(App { assets: Arc::new(Assets::embedded().unwrap()), store, queue, renders: Arc::new(Semaphore::new(2)) });
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
         let r = router(app.clone());
@@ -221,7 +234,7 @@ mod tests {
         let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
         app.store.put(derive(&RawUser { login: "old".into(), ..Default::default() }, 0, 1)).unwrap();
         let (kind, cache, _) = get(&format!("{base}/stats?user=old"), &[]).await;
-        assert_eq!((kind.as_str(), cache.as_str()), ("card", READY));
+        assert_eq!((kind.as_str(), cache.as_str()), ("card", STALE));
         assert_eq!(app.queue.len(), 1, "refresh queued");
     }
 
@@ -254,5 +267,46 @@ mod tests {
         let v: serde_json::Value = reqwest::get(format!("{base}/health")).await.unwrap().json().await.unwrap();
         assert_eq!(v["ok"], true);
         assert_eq!(v["scenes"], serde_json::json!(["forest"]));
+    }
+
+    #[tokio::test]
+    async fn hostile_text_renders_fast() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        app.store.put(derive(&RawUser { login: "kanji".into(), ..Default::default() }, 0, now_secs())).unwrap();
+        let han = "漢".repeat(60);
+        let labels: Vec<String> = ["level", "commits", "prs", "repos", "stars", "issues", "reviews", "followers", "contributions"]
+            .iter()
+            .map(|k| format!("{k}:{han}"))
+            .collect();
+        let url = format!("{base}/stats?user=kanji&title={han}&subtitle={han}&labels={}", labels.join(","));
+        let start = std::time::Instant::now();
+        let (kind, _, _) = get(&url, &[]).await;
+        assert_eq!(kind, "card");
+        assert!(start.elapsed() < std::time::Duration::from_secs(1), "took {:?}", start.elapsed());
+    }
+
+    #[tokio::test]
+    async fn permit_is_held_until_the_render_ends() {
+        let (_, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        let held = app.renders.clone().acquire_owned().await.unwrap();
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let a = app.clone();
+        let handle = tokio::spawn(async move {
+            render_png(&a, READY, "card", move || {
+                rx.recv().ok();
+                None
+            })
+            .await
+        });
+        drop(held);
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert_eq!(app.renders.available_permits(), 1, "render holds one permit");
+        handle.abort(); // the client disconnects
+        let _ = handle.await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert_eq!(app.renders.available_permits(), 1, "permit outlives the dropped handler");
+        tx.send(()).unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert_eq!(app.renders.available_permits(), 2, "released when the render ends");
     }
 }

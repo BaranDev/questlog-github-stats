@@ -32,7 +32,7 @@ async fn main() -> Result<(), questlog::BoxError> {
         }
     });
 
-    let app = Arc::new(App { assets: Arc::new(Assets::embedded()?), store, queue, renders: Semaphore::new(2) });
+    let app = Arc::new(App { assets: Arc::new(Assets::embedded()?), store, queue, renders: Arc::new(Semaphore::new(2)) });
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     eprintln!("questlog listening on :{port}");
     axum::serve(listener, router(app)).with_graceful_shutdown(shutdown()).await?;
