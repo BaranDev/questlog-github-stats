@@ -37,6 +37,15 @@ fn goldens() {
     }
     let msg = widgets::message(&a, Widget::Stats, &Look::default(), "The scribe is inking your sheet... ready in ~10 s");
     cases.push(("forest-stats-placeholder".into(), vec![msg.unwrap()]));
+    for (name, text) in [
+        ("forest-stats-unknown", "No adventurer by that name"),
+        ("forest-stats-busy", "The scriptorium is busy, try again soon"),
+        ("forest-stats-failed", "The road is closed"),
+        ("forest-stats-bad-scene", "Unknown scene 'castel'"),
+    ] {
+        let card = widgets::message(&a, Widget::Stats, &Look::default(), text);
+        cases.push((name.into(), vec![card.unwrap()]));
+    }
 
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/golden-actual");
