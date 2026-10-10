@@ -49,7 +49,7 @@ fn goldens() {
 
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/golden-actual");
-    let update = std::env::var("UPDATE_GOLDENS").is_ok();
+    let update = std::env::var("UPDATE_GOLDENS").as_deref() == Ok("1");
     std::fs::create_dir_all(&dir).unwrap();
     let mut failed = Vec::new();
     for (name, frames) in cases {
