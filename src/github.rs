@@ -57,7 +57,7 @@ impl<T: Transport> GitHub<T> {
                 let reset_at = quota(&body).map_or(now_secs() + 3600, |q| q.reset_at);
                 return Err(FetchError::RateLimited { reset_at });
             }
-            return Err(FetchError::Transient(format!("graphql: {}", errs[0]["message"])));
+            return Err(FetchError::Transient(format!("graphql: {}", errs.first().map(|e| e["message"].to_string()).unwrap_or_default())));
         }
         if !body["data"].is_object() {
             return Err(FetchError::Transient("graphql: response without data".into()));
@@ -259,6 +259,8 @@ mod tests {
         assert!(matches!(gh(vec![rl]).0.raw("a").await, Err(FetchError::RateLimited { .. })));
         let other = json!({"errors": [{"type": "SOMETHING", "message": "odd"}]});
         assert!(matches!(gh(vec![other]).0.raw("a").await, Err(FetchError::Transient(_))));
+        let empty = json!({"errors": []});
+        assert!(matches!(gh(vec![empty]).0.raw("a").await, Err(FetchError::Transient(_))));
     }
 
     #[tokio::test]
