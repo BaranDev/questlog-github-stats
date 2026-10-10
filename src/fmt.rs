@@ -35,15 +35,19 @@ pub fn fit(font: &Font, s: &str, max_w: i64) -> String {
     if font.length(s) <= max_w {
         return s.to_string();
     }
-    let mut chars: Vec<char> = s.chars().collect();
-    while !chars.is_empty() && font.length(&format!("{}...", chars.iter().collect::<String>())) > max_w {
-        chars.pop();
+    let chars: Vec<char> = s.chars().collect();
+    // prefix[k] = advance of the first k characters; keep the longest prefix that still fits with "..." after it.
+    let dots = font.advance('.') * 3;
+    let mut prefix = vec![0i64];
+    for &c in &chars {
+        prefix.push(prefix.last().unwrap() + font.advance(c));
     }
-    if chars.is_empty() {
+    let keep = (0..=chars.len()).rev().find(|&k| (prefix[k] + dots) / 64 <= max_w).unwrap_or(0);
+    if keep == 0 {
         // Not even "..." fits: keep as many dots as do (possibly none).
         return (0..3).rev().map(|n| ".".repeat(n)).find(|d| font.length(d) <= max_w).unwrap_or_default();
     }
-    format!("{}...", chars.iter().collect::<String>().trim_end())
+    format!("{}...", chars[..keep].iter().collect::<String>().trim_end())
 }
 
 /// Greedy word wrap into at most `max_lines`; whatever doesn't fit lands on the last line, trimmed with "...".

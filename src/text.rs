@@ -8,8 +8,8 @@ use skrifa::prelude::{LocationRef, Size};
 use skrifa::raw::TableProvider;
 use skrifa::{FontRef, MetadataProvider};
 use crate::BoxError;
-use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 /// FreeType's PIXEL(): 26.6 to whole pixels, rounding.
 fn pixel(x: i64) -> i64 {
@@ -41,10 +41,12 @@ pub struct Font {
     hinter: HintingInstance,
     high_precision: bool,
     ascender: i64,
-    cache: HashMap<char, Glyph>, // filled at load, read-only afterwards: one Font serves every render thread
+    // Keyed by glyph id: every character the font can't draw shares the .notdef entry, so the cache is bounded by the
+    // font's glyph count. One Font serves every render thread.
+    cache: RwLock<HashMap<u32, Arc<Glyph>>>,
 }
 
-/// Characters rasterized once at load. Anything else is rasterized on demand and not kept.
+/// Characters rasterized once at load; anything else is rasterized on first use and then cached by glyph id.
 const PRELOAD: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
 impl Font {
@@ -57,24 +59,30 @@ impl Font {
         let ascender = font.hhea()?.ascender().to_i16() as f64 * size as f64 / font.head()?.units_per_em() as f64;
         let ascender = if font.cff().is_ok() { ascender.ceil() } else { ascender.round() } as i64;
         let high_precision = size < 24; // the drivers set FT_OUTLINE_HIGH_PRECISION below 24 ppem
-        let mut f = Font { data, hinter, high_precision, ascender, cache: HashMap::new() };
+        let f = Font { data, hinter, high_precision, ascender, cache: RwLock::new(HashMap::new()) };
         for ch in PRELOAD.chars() {
-            let g = f.load_glyph(ch);
-            f.cache.insert(ch, g);
+            f.glyph(ch);
         }
         Ok(f)
     }
 
-    fn glyph(&self, ch: char) -> Cow<'_, Glyph> {
-        match self.cache.get(&ch) {
-            Some(g) => Cow::Borrowed(g),
-            None => Cow::Owned(self.load_glyph(ch)),
-        }
+    fn glyph_id(&self, ch: char) -> u32 {
+        let font = FontRef::new(self.data).expect("font parsed at load");
+        font.charmap().map(ch).unwrap_or_default().to_u32()
     }
 
-    fn load_glyph(&self, ch: char) -> Glyph {
+    fn glyph(&self, ch: char) -> Arc<Glyph> {
+        let gid = self.glyph_id(ch);
+        if let Some(g) = self.cache.read().expect("glyph cache lock").get(&gid) {
+            return g.clone();
+        }
+        let g = Arc::new(self.load_glyph(gid));
+        self.cache.write().expect("glyph cache lock").entry(gid).or_insert(g).clone()
+    }
+
+    fn load_glyph(&self, gid: u32) -> Glyph {
         let font = FontRef::new(self.data).expect("font parsed at load");
-        let gid = font.charmap().map(ch).unwrap_or_default();
+        let gid = skrifa::GlyphId::new(gid);
         let mut pen = ContourPen::default();
         let mut advance = 0;
         if let Some(outline) = font.outline_glyphs().get(gid) {
@@ -119,12 +127,17 @@ impl Font {
 
     /// `ImageDraw.textlength`: the sum of the advances.
     pub fn length(&self, text: &str) -> i64 {
-        text.chars().map(|c| self.glyph(c).advance).sum::<i64>() / 64
+        text.chars().map(|c| self.advance(c)).sum::<i64>() / 64
+    }
+
+    /// One character's advance in 26.6 pixels (always a whole number of pixels).
+    pub fn advance(&self, ch: char) -> i64 {
+        self.glyph(ch).advance
     }
 
     /// `FreeTypeFont.getmask2(text, "1")` with the default "la" anchor (Pillow 12 `font_render`).
     pub fn render(&self, text: &str) -> TextMask {
-        let glyphs: Vec<Cow<'_, Glyph>> = text.chars().map(|c| self.glyph(c)).collect();
+        let glyphs: Vec<Arc<Glyph>> = text.chars().map(|c| self.glyph(c)).collect();
         // bounding_box_and_anchors: glyph control boxes plus the pen line from 0 to the end
         let (mut pos, mut x_min, mut x_max, mut y_min, mut y_max) = (0, 0, 0, 0, 0);
         for g in &glyphs {
@@ -269,6 +282,19 @@ mod tests {
             let got: String = (0..9).map(|x| if m.on[y * 9 + x] { '#' } else { '.' }).collect();
             assert_eq!(&got, row, "row {y}");
         }
+    }
+
+    #[test]
+    fn cached_glyph_matches_fresh_rasterization() {
+        let t = Font::from_bytes(TINY, 8).unwrap();
+        let gid = t.glyph_id('é');
+        let fresh = t.load_glyph(gid);
+        let (a, b) = (t.render("é漢"), t.render("é漢"));
+        assert_eq!((a.width, a.height, &a.on), (b.width, b.height, &b.on));
+        let cached = t.glyph('é');
+        assert_eq!((cached.advance, cached.cbox, &cached.bits), (fresh.advance, fresh.cbox, &fresh.bits));
+        assert_eq!(t.glyph_id('漢'), t.glyph_id('字'), "undrawable characters share .notdef");
+        assert_eq!(t.glyph_id('漢'), 0);
     }
 
     #[test]
