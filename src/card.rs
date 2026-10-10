@@ -169,6 +169,15 @@ mod tests {
     }
 
     #[test]
+    fn rows_with_a_huge_value_never_overlap() {
+        let a = Assets::embedded().unwrap();
+        let mut c = Card::new(&a, a.scene("forest").unwrap(), "stats", false).unwrap();
+        let label = c.row("Commits", "123,456,789", 0, 0, 30);
+        let f = &a.text_font;
+        assert!(label.is_empty() || f.length(&label) + 2 + f.length("123,456,789") <= 30, "{label:?}");
+    }
+
+    #[test]
     fn frames_use_only_scene_colors() {
         let a = Assets::embedded().unwrap();
         let s = a.scene("forest").unwrap();

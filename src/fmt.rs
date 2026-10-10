@@ -39,6 +39,10 @@ pub fn fit(font: &Font, s: &str, max_w: i64) -> String {
     while !chars.is_empty() && font.length(&format!("{}...", chars.iter().collect::<String>())) > max_w {
         chars.pop();
     }
+    if chars.is_empty() {
+        // Not even "..." fits: keep as many dots as do (possibly none).
+        return (0..3).rev().map(|n| ".".repeat(n)).find(|d| font.length(d) <= max_w).unwrap_or_default();
+    }
     format!("{}...", chars.iter().collect::<String>().trim_end())
 }
 
@@ -96,6 +100,14 @@ mod tests {
         let t = fit(&f, "a-very-long-repository-name-that-cannot-fit", 60);
         assert!(t.ends_with("...") && f.length(&t) <= 60);
         assert_eq!(fit(&f, "short", 60), "short");
+        assert_eq!(fit(&f, "abcdef", 0), "");
+        assert_eq!(fit(&f, "", -5), "");
+        for w in 0..12 {
+            let t = fit(&f, "abcdef", w);
+            assert!(f.length(&t) <= w.max(0), "w={w} gave {t:?}");
+        }
+        let one = f.length(".");
+        assert_eq!(fit(&f, "abcdef", one), ".");
         let lines = wrap(&f, "the scribe is inking your sheet ready in about forty seconds", 60, 3);
         assert!(lines.len() <= 3 && lines.iter().all(|l| f.length(l) <= 60), "{lines:?}");
         assert!(lines[2].ends_with("..."), "overflow is trimmed on the last line");
