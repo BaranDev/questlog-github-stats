@@ -1,7 +1,9 @@
 //! questlog: pixel-art GitHub profile cards.
 pub mod canvas;
+pub mod card;
 pub mod dates;
 pub mod encode;
+pub mod fmt;
 pub mod github;
 pub mod queue;
 pub mod raster;
