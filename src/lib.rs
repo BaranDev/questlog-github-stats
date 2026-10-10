@@ -9,6 +9,7 @@ pub mod github;
 pub mod queue;
 pub mod raster;
 pub mod scene;
+pub mod server;
 pub mod stats;
 pub mod store;
 pub mod text;
