@@ -1,0 +1,269 @@
+//! GitHub GraphQL client: a paged profile query and one aliased query for every contribution year, turned into
+//! derived stats for the queue.
+use crate::BoxError;
+use crate::dates::{civil_from_days, day_of, now_secs, parse_date, parse_utc};
+use crate::queue::{FetchError, Fetched, Fetcher, Quota};
+use crate::stats::{RawRepo, RawUser, RawYear, derive};
+use serde_json::{Value, json};
+use std::future::Future;
+
+pub trait Transport: Send + Sync + 'static {
+    fn post(&self, body: Value) -> impl Future<Output = Result<Value, FetchError>> + Send;
+}
+
+const PROFILE: &str = "query($login: String!, $after: String) {
+  rateLimit { remaining resetAt }
+  user(login: $login) {
+    login createdAt
+    followers { totalCount } pullRequests { totalCount } issues { totalCount }
+    repositories(first: 100, after: $after, ownerAffiliations: OWNER, isFork: false, privacy: PUBLIC) {
+      totalCount pageInfo { hasNextPage endCursor }
+      nodes { stargazerCount languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name } } } }
+    }
+  }
+}";
+const MAX_PAGES: usize = 10; // 1,000 repos
+
+/// One aliased contributionsCollection per year: a collection may span one year at most.
+fn years_query(first: i64, last: i64) -> String {
+    let parts: String = (first..=last)
+        .map(|y| {
+            format!(
+                "y{y}: contributionsCollection(from: \"{y}-01-01T00:00:00Z\", to: \"{y}-12-31T23:59:59Z\") {{ \
+                 totalCommitContributions totalPullRequestReviewContributions \
+                 contributionCalendar {{ weeks {{ contributionDays {{ date contributionCount }} }} }} }}\n"
+            )
+        })
+        .collect();
+    format!("query($login: String!) {{ rateLimit {{ remaining resetAt }} user(login: $login) {{\n{parts}}} }}")
+}
+
+pub struct GitHub<T> {
+    t: T,
+}
+
+impl<T: Transport> GitHub<T> {
+    pub fn new(t: T) -> Self {
+        GitHub { t }
+    }
+
+    async fn query(&self, query: &str, vars: Value) -> Result<(Value, Option<Quota>), FetchError> {
+        let body = self.t.post(json!({ "query": query, "variables": vars })).await?;
+        if let Some(errs) = body["errors"].as_array() {
+            if errs.iter().any(|e| e["type"] == "NOT_FOUND") {
+                return Err(FetchError::NotFound);
+            }
+            if errs.iter().any(|e| e["type"] == "RATE_LIMITED") {
+                let reset_at = quota(&body).map_or(now_secs() + 3600, |q| q.reset_at);
+                return Err(FetchError::RateLimited { reset_at });
+            }
+            return Err(FetchError::Transient(format!("graphql: {}", errs[0]["message"])));
+        }
+        if body["data"]["user"].is_null() {
+            return Err(FetchError::NotFound);
+        }
+        Ok((body["data"]["user"].clone(), quota(&body)))
+    }
+
+    pub async fn raw(&self, login: &str) -> Result<(RawUser, Option<Quota>), FetchError> {
+        let (mut user, mut after, mut repos) = (Value::Null, Value::Null, Vec::new());
+        for _ in 0..MAX_PAGES {
+            let (page, _) = self.query(PROFILE, json!({"login": login, "after": after})).await?;
+            let conn = &page["repositories"];
+            repos.extend(conn["nodes"].as_array().into_iter().flatten().map(repo));
+            let more = conn["pageInfo"]["hasNextPage"].as_bool().unwrap_or(false);
+            after = conn["pageInfo"]["endCursor"].clone();
+            if user.is_null() {
+                user = page;
+            }
+            if !more {
+                break;
+            }
+        }
+        let first: i64 = user["createdAt"]
+            .as_str()
+            .and_then(|s| s.get(..4))
+            .and_then(|y| y.parse().ok())
+            .ok_or_else(|| FetchError::Transient("profile without createdAt".into()))?;
+        let last = civil_from_days(day_of(now_secs())).0;
+        let (cal, quota) = self.query(&years_query(first, last), json!({"login": login})).await?;
+        let raw = RawUser {
+            login: user["login"].as_str().unwrap_or(login).to_string(),
+            followers: count(&user["followers"]),
+            prs: count(&user["pullRequests"]),
+            issues: count(&user["issues"]),
+            repo_count: count(&user["repositories"]),
+            repos,
+            years: (first..=last).map(|y| year(&cal[format!("y{y}")])).collect(),
+        };
+        Ok((raw, quota))
+    }
+}
+
+impl<T: Transport> Fetcher for GitHub<T> {
+    fn fetch(&self, login: &str) -> impl Future<Output = Result<Fetched, FetchError>> + Send {
+        async move {
+            let (raw, quota) = self.raw(login).await?;
+            let now = now_secs();
+            Ok(Fetched { stats: derive(&raw, day_of(now), now), quota })
+        }
+    }
+}
+
+fn count(v: &Value) -> u64 {
+    v["totalCount"].as_u64().unwrap_or(0)
+}
+
+fn repo(n: &Value) -> RawRepo {
+    let edges = n["languages"]["edges"].as_array().into_iter().flatten();
+    RawRepo {
+        stars: n["stargazerCount"].as_u64().unwrap_or(0),
+        languages: edges.filter_map(|e| Some((e["node"]["name"].as_str()?.to_string(), e["size"].as_u64()?))).collect(),
+    }
+}
+
+fn year(c: &Value) -> RawYear {
+    let days = c["contributionCalendar"]["weeks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|w| w["contributionDays"].as_array().into_iter().flatten())
+        .filter_map(|d| Some((parse_date(d["date"].as_str()?)?, d["contributionCount"].as_u64()?)));
+    RawYear {
+        commits: c["totalCommitContributions"].as_u64().unwrap_or(0),
+        reviews: c["totalPullRequestReviewContributions"].as_u64().unwrap_or(0),
+        days: days.collect(),
+    }
+}
+
+fn quota(body: &Value) -> Option<Quota> {
+    let r = &body["data"]["rateLimit"];
+    Some(Quota { remaining: r["remaining"].as_u64()?, reset_at: parse_utc(r["resetAt"].as_str()?)? })
+}
+
+/// The real transport. The token goes only into the Authorization header and is never logged.
+pub struct Http {
+    client: reqwest::Client,
+    token: String,
+}
+
+impl Http {
+    pub fn new(token: String) -> Result<Http, BoxError> {
+        let client = reqwest::Client::builder()
+            .user_agent("questlog-github-stats")
+            .timeout(std::time::Duration::from_secs(20))
+            .build()?;
+        Ok(Http { client, token })
+    }
+}
+
+impl Transport for Http {
+    fn post(&self, body: Value) -> impl Future<Output = Result<Value, FetchError>> + Send {
+        async move {
+            let res = self
+                .client
+                .post("https://api.github.com/graphql")
+                .bearer_auth(&self.token)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| FetchError::Transient(e.to_string()))?;
+            let status = res.status();
+            let reset = res.headers().get("x-ratelimit-reset").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok());
+            if status == 403 || status == 429 {
+                return Err(FetchError::RateLimited { reset_at: reset.unwrap_or(now_secs() + 60) });
+            }
+            if !status.is_success() {
+                return Err(FetchError::Transient(format!("http {status}")));
+            }
+            res.json().await.map_err(|e| FetchError::Transient(e.to_string()))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct Script(Mutex<VecDeque<Value>>, Mutex<Vec<Value>>);
+
+    impl Transport for std::sync::Arc<Script> {
+        fn post(&self, body: Value) -> impl Future<Output = Result<Value, FetchError>> + Send {
+            self.1.lock().unwrap().push(body);
+            let r = self.0.lock().unwrap().pop_front().ok_or(FetchError::Transient("unscripted".into()));
+            async move { r }
+        }
+    }
+
+    fn gh(responses: Vec<Value>) -> (GitHub<std::sync::Arc<Script>>, std::sync::Arc<Script>) {
+        let s = std::sync::Arc::new(Script::default());
+        s.0.lock().unwrap().extend(responses);
+        (GitHub::new(s.clone()), s)
+    }
+
+    fn this_year() -> i64 {
+        civil_from_days(day_of(now_secs())).0
+    }
+
+    fn profile(after_next: bool, stars: u64) -> Value {
+        json!({"data": {"rateLimit": {"remaining": 4999, "resetAt": "2026-10-11T12:00:00Z"}, "user": {
+            "login": "OctoCat", "createdAt": format!("{}-03-01T00:00:00Z", this_year() - 1),
+            "followers": {"totalCount": 3}, "pullRequests": {"totalCount": 4}, "issues": {"totalCount": 5},
+            "repositories": {"totalCount": 2, "pageInfo": {"hasNextPage": after_next, "endCursor": "c1"},
+                "nodes": [{"stargazerCount": stars, "languages": {"edges": [{"size": 10, "node": {"name": "Rust"}}]}}]}}}})
+    }
+
+    fn years() -> Value {
+        let y = this_year();
+        let cal = |date: String, n: u64| json!({"totalCommitContributions": n, "totalPullRequestReviewContributions": 1,
+            "contributionCalendar": {"weeks": [{"contributionDays": [{"date": date, "contributionCount": n}]}]}});
+        json!({"data": {"rateLimit": {"remaining": 4990, "resetAt": "2026-10-11T12:00:00Z"}, "user": {
+            format!("y{}", y - 1): cal(format!("{}-06-01", y - 1), 2),
+            format!("y{y}"): cal(format!("{y}-06-01"), 3)}}})
+    }
+
+    #[tokio::test]
+    async fn pages_repos_and_reads_every_year() {
+        let (g, script) = gh(vec![profile(true, 7), profile(false, 1), years()]);
+        let (raw, quota) = g.raw("octocat").await.unwrap();
+        assert_eq!(raw.repos.len(), 2, "both pages");
+        assert_eq!((raw.followers, raw.prs, raw.issues, raw.repo_count), (3, 4, 5, 2));
+        assert_eq!(raw.years.len(), 2);
+        assert_eq!(quota.unwrap().remaining, 4990);
+        let sent = script.1.lock().unwrap();
+        assert_eq!(sent[1]["variables"]["after"], "c1", "second page asks after the cursor");
+        let q = sent[2]["query"].as_str().unwrap();
+        assert!(q.contains(&format!("y{}:", this_year() - 1)) && q.contains(&format!("y{}:", this_year())));
+    }
+
+    #[tokio::test]
+    async fn fetch_derives_stats() {
+        let (g, _) = gh(vec![profile(false, 7), years()]);
+        let f = g.fetch("octocat").await.unwrap();
+        assert_eq!(f.stats.login, "octocat");
+        assert_eq!((f.stats.commits, f.stats.reviews, f.stats.contributions, f.stats.stars), (5, 2, 5, 7));
+        assert_eq!(f.stats.class, "Blacksmith");
+    }
+
+    #[tokio::test]
+    async fn errors_map_to_fetch_errors() {
+        let nf = json!({"data": {"user": null}, "errors": [{"type": "NOT_FOUND", "message": "no user"}]});
+        assert!(matches!(gh(vec![nf]).0.raw("ghost").await, Err(FetchError::NotFound)));
+        let rl = json!({"errors": [{"type": "RATE_LIMITED", "message": "slow down"}]});
+        assert!(matches!(gh(vec![rl]).0.raw("a").await, Err(FetchError::RateLimited { .. })));
+        let other = json!({"errors": [{"type": "SOMETHING", "message": "odd"}]});
+        assert!(matches!(gh(vec![other]).0.raw("a").await, Err(FetchError::Transient(_))));
+    }
+
+    /// Manual: `GITHUB_TOKEN=$(gh auth token) cargo test --lib github -- --ignored`
+    #[tokio::test]
+    #[ignore]
+    async fn live_barandev() {
+        let g = GitHub::new(Http::new(std::env::var("GITHUB_TOKEN").unwrap()).unwrap());
+        let f = g.fetch("BaranDev").await.unwrap();
+        eprintln!("{:?} quota {:?}", f.stats, f.quota.map(|q| q.remaining));
+    }
+}
