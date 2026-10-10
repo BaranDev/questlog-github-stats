@@ -2,6 +2,7 @@
 pub mod canvas;
 pub mod dates;
 pub mod encode;
+pub mod queue;
 pub mod raster;
 pub mod stats;
 pub mod store;
