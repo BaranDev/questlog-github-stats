@@ -59,6 +59,9 @@ impl<T: Transport> GitHub<T> {
             }
             return Err(FetchError::Transient(format!("graphql: {}", errs[0]["message"])));
         }
+        if !body["data"].is_object() {
+            return Err(FetchError::Transient("graphql: response without data".into()));
+        }
         if body["data"]["user"].is_null() {
             return Err(FetchError::NotFound);
         }
@@ -258,7 +261,14 @@ mod tests {
         assert!(matches!(gh(vec![other]).0.raw("a").await, Err(FetchError::Transient(_))));
     }
 
-    /// Manual: `GITHUB_TOKEN=$(gh auth token) cargo test --lib github -- --ignored`
+    #[tokio::test]
+    async fn body_without_data_is_transient() {
+        for body in [json!({}), json!({"message": "odd"})] {
+            assert!(matches!(gh(vec![body]).0.raw("a").await, Err(FetchError::Transient(_))));
+        }
+    }
+
+    /// Manual:`GITHUB_TOKEN=$(gh auth token) cargo test --lib github -- --ignored`
     #[tokio::test]
     #[ignore]
     async fn live_barandev() {
