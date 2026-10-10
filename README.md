@@ -4,7 +4,7 @@ Pixel-art GitHub profile cards with a medieval feel. Paste one line into your pr
 
 | Card | Shows |
 |---|---|
-| `/stats` | level (from lifetime contributions), commits, PRs, repos, stars, issues, reviews, followers |
+| `/stats` | level (from lifetime contributions), commits, PRs, repos, stars, issues, reviews, followers, contributions |
 | `/languages` | your top five languages |
 | `/streak` | current and best streak, total contributions |
 
