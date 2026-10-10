@@ -4,6 +4,7 @@ pub mod dates;
 pub mod encode;
 pub mod raster;
 pub mod stats;
+pub mod store;
 pub mod text;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
