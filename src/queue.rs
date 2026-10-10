@@ -177,6 +177,9 @@ impl<F: Fetcher> Queue<F> {
                     _ => {
                         s.paused_until = None;
                         if let Some(login) = s.pending.pop_front() {
+                            if !s.pending.is_empty() {
+                                self.inner.notify.notify_one(); // cascade: a sleeping worker takes the next one
+                            }
                             return login;
                         }
                         None
@@ -193,6 +196,22 @@ impl<F: Fetcher> Queue<F> {
     fn finish(&self, login: &str, result: Result<Fetched, FetchError>, took: Duration) {
         let now = Instant::now();
         let cfg = &self.inner.cfg;
+        // The store is written before the login leaves `active`, so a request in between never re-enqueues it.
+        let result = match result {
+            Ok(mut f) => {
+                f.stats.login = login.to_string(); // keyed by the requested login, or a renamed account refetches forever
+                if let Err(e) = self.inner.store.put(f.stats.clone()) {
+                    eprintln!("store {login}: {e}");
+                }
+                Ok(f)
+            }
+            Err(FetchError::NotFound) => {
+                self.inner.store.forget(login);
+                self.inner.store.mark_unknown(login, now_secs());
+                Err(FetchError::NotFound)
+            }
+            other => other,
+        };
         let mut s = self.inner.state.lock().unwrap();
         match result {
             Ok(f) => {
@@ -200,25 +219,21 @@ impl<F: Fetcher> Queue<F> {
                 if let Some(q) = f.quota {
                     s.quota = Some(q.remaining);
                     if q.remaining < cfg.min_quota {
-                        s.paused_until = Some(now + Duration::from_secs(q.reset_at.saturating_sub(now_secs())));
+                        pause(&mut s, now + Duration::from_secs(q.reset_at.saturating_sub(now_secs())));
                     }
                 }
                 s.active.remove(login);
                 s.attempts.remove(login);
-                drop(s);
-                if let Err(e) = self.inner.store.put(f.stats) {
-                    eprintln!("store {login}: {e}");
-                }
             }
             Err(FetchError::NotFound) => {
                 s.active.remove(login);
                 s.attempts.remove(login);
-                drop(s);
-                self.inner.store.mark_unknown(login, now_secs());
             }
             Err(FetchError::RateLimited { reset_at }) => {
-                s.paused_until = Some(now + Duration::from_secs(reset_at.saturating_sub(now_secs()).max(1)));
+                pause(&mut s, now + Duration::from_secs(reset_at.saturating_sub(now_secs()).max(1)));
                 s.pending.push_front(login.to_string());
+                drop(s);
+                self.inner.notify.notify_one();
             }
             Err(FetchError::Transient(e)) => {
                 eprintln!("fetch {login}: {e}");
@@ -242,6 +257,11 @@ impl<F: Fetcher> Queue<F> {
             }
         }
     }
+}
+
+/// A pause only ever grows: a later, shorter one must not cut a running one short.
+fn pause(s: &mut State, until: Instant) {
+    s.paused_until = Some(s.paused_until.map_or(until, |p| p.max(until)));
 }
 
 /// Seconds until position `pos` is fetched: whole rounds of the workers at the average fetch time, plus any quota
@@ -362,5 +382,58 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(100)).await;
         assert_eq!(*mock.calls.lock().unwrap(), vec!["a", "b"], "resumed after the reset");
         assert_eq!(q.quota(), Some(10));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn two_workers_fetch_in_parallel() {
+        let script = ["a", "b", "c", "d"].map(|l| (l, ok(l, None))).into();
+        let (q, mock, store) = setup("q-parallel", QueueConfig::default(), script);
+        q.start();
+        tokio::time::sleep(Duration::from_millis(10)).await; // both workers idle
+        for l in ["a", "b", "c", "d"] {
+            q.enqueue(l, None);
+        }
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        assert_eq!(mock.calls.lock().unwrap().len(), 4);
+        for l in ["a", "b", "c", "d"] {
+            assert!(store.get(l, now_secs()).is_some(), "{l} stored");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stats_are_stored_under_the_requested_login() {
+        let (q, _, store) = setup("q-canon", QueueConfig::default(), vec![("octocat", ok("OctoCat", None))]);
+        q.start();
+        q.enqueue("octocat", None);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        assert_eq!(store.get("octocat", now_secs()).unwrap().0.login, "octocat");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_pause_is_never_shortened() {
+        let long = Quota { remaining: 1, reset_at: now_secs() + 500 };
+        let short = Quota { remaining: 1, reset_at: now_secs() + 50 };
+        let (q, mock, _) = setup("q-pause", QueueConfig::default(), vec![
+            ("a", ok("a", Some(long))), ("b", ok("b", Some(short))), ("c", ok("c", None)),
+        ]);
+        q.start();
+        q.enqueue("a", None);
+        q.enqueue("b", None);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        q.enqueue("c", None);
+        tokio::time::sleep(Duration::from_secs(100)).await;
+        assert!(!mock.calls.lock().unwrap().contains(&"c".to_string()), "still paused by the longer pause");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn not_found_stops_serving_the_old_stats() {
+        let (q, _, store) = setup("q-forget", QueueConfig::default(), vec![("gone", Err(FetchError::NotFound))]);
+        store.put(derive(&RawUser { login: "gone".into(), ..Default::default() }, 0, 0)).unwrap();
+        assert!(store.get("gone", 1).is_some());
+        q.start();
+        q.enqueue("gone", None);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        assert!(store.get("gone", now_secs()).is_none());
+        assert!(store.is_unknown("gone", now_secs()));
     }
 }
