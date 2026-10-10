@@ -3,6 +3,7 @@
 use crate::canvas::Image;
 use crate::card::{Card, LINE};
 use crate::fmt::{fit, number};
+use crate::text::Font;
 use crate::stats::UserStats;
 use crate::widgets::{FRAMES, Look};
 
@@ -13,6 +14,12 @@ pub fn tier(current: u32) -> &'static str {
         7..=29 => "flame-steady",
         _ => "flame-bonfire",
     }
+}
+
+/// "label value" within `w`: the label is trimmed before the value is ever touched.
+fn line(font: &Font, label: &str, value: &str, w: i64) -> String {
+    let label = fit(font, label, w - font.length(value) - font.length(" "));
+    if label.is_empty() { value.to_string() } else { format!("{label} {value}") }
 }
 
 pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
@@ -31,8 +38,8 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
             continue;
         }
         let n = number(&assets.text_font, v, text.w / 2);
-        let line = if unit { format!("{} {n} {days}", look.label(scene, k)) } else { format!("{} {n}", look.label(scene, k)) };
-        c.say(&fit(&assets.text_font, &line, text.w), text.x, y);
+        let value = if unit { format!("{n} {days}") } else { n };
+        c.say(&line(&assets.text_font, &look.label(scene, k), &value, text.w), text.x, y);
         y += LINE;
     }
     if shown("best") {
@@ -84,6 +91,21 @@ mod tests {
                 assert_scene_colors(&a, &look, &frames);
             }
         }
+    }
+
+    #[test]
+    fn long_labels_give_way_to_values() {
+        let a = Assets::embedded().unwrap();
+        let mut look = Look::default();
+        look.labels.insert("current".into(), "W".repeat(60));
+        let frames = draw(&a, Widget::Streak, &look, &sample()).unwrap();
+        assert_scene_colors(&a, &look, &frames);
+        let scene = a.scene("forest").unwrap();
+        let w = Card::new(&a, scene, "streak", false).unwrap().painting.anchors.boxes["text"].w;
+        let l = line(&a.text_font, &look.label(scene, "current"), "4 days", w);
+        assert!(l.ends_with(" 4 days"), "{l}");
+        assert!(a.text_font.length(&l) <= w, "{l}");
+        assert_eq!(line(&a.text_font, "", "4 days", w), "4 days");
     }
 
     #[test]
