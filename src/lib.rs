@@ -11,5 +11,6 @@ pub mod scene;
 pub mod stats;
 pub mod store;
 pub mod text;
+pub mod widgets;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
