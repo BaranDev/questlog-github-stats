@@ -63,8 +63,9 @@ pub enum Enqueued {
 }
 
 const HOUR: Duration = Duration::from_secs(3600);
-/// Past this many entries, the IP log and the failed map are swept of expired entries.
+/// Past this many entries, the IP log and the failed map are swept of expired entries, at most once per SWEEP_EVERY.
 const SWEEP_AT: usize = 1000;
+const SWEEP_EVERY: Duration = Duration::from_secs(60);
 
 struct State {
     pending: VecDeque<String>,
@@ -74,6 +75,7 @@ struct State {
     ip_log: HashMap<String, VecDeque<Instant>>,
     avg_secs: f64,
     paused_until: Option<Instant>,
+    next_sweep: Instant,
     quota: Option<u64>,
 }
 
@@ -105,6 +107,7 @@ impl<F: Fetcher> Queue<F> {
             ip_log: HashMap::new(),
             avg_secs: 10.0,
             paused_until: None,
+            next_sweep: Instant::now(),
             quota: None,
         };
         Queue { inner: Arc::new(Inner { fetcher, store, cfg, state: Mutex::new(state), notify: Notify::new() }) }
@@ -135,8 +138,14 @@ impl<F: Fetcher> Queue<F> {
             }
             s.failed.remove(login);
         }
-        if s.failed.len() > SWEEP_AT {
-            s.failed.retain(|_, &mut until| now < until);
+        if now >= s.next_sweep {
+            s.next_sweep = now + SWEEP_EVERY;
+            if s.failed.len() > SWEEP_AT {
+                s.failed.retain(|_, &mut until| now < until);
+            }
+            if s.ip_log.len() > SWEEP_AT {
+                s.ip_log.retain(|_, log| log.back().is_some_and(|&t| now.duration_since(t) < HOUR));
+            }
         }
         if s.active.contains(login) {
             let pos = s.pending.iter().position(|l| l == login).unwrap_or(0);
@@ -154,9 +163,6 @@ impl<F: Fetcher> Queue<F> {
                 return Enqueued::IpLimited;
             }
             log.push_back(now);
-            if s.ip_log.len() > SWEEP_AT {
-                s.ip_log.retain(|_, log| log.back().is_some_and(|&t| now.duration_since(t) < HOUR));
-            }
         }
         s.pending.push_back(login.to_string());
         s.active.insert(login.to_string());
@@ -358,6 +364,25 @@ mod tests {
         let s = q.inner.state.lock().unwrap();
         assert!(s.ip_log.values().all(|l| !l.is_empty()));
         assert!(!s.ip_log.contains_key("ip0"), "expired entries are swept");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn failed_map_is_swept_once_a_minute() {
+        let (q, _, _) = setup("q-failsweep", QueueConfig::default(), vec![]);
+        let now = Instant::now();
+        {
+            let mut s = q.inner.state.lock().unwrap();
+            for i in 0..=SWEEP_AT {
+                s.failed.insert(format!("f{i}"), now + Duration::from_secs(10));
+            }
+            s.next_sweep = now + SWEEP_EVERY;
+        }
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        q.enqueue("x", None);
+        assert!(q.inner.state.lock().unwrap().failed.len() > SWEEP_AT, "expired but before next_sweep: not scanned");
+        tokio::time::sleep(Duration::from_secs(31)).await;
+        q.enqueue("y", None);
+        assert!(q.inner.state.lock().unwrap().failed.is_empty(), "swept once next_sweep passed");
     }
 
     #[tokio::test(start_paused = true)]
