@@ -22,6 +22,8 @@ const PROFILE: &str = "query($login: String!, $after: String) {
     }
   }
 }";
+/// Heavy accounts exceed GitHub's resource limits when every year is asked for in one query.
+const YEARS_PER_QUERY: i64 = 4;
 const MAX_PAGES: usize = 10; // 1,000 repos
 
 /// One aliased contributionsCollection per year: a collection may span one year at most.
@@ -89,7 +91,15 @@ impl<T: Transport> GitHub<T> {
             .and_then(|y| y.parse().ok())
             .ok_or_else(|| FetchError::Transient("profile without createdAt".into()))?;
         let last = civil_from_days(day_of(now_secs())).0;
-        let (cal, quota) = self.query(&years_query(first, last), json!({"login": login})).await?;
+        let (mut cal, mut quota) = (serde_json::Map::new(), None);
+        let mut from = first;
+        while from <= last {
+            let to = (from + YEARS_PER_QUERY - 1).min(last);
+            let (part, q) = self.query(&years_query(from, to), json!({"login": login})).await?;
+            cal.extend(part.as_object().cloned().unwrap_or_default());
+            quota = q.or(quota);
+            from = to + 1;
+        }
         let raw = RawUser {
             login: user["login"].as_str().unwrap_or(login).to_string(),
             followers: count(&user["followers"]),
@@ -97,7 +107,7 @@ impl<T: Transport> GitHub<T> {
             issues: count(&user["issues"]),
             repo_count: count(&user["repositories"]),
             repos,
-            years: (first..=last).map(|y| year(&cal[format!("y{y}")])).collect(),
+            years: (first..=last).map(|y| year(cal.get(&format!("y{y}")).unwrap_or(&Value::Null))).collect(),
         };
         Ok((raw, quota))
     }
@@ -240,6 +250,32 @@ mod tests {
         assert_eq!(sent[1]["variables"]["after"], "c1", "second page asks after the cursor");
         let q = sent[2]["query"].as_str().unwrap();
         assert!(q.contains(&format!("y{}:", this_year() - 1)) && q.contains(&format!("y{}:", this_year())));
+    }
+
+    #[tokio::test]
+    async fn years_are_requested_in_chunks_of_four() {
+        let y = this_year();
+        let mut p = profile(false, 1);
+        p["data"]["user"]["createdAt"] = json!(format!("{}-03-01T00:00:00Z", y - 8));
+        let chunk = |from: i64, to: i64| {
+            let user: serde_json::Map<String, Value> = (from..=to)
+                .map(|n| {
+                    let c = json!({"totalCommitContributions": 1, "totalPullRequestReviewContributions": 0,
+                        "contributionCalendar": {"weeks": [{"contributionDays": [{"date": format!("{n}-06-01"), "contributionCount": 1}]}]}});
+                    (format!("y{n}"), c)
+                })
+                .collect();
+            json!({"data": {"rateLimit": {"remaining": 4000, "resetAt": "2026-10-11T12:00:00Z"}, "user": user}})
+        };
+        let (g, script) = gh(vec![p, chunk(y - 8, y - 5), chunk(y - 4, y - 1), chunk(y, y)]);
+        let (raw, quota) = g.raw("octocat").await.unwrap();
+        assert_eq!(raw.years.len(), 9);
+        assert!(raw.years.iter().all(|r| r.commits == 1 && r.days.len() == 1), "every year merged");
+        assert_eq!(quota.unwrap().remaining, 4000);
+        let sent = script.1.lock().unwrap();
+        assert_eq!(sent.len(), 4, "one profile page and three year queries");
+        let q = sent[1]["query"].as_str().unwrap();
+        assert!(q.contains(&format!("y{}:", y - 8)) && !q.contains(&format!("y{}:", y - 4)));
     }
 
     #[tokio::test]
