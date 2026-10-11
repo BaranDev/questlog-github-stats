@@ -70,4 +70,4 @@ The pages at `/` and `/wiki` come from `site/`, a Next.js static export that the
 
 ## License
 
-Code: MIT (see `LICENSE`). Art: CC BY 4.0 (see `ART-LICENSE.md`). Fonts: see `fonts/README.md`.
+Code: MIT (see `LICENSE`). Art: © Cevdet Baran Oral, CC BY-NC 4.0 (see `ART-LICENSE.md`): free for non-commercial use with credit; commercial use, including a commercial self-hosted instance, needs written permission (contact@cevdetbaran.com). Fonts: see `fonts/README.md`.

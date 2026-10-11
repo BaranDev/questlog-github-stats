@@ -17,7 +17,7 @@ export default function Footer() {
       </div>
       <p className="footer-fine">
         Code under the <a href={`${REPO}/blob/master/LICENSE`}>MIT license</a>, paintings under{" "}
-        <a href={`${REPO}/blob/master/ART-LICENSE.md`}>CC BY 4.0</a>. Nodesto Caps Condensed by Solbera (CC BY-SA 4.0),
+        <a href={`${REPO}/blob/master/ART-LICENSE.md`}>CC BY-NC 4.0</a> (commercial use needs permission). Nodesto Caps Condensed by Solbera (CC BY-SA 4.0),
         Tiny5 by Stefan Schmidt and Outfit by the Outfit Project Authors (SIL OFL 1.1).
       </p>
     </footer>
