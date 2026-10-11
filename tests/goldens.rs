@@ -53,7 +53,7 @@ fn goldens() {
     std::fs::create_dir_all(&dir).unwrap();
     let mut failed = Vec::new();
     for (name, frames) in cases {
-        let bytes = questlog::encode::encode(&frames).unwrap().len();
+        let bytes = questlog::encode::encode(&frames, 5).unwrap().len();
         let budget = if frames.len() > 1 { 1_000_000 } else { 150_000 }; // spec: still < 150 KB, animated < 1 MB
         assert!(bytes < budget, "{name}: {bytes} bytes is over the {budget} byte budget");
         let got = stack(&frames);

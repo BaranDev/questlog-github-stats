@@ -75,6 +75,13 @@ pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Re
         Some("false") | Some("0") => look.animate = false,
         Some(v) => fail(format!("Unknown animate '{}' (use true or false)", clip(v))),
     }
+    match q.get("scale").map(String::as_str) {
+        None => {}
+        Some(v) => match v.parse::<u8>() {
+            Ok(n @ 1..=5) => look.scale = n,
+            _ => fail(format!("Unknown scale '{}' (use 1 to 5)", clip(v))),
+        },
+    }
     look.title = q.get("title").map(|t| text(t)).filter(|t| !t.is_empty());
     look.subtitle = q.get("subtitle").map(|t| text(t)).filter(|t| !t.is_empty());
     if let Some(l) = q.get("labels") {
@@ -175,5 +182,9 @@ mod tests {
         assert!(err(&[("user", "a"), ("time", "noon")]).message.starts_with("Unknown time 'noon'"));
         assert_eq!(err(&[("user", "a"), ("labels", "junk")]).message, "Bad labels: use key:Text,key:Text");
         assert!(err(&[("user", "a"), ("animate", "maybe")]).message.starts_with("Unknown animate"));
+        for bad in ["0", "6", "9", "x", "-1", ""] {
+            assert!(err(&[("user", "a"), ("scale", bad)]).message.starts_with("Unknown scale"), "{bad}");
+        }
+        assert_eq!(ok(&[("user", "a"), ("scale", "2")]).look.scale, 2);
     }
 }

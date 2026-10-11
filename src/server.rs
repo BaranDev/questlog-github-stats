@@ -117,7 +117,7 @@ fn failed() -> Response {
     let bytes = FALLBACK.get_or_init(|| {
         let mut img = Image::new(320, 128);
         img.px.fill([0x1C, 0x12, 0x0A, 0xFF]);
-        encode(&[img]).unwrap_or_default()
+        encode(&[img], 5).unwrap_or_default()
     });
     png(bytes.clone(), NO_CACHE, "error")
 }
@@ -146,14 +146,14 @@ async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, fre
     let cache = if fresh { READY } else { STALE };
     render_png(app, cache, "card", move || {
         let frames = widgets::render(&assets, req.widget, &req.look, &stats)?;
-        encode(&frames).ok()
+        encode(&frames, req.look.scale).ok()
     })
     .await
 }
 
 async fn message<F: Fetcher>(app: &Arc<App<F>>, w: Widget, look: Look, msg: String, kind: &'static str) -> Response {
     let assets = app.assets.clone();
-    render_png(app, NO_CACHE, kind, move || encode(&[widgets::message(&assets, w, &look, &msg)?]).ok()).await
+    render_png(app, NO_CACHE, kind, move || encode(&[widgets::message(&assets, w, &look, &msg)?], look.scale).ok()).await
 }
 
 #[cfg(test)]
@@ -224,6 +224,23 @@ mod tests {
         assert_eq!((kind.as_str(), cache.as_str()), ("card", READY));
         let (kind, _, _) = get(&format!("{base}/streak?user=octocat&animate=false"), &[]).await;
         assert_eq!(kind, "card", "one fetch serves every widget");
+    }
+
+    fn dims(png_bytes: &[u8]) -> (u32, u32) {
+        let r = png::Decoder::new(std::io::Cursor::new(png_bytes)).read_info().unwrap();
+        (r.info().width, r.info().height)
+    }
+
+    #[tokio::test]
+    async fn scale_sizes_the_card_and_bad_scale_is_an_error_card() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        app.store.put(derive(&RawUser { login: "sized".into(), ..Default::default() }, 0, now_secs())).unwrap();
+        let (kind, _, body) = get(&format!("{base}/stats?user=sized&scale=2&animate=false"), &[]).await;
+        assert_eq!((kind.as_str(), dims(&body)), ("card", (640, 256)));
+        let (_, _, body) = get(&format!("{base}/stats?user=sized&animate=false"), &[]).await;
+        assert_eq!(dims(&body), (1600, 640), "default scale is 5");
+        let (kind, cache, body) = get(&format!("{base}/stats?user=sized&scale=9"), &[]).await;
+        assert_eq!((kind.as_str(), cache.as_str(), dims(&body)), ("error", NO_CACHE, (1600, 640)));
     }
 
     #[test]

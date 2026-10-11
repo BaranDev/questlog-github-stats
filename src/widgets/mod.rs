@@ -42,6 +42,8 @@ pub struct Look {
     pub labels: HashMap<String, String>,
     pub hide: HashSet<String>,
     pub animate: bool,
+    /// Output upscale, 1..=5. Only the final PNG changes, not the drawing.
+    pub scale: u8,
 }
 
 impl Default for Look {
@@ -54,6 +56,7 @@ impl Default for Look {
             labels: HashMap::new(),
             hide: HashSet::new(),
             animate: true,
+            scale: 5,
         }
     }
 }
