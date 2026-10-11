@@ -1,5 +1,5 @@
 //! /streak, the Campfire: a fire sized by the current streak (smoking ashes at 0), a notch per 5 days of the best
-//! streak, and the numbers beside it. The flames flicker.
+//! streak, and the numbers beside it. The flames flicker, and a scene may light its painting around them (glow).
 use crate::canvas::Image;
 use crate::card::{Card, LINE};
 use crate::fmt::{line, number};
@@ -55,11 +55,24 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
         }
     }
     let prefix = tier(s.current_streak);
-    let sprites: Vec<&Image> = (0..).map_while(|i| scene.sprites.get(&format!("{prefix}-{i}"))).collect();
+    let night = c.night;
+    let frames = |p: &str| -> Vec<&Image> { (0..).map_while(|i| scene.sprite(&format!("{p}-{i}"), night)).collect() };
+    let sprites = frames(prefix);
+    // the light a burning fire throws on the painting around it: full-card overlays at painting scale, under the text
+    let glows = prefix.strip_prefix("flame-").map(|t| frames(&format!("glow-{t}"))).unwrap_or_default();
     let (base, cx, ground) = (c.layer.clone(), fire.x + fire.w / 2, fire.y + fire.h);
     (0..FRAMES)
         .map(|f| {
-            c.layer = base.clone();
+            c.layer = match glows.get(f % glows.len().max(1)) {
+                Some(glow) => {
+                    // drawn as painted, not night-toned: a glow is light, and a night glow is made for the night
+                    let mut layer = Image::new(base.w, base.h);
+                    layer.alpha_composite(glow, 0, 0);
+                    layer.alpha_composite(&base, 0, 0);
+                    layer
+                }
+                None => base.clone(),
+            };
             if let Some(sprite) = sprites.get(f % sprites.len().max(1)) {
                 c.sprite(sprite, cx, ground);
             }
