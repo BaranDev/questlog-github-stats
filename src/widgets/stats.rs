@@ -7,8 +7,8 @@ use crate::widgets::Look;
 
 pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
     let (assets, scene, painting) = (c.assets, c.scene, c.painting);
-    c.title(&look.title_or(scene, "stats"));
-    c.subtitle(look.subtitle.as_deref().unwrap_or(&s.class));
+    let title_width = c.title(&look.title_or(scene, "stats"));
+    c.subtitle_after(look.subtitle.as_deref().unwrap_or(&s.class), title_width);
     let shown = |k: &str| !look.hide.contains(k);
     let (left, right) = (painting.anchors.boxes["left"], painting.anchors.boxes["right"]);
     let mut y = left.y;

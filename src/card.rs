@@ -69,11 +69,23 @@ impl<'a> Card<'a> {
         if self.painting.anchors.title.size == TITLE_SMALL_SIZE { &assets.title_small } else { &assets.title_font }
     }
 
-    pub fn title(&mut self, s: &str) {
+    /// Draws the title; returns the width of its first line, so a subtitle can follow it on the same line.
+    pub fn title(&mut self, s: &str) -> i64 {
         let (tb, font) = (self.painting.anchors.title, self.title_font());
-        for (i, line) in wrap(font, s, tb.w, tb.lines).iter().enumerate() {
+        let lines = wrap(font, s, tb.w, tb.lines);
+        for (i, line) in lines.iter().enumerate() {
             self.outlined(font, line, tb.x, tb.y + i as i64 * tb.line_h, true);
         }
+        lines.first().map_or(0, |l| font.length(l) + 3)
+    }
+
+    /// The subtitle on the title's line, starting after the title's real width: the title always gets its room
+    /// and the subtitle takes what is left (trimmed).
+    pub fn subtitle_after(&mut self, s: &str, title_width: i64) {
+        let tb = self.painting.anchors.subtitle;
+        let x = tb.x.max(self.painting.anchors.title.x + title_width + 6);
+        let line = fit(&self.assets.text_font, s, tb.x + tb.w - x);
+        self.outlined(&self.assets.text_font, &line, x, tb.y, false);
     }
 
     pub fn subtitle(&mut self, s: &str) {

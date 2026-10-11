@@ -2,15 +2,15 @@
  "title": {
   "x": 88,
   "y": 6,
-  "w": 70,
+  "w": 146,
   "lines": 1,
   "line_h": 18,
   "size": 20
  },
  "subtitle": {
-  "x": 162,
+  "x": 88,
   "y": 13,
-  "w": 72
+  "w": 146
  },
  "style": "ink",
  "message": {
