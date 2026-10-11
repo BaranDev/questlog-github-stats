@@ -33,8 +33,10 @@ async fn main() -> Result<(), questlog::BoxError> {
     });
 
     let app = Arc::new(App { assets: Arc::new(Assets::embedded()?), store, queue, renders: Arc::new(Semaphore::new(2)) });
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
-    eprintln!("questlog listening on :{port}");
+    // HOST=127.0.0.1 keeps a local run off the network; the container needs the default.
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
+    let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
+    eprintln!("questlog listening on {host}:{port}");
     axum::serve(listener, router(app)).with_graceful_shutdown(shutdown()).await?;
     Ok(())
 }
