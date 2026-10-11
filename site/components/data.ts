@@ -2,6 +2,8 @@
 
 export const REPO = "https://github.com/BaranDev/questlog-github-stats";
 export const DEMO_USER = "BaranDev";
+/** The primary host; questlog.cevdetbaran.com still answers too. */
+export const HOST = "https://questlog.cc";
 
 export type Widget = "stats" | "languages" | "streak";
 
@@ -33,6 +35,10 @@ export const THEMES = [
 ];
 
 export const SCENES = THEMES.flatMap((t) => t.scenes);
+
+/** Scenes whose fire has been redrawn for the scene (fire=themed). The others are being reworked. */
+export const READY = ["fairy-garden", "cloud-kingdom", "castle-sky", "royal-library", "war-room", "guild-hall", "observatory", "forest-moonlit"];
+export const isReady = (scene: string) => READY.includes(scene);
 
 const FIRE: Record<string, string> = {
   forest: "Campfire", "forest-autumn": "Campfire", "forest-misty": "Campfire", "forest-moonlit": "Campfire",

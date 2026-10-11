@@ -1,12 +1,23 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { HOST } from "@/components/data";
 
 const outfit = localFont({ src: "./fonts/Outfit-Variable.ttf", weight: "100 900", variable: "--font-outfit", display: "swap" });
 const nodesto = localFont({ src: "./fonts/NodestoCapsCondensed-Bold.otf", variable: "--font-nodesto", display: "swap" });
 const tiny = localFont({ src: "./fonts/Tiny5-Regular.ttf", variable: "--font-tiny", display: "swap" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(HOST),
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "questlog",
+    title: "questlog: your GitHub profile, painted like a realm",
+    description: "Pixel-art GitHub profile cards with a medieval feel. Paste one line, no setup.",
+    images: [{ url: "/demo/stats?scene=castle-sky", width: 1600, height: 640, alt: "A questlog Character Sheet" }],
+  },
   title: "questlog: your GitHub profile, painted like a realm",
   description:
     "Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a fire for your streak. Paste one line, no setup.",

@@ -34,6 +34,7 @@ html {
 }
 
 body {
+  --backdrop: url("/art/castle-sky/streak-night.png");
   margin: 0;
   min-height: 100vh;
   background-color: var(--night);
@@ -44,7 +45,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Ambience: a night-blue sky drifting to embers, and a fine grain over everything. */
+/* Ambience: a castle above the clouds, dimmed far back behind the page, and a fine grain over everything. */
 body::before,
 body::after {
   content: "";
@@ -56,10 +57,19 @@ body::after {
 body::before {
   z-index: -1;
   background:
-    radial-gradient(70rem 48rem at 8% -12%, rgba(40, 56, 122, 0.55), transparent 62%),
-    radial-gradient(56rem 40rem at 105% 18%, rgba(70, 48, 110, 0.28), transparent 60%),
+    radial-gradient(70rem 48rem at 8% -12%, rgba(40, 56, 122, 0.45), transparent 62%),
     radial-gradient(60rem 44rem at 70% 118%, rgba(193, 117, 48, 0.2), transparent 62%),
+    linear-gradient(rgba(15, 13, 20, 0.8), rgba(15, 13, 20, 0.92) 55%, var(--night)),
+    var(--backdrop) center top / cover no-repeat,
     var(--night);
+  image-rendering: pixelated;
+}
+
+/* A day sky behind the page for readers on a light system theme; the night one otherwise. */
+@media (prefers-color-scheme: light) {
+  body {
+    --backdrop: url("/art/castle-sky/streak.png");
+  }
 }
 
 body::after {

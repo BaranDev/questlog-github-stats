@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Rune from "@/components/Rune";
-import { RUNES, THEMES, REPO, card, cardName, type Widget } from "@/components/data";
+import { RUNES, THEMES, REPO, HOST, card, cardName, isReady, type Widget } from "@/components/data";
 import w from "./wiki.module.css";
 
 export const metadata: Metadata = {
   title: "questlog wiki: every card, option and scene",
   description: "How questlog works: the snippet, what every number means, fire tiers, runes, all sixteen scenes, every option and the messages.",
+  alternates: { canonical: "/wiki" },
+  openGraph: { url: "/wiki", title: "questlog wiki", description: "Every card, option and scene of questlog." },
 };
 
 const TOC = [
@@ -23,7 +25,6 @@ const TOC = [
   ["faq", "FAQ"],
 ];
 
-const HOST = "https://questlog.cevdetbaran.com";
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 
 /** A live card that links to its full-size version. */
@@ -94,6 +95,7 @@ const OPTIONS = [
   ["title_color", "hex RRGGBB or RGB, # optional (as %23)", "the scene's ink"],
   ["text_color", "hex, as above: every other text", "the scene's ink"],
   ["outline_color", "hex, as above: the dark edge around outlined text", "the scene's ink"],
+  ["fire", "classic, themed: on /streak, themed draws the scene's own fire where it has one (scenes not marked WIP)", "classic"],
   ["hide", "a comma list of keys, or of languages on /languages", "nothing hidden"],
   ["animate", "true, false", "true"],
   ["scale", "1 to 5: the image is 320 x 128 times this", "5"],
@@ -324,14 +326,16 @@ export default function Wiki() {
                         <code>scene={scene}</code>
                         <span>
                           Character Sheet, Spellbook, {cardName("streak", scene)}
+                          {isReady(scene) ? ": themed or classic fire" : ""}
                         </span>
+                        {!isReady(scene) && <small className={w.wip}>WIP: fire being reworked</small>}
                       </h4>
                       <div className={w.variations}>
                         {WIDGETS.map((wd) =>
                           (["day", "night"] as const).map((time) => (
                             <Shot
                               key={wd + time}
-                              src={card(wd, scene, `&time=${time}`)}
+                              src={card(wd, scene, `&time=${time}${wd === "streak" && isReady(scene) ? "&fire=themed" : ""}`)}
                               alt={`${cardName(wd, scene)}, ${scene}, ${time}`}
                             />
                           )),

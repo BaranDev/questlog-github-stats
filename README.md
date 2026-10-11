@@ -12,12 +12,12 @@ Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellb
 
 ## Use it
 
-Open https://questlog.cevdetbaran.com, type your login, pick a scene and copy the snippet. Or write it yourself:
+Open https://questlog.cc, type your login, pick a scene and copy the snippet. Or write it yourself:
 
 ```html
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://questlog.cevdetbaran.com/stats?user=octocat&scene=forest&time=night">
-  <img alt="octocat's stats" src="https://questlog.cevdetbaran.com/stats?user=octocat&scene=forest&time=day">
+  <source media="(prefers-color-scheme: dark)" srcset="https://questlog.cc/stats?user=octocat&scene=forest&time=night">
+  <img alt="octocat's stats" src="https://questlog.cc/stats?user=octocat&scene=forest&time=day">
 </picture>
 ```
 
@@ -55,6 +55,7 @@ The gallery shows each scene's Character Sheet in the order of the table.
 | `title_color` | hex `RRGGBB` or `RGB`, `#` optional (write it as `%23`), e.g. `FFD700` | the scene's ink |
 | `text_color` | hex, as above; colors every other text | the scene's ink |
 | `outline_color` | hex, as above; the dark edge around outlined text | the scene's ink |
+| `fire` | `classic`, `themed`: on `/streak`, `themed` draws the scene's own fire in fairy-garden, cloud-kingdom, castle-sky, royal-library, war-room, guild-hall, observatory and forest-moonlit; the other scenes draw the classic fire while theirs is reworked | `classic` |
 | `hide` | comma list, e.g. `prs,stars` or `html,css` on `/languages` | none |
 | `animate` | `true`, `false` | `true` |
 | `scale` | `1` to `5`, the output size (320×128 times this) | `5` |
