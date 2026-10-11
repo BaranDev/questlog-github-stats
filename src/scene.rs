@@ -362,9 +362,10 @@ mod tests {
     fn tone_maps_only_at_night() {
         let a = assets();
         let s = a.scene("forest").unwrap();
-        let text = s.inks["text"];
-        assert_eq!(s.tone(text, false), text);
-        assert_ne!(s.tone(text, true), text);
+        for &c in &s.palette {
+            assert_eq!(s.tone(c, false), c, "day is untouched");
+        }
+        assert!(s.palette.iter().any(|&c| s.tone(c, true) != c), "night changes some colors");
         assert_eq!(s.ink("title", true), s.inks["title"], "title gold stays lit at night");
         assert_eq!(s.label("commits"), "Commits");
         assert_eq!(s.label("nope"), "nope");

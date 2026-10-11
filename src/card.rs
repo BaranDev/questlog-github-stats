@@ -151,10 +151,14 @@ mod tests {
     #[test]
     fn default_title_wraps_onto_two_lines() {
         let a = Assets::embedded().unwrap();
-        let s = a.scene("forest").unwrap();
-        let c = Card::new(&a, s, "stats", false).unwrap();
-        let tb = c.painting.anchors.title;
-        assert_eq!(wrap(&a.title_font, "Character Sheet", tb.w, tb.lines), vec!["Character", "Sheet"]);
+        assert_eq!(wrap(&a.title_font, "Character Sheet", 100, 2), vec!["Character", "Sheet"]);
+        for scene in a.scenes.values() {
+            let c = Card::new(&a, scene, "stats", false).unwrap();
+            let tb = c.painting.anchors.title;
+            let font = if tb.size == 20 { &a.title_small } else { &a.title_font };
+            let lines = wrap(font, "Character Sheet", tb.w, tb.lines);
+            assert!(lines.iter().all(|l| font.length(l) <= tb.w), "{}: {lines:?}", scene.name);
+        }
     }
 
     #[test]

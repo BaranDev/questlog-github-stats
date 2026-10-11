@@ -291,7 +291,9 @@ mod tests {
         let (base, _) = serve(QueueConfig::default()).await;
         let v: serde_json::Value = reqwest::get(format!("{base}/health")).await.unwrap().json().await.unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["scenes"], serde_json::json!(["forest"]));
+        let scenes = v["scenes"].as_array().unwrap();
+        assert!(scenes.contains(&serde_json::json!("forest")), "{scenes:?}");
+        assert!(!scenes.contains(&serde_json::json!("_shared")), "shared art is not a scene");
     }
 
     #[tokio::test]
