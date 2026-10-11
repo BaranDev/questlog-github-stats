@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { THEMES, SCENES, cardName, type Widget } from "./data";
 import s from "./Builder.module.css";
 
+/** The per-card words: labels and values as key:Text lists, and a note. */
+type Words = { labels: string; values: string; note: string };
+
 type Picks = {
   user: string;
   scene: string;
@@ -12,8 +15,12 @@ type Picks = {
   subtitle: string;
   hide: string;
   animate: boolean;
+  words: Record<Widget, Words>;
+  titleColor: string;
+  textColor: string;
 };
 
+const NO_WORDS: Words = { labels: "", values: "", note: "" };
 const DEFAULTS: Picks = {
   user: "BaranDev",
   scene: "forest",
@@ -22,32 +29,53 @@ const DEFAULTS: Picks = {
   subtitle: "",
   hide: "",
   animate: true,
+  words: { stats: NO_WORDS, languages: NO_WORDS, streak: NO_WORDS },
+  titleColor: "",
+  textColor: "",
 };
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 const KEY = "questlog-builder";
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+/** Example keys for each card's labels and values fields. */
+const KEYS: Record<Widget, [string, string]> = {
+  stats: ["commits:Deeds,prs:Pacts", "level:Archmage"],
+  languages: ["typescript:TS,python:Py", "typescript:Master"],
+  streak: ["current:Now,days:suns", "current:Forever"],
+};
 
 /** Encoded like encodeURIComponent, but keeps the commas and colons of lists readable. */
 function enc(v: string) {
   return encodeURIComponent(v).replace(/%2C/g, ",").replace(/%3A/g, ":");
 }
 
-function query(p: Picks) {
+/** A valid hex color without its "#", or nothing. */
+function hex(v: string) {
+  return HEX.test(v.trim()) ? v.trim().replace("#", "").toUpperCase() : "";
+}
+
+function query(p: Picks, w: Widget) {
   const parts = [`user=${enc(p.user.trim())}`, `scene=${enc(p.scene)}`];
   const hide = p.hide
     .split(",")
     .map((h) => h.trim())
     .filter(Boolean)
     .join(",");
+  const words = p.words[w];
   if (p.title.trim()) parts.push(`title=${enc(p.title.trim())}`);
   if (p.subtitle.trim()) parts.push(`subtitle=${enc(p.subtitle.trim())}`);
+  if (words.labels.trim()) parts.push(`labels=${enc(words.labels.trim())}`);
+  if (words.values.trim()) parts.push(`values=${enc(words.values.trim())}`);
+  if (words.note.trim()) parts.push(`note=${enc(words.note.trim())}`);
+  if (hex(p.titleColor)) parts.push(`title_color=${hex(p.titleColor)}`);
+  if (hex(p.textColor)) parts.push(`text_color=${hex(p.textColor)}`);
   if (hide) parts.push(`hide=${enc(hide)}`);
   if (!p.animate) parts.push("animate=false");
   return parts.join("&");
 }
 
 function snippet(origin: string, p: Picks, w: Widget) {
-  const url = `${origin}/${w}?${query(p)}`;
+  const url = `${origin}/${w}?${query(p, w)}`;
   return [
     "<picture>",
     `  <source media="(prefers-color-scheme: dark)" srcset="${url}&time=night">`,
@@ -70,6 +98,14 @@ function restore(): Picks {
       subtitle: str(v.subtitle, ""),
       hide: str(v.hide, ""),
       animate: typeof v.animate === "boolean" ? v.animate : true,
+      words: Object.fromEntries(
+        WIDGETS.map((w) => {
+          const x = v.words?.[w] ?? {};
+          return [w, { labels: str(x.labels, ""), values: str(x.values, ""), note: str(x.note, "") }];
+        }),
+      ) as Record<Widget, Words>,
+      titleColor: str(v.titleColor, ""),
+      textColor: str(v.textColor, ""),
     };
   } catch {
     return DEFAULTS;
@@ -268,6 +304,56 @@ export default function Builder() {
             <input value={picks.hide} onChange={(e) => set({ hide: e.target.value })} placeholder="prs,stars or html,css" maxLength={120} />
           </label>
 
+          <details className={s.custom}>
+            <summary className={s.label}>Customize</summary>
+            <div className={s.customBody}>
+              <p className={s.help}>
+                Lists are <code>key:Text,key:Text</code>; the <a href="/wiki#options">wiki</a> lists every key. A note
+                has up to two lines split by <code>|</code>.
+              </p>
+              {WIDGETS.map((w) => {
+                const words = picks.words[w];
+                const setWords = (patch: Partial<Words>) => set({ words: { ...picks.words, [w]: { ...words, ...patch } } });
+                return (
+                  <fieldset key={w} className={s.group}>
+                    <legend className={s.label}>{cardName(w, picks.scene)}</legend>
+                    <div className={s.row}>
+                      <label className={s.field}>
+                        <span className={s.help}>Labels</span>
+                        <input value={words.labels} onChange={(e) => setWords({ labels: e.target.value })} placeholder={KEYS[w][0]} maxLength={120} />
+                      </label>
+                      <label className={s.field}>
+                        <span className={s.help}>Values</span>
+                        <input value={words.values} onChange={(e) => setWords({ values: e.target.value })} placeholder={KEYS[w][1]} maxLength={120} />
+                      </label>
+                    </div>
+                    <label className={s.field}>
+                      <span className={s.help}>Note</span>
+                      <input value={words.note} onChange={(e) => setWords({ note: e.target.value })} placeholder="Open to work|DMs open" maxLength={120} />
+                    </label>
+                  </fieldset>
+                );
+              })}
+              <div className={s.row}>
+                {(["titleColor", "textColor"] as const).map((k) => (
+                  <label key={k} className={s.field}>
+                    <span className={s.label}>{k === "titleColor" ? "Title color" : "Text color"}</span>
+                    <span className={s.color}>
+                      <input
+                        type="color"
+                        value={hex(picks[k]) ? `#${hex(picks[k]).replace(/^(.)(.)(.)$/, "$1$1$2$2$3$3")}`.toLowerCase() : "#000000"}
+                        onChange={(e) => set({ [k]: e.target.value.toUpperCase() })}
+                        aria-label={k === "titleColor" ? "Pick the title color" : "Pick the text color"}
+                      />
+                      <input value={picks[k]} onChange={(e) => set({ [k]: e.target.value })} placeholder="The scene's own" maxLength={7} />
+                    </span>
+                    {picks[k].trim() && !hex(picks[k]) && <span className={s.error}>Use hex: RRGGBB or RGB.</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </details>
+
           <label className={s.toggle}>
             <input type="checkbox" checked={picks.animate} onChange={(e) => set({ animate: e.target.checked })} />
             <span className={s.switch} aria-hidden="true" />
@@ -282,7 +368,7 @@ export default function Builder() {
         <div className={s.results}>
           {ready && applied.cards.length === 0 && <p className={s.empty}>Choose at least one card.</p>}
           {ready && applied.cards.map((w) => {
-            const q = `/${w}?${query(applied)}&scale=2`;
+            const q = `/${w}?${query(applied, w)}&scale=2`;
             const name = cardName(w, applied.scene);
             return (
               <article key={w} className={s.result}>

@@ -86,9 +86,14 @@ const OPTIONS = [
   ["user", "your GitHub login", "required"],
   ["scene", "any of the sixteen scenes", "forest"],
   ["time", "day, night", "day"],
-  ["title", "any text", "the scene's title"],
-  ["subtitle", "any text", "on /stats, your class"],
-  ["labels", "key:Text,key:Text", "the scene's labels"],
+  ["title", "any text, up to 60 characters", "the scene's title"],
+  ["subtitle", "any text, up to 60 characters", "on /stats, your class; none on the others"],
+  ["labels", "key:Text,key:Text, keys below", "the scene's labels"],
+  ["values", "key:Text,key:Text, keys below: drawn in place of the number", "your numbers"],
+  ["note", "up to two lines split by |", "none"],
+  ["title_color", "hex RRGGBB or RGB, # optional (as %23)", "the scene's ink"],
+  ["text_color", "hex, as above: every other text", "the scene's ink"],
+  ["outline_color", "hex, as above: the dark edge around outlined text", "the scene's ink"],
   ["hide", "a comma list of keys, or of languages on /languages", "nothing hidden"],
   ["animate", "true, false", "true"],
   ["scale", "1 to 5: the image is 320 x 128 times this", "5"],
@@ -101,6 +106,13 @@ const EXAMPLES: [string, Widget, string, string][] = [
   ["hide=prs,stars", "stats", "&hide=prs,stars", "Leaves rows out; the others move up."],
   ["hide=html,css", "languages", "&hide=html,css", "On the Spellbook, hide takes language names; the next language takes the place."],
   ["animate=false", "streak", "&animate=false", "A still image: no flicker and no sparkles, and a smaller file."],
+  ["labels=typescript:TS,python:Py", "languages", "&labels=typescript:TS,python:Py", "On the Spellbook, labels take language names too, plus percent."],
+  ["values=level:Archmage,commits:Lots", "stats", "&values=level:Archmage,commits:Lots", "Draws your text in place of a number. The XP bar still follows your real level."],
+  ["values=current:Forever", "streak", "&values=current:Forever", "The fire and the notches still follow your real streak."],
+  ["note=Open to work|DMs open", "stats", "&note=Open%20to%20work|DMs%20open", "Up to two free lines where the card has room. Hiding rows makes more."],
+  ["title_color=FF6B35", "streak", "&title_color=FF6B35", "The title and subtitle color, the same by day and by night."],
+  ["text_color=7A1F1F", "stats", "&text_color=7A1F1F", "The color of every other text: rows, values and the note."],
+  ["outline_color=3B1F5C", "streak", "&outline_color=3B1F5C", "The dark edge around the title and around text drawn on the painting."],
 ];
 
 const MESSAGES = [
@@ -355,10 +367,17 @@ export default function Wiki() {
                 </tbody>
               </table>
               <p className={w.note}>
-                Label keys on /stats: <code>level</code>, <code>commits</code>, <code>prs</code>, <code>repos</code>,{" "}
-                <code>stars</code>, <code>issues</code>, <code>reviews</code>, <code>followers</code>,{" "}
-                <code>contributions</code>. On /streak: <code>current</code>, <code>best</code>, <code>total</code>,{" "}
-                <code>days</code>. The same keys work for <code>hide</code>.
+                Keys are case-insensitive. On /stats, <code>labels</code> and <code>values</code> both take{" "}
+                <code>level</code>, <code>commits</code>, <code>prs</code>, <code>repos</code>, <code>stars</code>,{" "}
+                <code>issues</code>, <code>reviews</code>, <code>followers</code>, <code>contributions</code>. On
+                /languages, both take any language name, such as <code>typescript</code>, <code>c%23</code> for C# or{" "}
+                <code>c%2B%2B</code> for C++, and a value replaces that row&apos;s percent; <code>labels</code> also
+                takes <code>percent</code> (the % sign) and <code>empty</code> (the text for an account with no
+                languages). On /streak, both take <code>current</code>, <code>best</code>, <code>total</code>, and{" "}
+                <code>labels</code> also takes <code>days</code>; a value replaces the whole value, days included. The
+                stats and streak keys work for <code>hide</code> too. Up to 20 pairs per list; text that does not fit
+                its place is trimmed. A note goes under the rows on /stats and /languages, where each line takes the
+                place of the last language, and beside the fire on /streak.
               </p>
               <div className={w.examples}>
                 {EXAMPLES.map(([label, wd, extra, text]) => (
