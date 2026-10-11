@@ -5,5 +5,8 @@
 !src
 !art
 !fonts
-!static
 !tests
+!site
+site/node_modules
+site/.next
+site/out

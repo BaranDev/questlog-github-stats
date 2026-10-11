@@ -1,8 +1,17 @@
+# Build the site (a static export into static/) first.
+FROM node:22-alpine AS site
+WORKDIR /src/site
+COPY site/package.json site/package-lock.json ./
+RUN npm ci
+COPY site/ ./
+RUN npm run build
+
 # Build and test on Alpine (musl → a static binary), run from scratch.
 FROM rust:1.99-alpine AS build
 RUN apk add --no-cache musl-dev cmake make perl
 WORKDIR /src
 COPY . .
+COPY --from=site /src/static ./static
 RUN cargo test --release --locked && cargo build --release --locked
 RUN mkdir -p /data-empty
 
