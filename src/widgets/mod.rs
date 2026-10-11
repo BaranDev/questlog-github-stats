@@ -37,6 +37,8 @@ impl Widget {
 pub struct Look {
     pub scene: String,
     pub night: bool,
+    /// fire=themed: the scene's own fire colors (sprites-themed/), where the scene has them; else the classic fire.
+    pub themed: bool,
     pub title: Option<String>,
     pub subtitle: Option<String>,
     pub labels: HashMap<String, String>,
@@ -58,6 +60,7 @@ impl Default for Look {
         Look {
             scene: "forest".into(),
             night: false,
+            themed: false,
             title: None,
             subtitle: None,
             labels: HashMap::new(),
