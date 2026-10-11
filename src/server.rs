@@ -23,6 +23,9 @@ pub const READY: &str = "public, max-age=43200";
 pub const STALE: &str = "public, max-age=600";
 pub const NO_CACHE: &str = "no-cache";
 pub const PAGE: &str = "public, max-age=300";
+pub const DEMO: &str = "public, max-age=86400";
+const DEMO_USER: &str = "demo-adventurer";
+const DEMO_STATS: &str = include_str!("../tests/fixtures/sample.json");
 pub const ASSET: &str = "public, max-age=604800";
 mod embedded_static {
     include!(concat!(env!("OUT_DIR"), "/static_files.rs"));
@@ -44,6 +47,8 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/wiki", get(|| async { static_file("wiki.html", PAGE) }))
         .route("/static/{*path}", get(|Path(p): Path<String>| async move { static_file(&p, ASSET) }))
         .route("/art/{scene}/{file}", get(art::<F>))
+        .route("/demo/message", get(demo_message::<F>))
+        .route("/demo/{widget}", get(demo_card::<F>))
         .route("/health", get(health::<F>))
         .route("/{widget}", get(card::<F>))
         .with_state(app)
@@ -141,6 +146,64 @@ async fn card<F: Fetcher>(
     }
 }
 
+/// The built-in adventurer, with an optional `streak=N` (0-9999) for showing the fire tiers. Never touches the
+/// store or the queue.
+async fn demo_card<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(path): Path<String>,
+    Query(mut q): Query<HashMap<String, String>>,
+) -> Response {
+    let Some(w) = Widget::from_path(&path) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
+    let streak = q.remove("streak");
+    q.insert("user".into(), DEMO_USER.into());
+    let req = match params::parse(w, &q, &app.assets.scene_names()) {
+        Ok(r) => r,
+        Err(e) => return message(&app, w, e.look, e.message, "error").await,
+    };
+    let mut stats: UserStats = serde_json::from_str(DEMO_STATS).expect("demo stats parse");
+    if let Some(v) = streak {
+        match v.parse::<u32>() {
+            Ok(n @ 0..=9999) => {
+                stats.current_streak = n;
+                stats.best_streak = stats.best_streak.max(n);
+            }
+            _ => {
+                let msg = format!("Unknown streak '{}' (use 0 to 9999)", v.chars().take(20).collect::<String>());
+                return message(&app, w, req.look, msg, "error").await;
+            }
+        }
+    }
+    stats.login = DEMO_USER.into();
+    render_card(&app, req, stats, DEMO).await
+}
+
+/// A message card for the pages: the same texts the live service uses.
+async fn demo_message<F: Fetcher>(State(app): State<Arc<App<F>>>, Query(mut q): Query<HashMap<String, String>>) -> Response {
+    let kind = q.remove("kind").unwrap_or_default();
+    let w = match q.remove("widget") {
+        None => Widget::Stats,
+        Some(k) => match Widget::from_path(&k) {
+            Some(w) => w,
+            None => return (StatusCode::NOT_FOUND, "not found").into_response(),
+        },
+    };
+    let (kind, text): (&'static str, String) = match kind.as_str() {
+        "placeholder" => ("placeholder", placeholder_text(10, false)),
+        "quota" => ("placeholder", placeholder_text(24 * 60, true)),
+        "unknown" => ("unknown", UNKNOWN.into()),
+        "busy" => ("busy", BUSY.into()),
+        "failed" => ("failed", FAILED.into()),
+        "error" => ("error", "Unknown scene 'castel'".into()),
+        _ => return (StatusCode::NOT_FOUND, "not found").into_response(),
+    };
+    q.insert("user".into(), DEMO_USER.into());
+    let look = match params::parse(w, &q, &app.assets.scene_names()) {
+        Ok(r) => r.look,
+        Err(e) => return message(&app, w, e.look, e.message, "error").await,
+    };
+    message_cached(&app, w, look, text, kind, DEMO).await
+}
+
 /// The placeholder line: a quota pause says why and counts in minutes, a normal wait counts in seconds.
 fn placeholder_text(eta_secs: u64, paused: bool) -> String {
     if paused {
@@ -192,8 +255,11 @@ async fn render_png<F: Fetcher>(
 }
 
 async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, fresh: bool) -> Response {
+    render_card(app, req, stats, if fresh { READY } else { STALE }).await
+}
+
+async fn render_card<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, cache: &'static str) -> Response {
     let assets = app.assets.clone();
-    let cache = if fresh { READY } else { STALE };
     render_png(app, cache, "card", move || {
         let frames = widgets::render(&assets, req.widget, &req.look, &stats)?;
         encode(&frames, req.look.scale).ok()
@@ -202,8 +268,19 @@ async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, fre
 }
 
 async fn message<F: Fetcher>(app: &Arc<App<F>>, w: Widget, look: Look, msg: String, kind: &'static str) -> Response {
+    message_cached(app, w, look, msg, kind, NO_CACHE).await
+}
+
+async fn message_cached<F: Fetcher>(
+    app: &Arc<App<F>>,
+    w: Widget,
+    look: Look,
+    msg: String,
+    kind: &'static str,
+    cache: &'static str,
+) -> Response {
     let assets = app.assets.clone();
-    render_png(app, NO_CACHE, kind, move || encode(&[widgets::message(&assets, w, &look, &msg)?], look.scale).ok()).await
+    render_png(app, cache, kind, move || encode(&[widgets::message(&assets, w, &look, &msg)?], look.scale).ok()).await
 }
 
 #[cfg(test)]
@@ -389,6 +466,43 @@ mod tests {
             "/art/castle/nope.png", "/art/nowhere/stats.png", "/art/castle/sprites/a.png", "/art/castle"] {
             assert_eq!(raw(&format!("{base}{bad}")).await.0, 404, "{bad}");
         }
+    }
+
+    #[tokio::test]
+    async fn demo_cards_use_the_sample_and_skip_the_store() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        for w in ["stats", "languages", "streak"] {
+            let (kind, cache, body) = get(&format!("{base}/demo/{w}?scale=2&animate=false&scene=castle&time=night"), &[]).await;
+            assert_eq!((kind.as_str(), cache.as_str(), dims(&body)), ("card", DEMO, (640, 256)), "{w}");
+        }
+        let (kind, cache, body) = get(&format!("{base}/demo/streak?streak=45"), &[]).await;
+        assert_eq!((kind.as_str(), cache.as_str(), dims(&body)), ("card", DEMO, (1600, 640)));
+        let a = get(&format!("{base}/demo/streak?animate=false"), &[]).await.2;
+        let b = get(&format!("{base}/demo/streak?animate=false&streak=45"), &[]).await.2;
+        assert_ne!(a, b, "streak=N changes the card");
+        let (kind, cache, _) = get(&format!("{base}/demo/streak?streak=10000"), &[]).await;
+        assert_eq!((kind.as_str(), cache.as_str()), ("error", NO_CACHE));
+        let (kind, _, _) = get(&format!("{base}/demo/stats?scale=9"), &[]).await;
+        assert_eq!(kind, "error");
+        assert_eq!(reqwest::get(format!("{base}/demo/trophies")).await.unwrap().status(), 404);
+        assert_eq!(app.queue.len(), 0, "never queued");
+        assert!(app.store.get(DEMO_USER, now_secs()).is_none() && app.store.get("barandev", now_secs()).is_none(), "never stored");
+    }
+
+    #[tokio::test]
+    async fn demo_messages() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        for (k, want) in [("placeholder", "placeholder"), ("quota", "placeholder"), ("unknown", "unknown"), ("busy", "busy"),
+            ("failed", "failed"), ("error", "error")] {
+            let (kind, cache, body) = get(&format!("{base}/demo/message?kind={k}&scale=1"), &[]).await;
+            assert_eq!((kind.as_str(), cache.as_str(), dims(&body)), (want, DEMO, (320, 128)), "{k}");
+        }
+        let (kind, _, body) = get(&format!("{base}/demo/message?kind=busy&widget=streak&scene=castle&time=night"), &[]).await;
+        assert_eq!((kind.as_str(), dims(&body)), ("busy", (1600, 640)));
+        for bad in ["kind=nope", "", "kind=busy&widget=x"] {
+            assert_eq!(reqwest::get(format!("{base}/demo/message?{bad}")).await.unwrap().status(), 404, "{bad}");
+        }
+        assert_eq!(app.queue.len(), 0);
     }
 
     #[tokio::test]
