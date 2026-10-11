@@ -132,6 +132,19 @@
   cursor: pointer;
 }
 
+.wip {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(15, 13, 20, 0.82);
+  color: #f0a27a;
+  font-family: var(--tiny);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+}
+
 .swatch input,
 .chip input,
 .toggle input {
@@ -338,13 +351,13 @@
   gap: 0.75rem;
 }
 
-.pair figure {
+.result figure {
   display: grid;
   gap: 0.45rem;
   margin: 0;
 }
 
-.pair figcaption {
+.result figcaption {
   padding-left: 0.25rem;
   font-family: var(--tiny);
   font-size: 0.75rem;
@@ -363,12 +376,14 @@
   animation: shimmer 1.6s linear infinite;
 }
 
-.shot:has(img) {
+.shot:has(img),
+.shot:has(canvas) {
   animation: none;
   background: none;
 }
 
-.shot img {
+.shot img,
+.shot canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -446,4 +461,9 @@
   .swatches {
     gap: 0.4rem;
   }
+}
+
+.chip input:disabled + span {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
