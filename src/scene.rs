@@ -121,6 +121,7 @@ impl Scene {
         let mut s: HashSet<Rgb> = self.palette.iter().copied().collect();
         s.extend(self.inks.values().copied());
         s.extend(self.night.values().copied());
+        s.extend(crate::widgets::languages::rune_colors());
         s
     }
 }
