@@ -17,6 +17,8 @@ pub const OW: usize = 320;
 pub const OH: usize = 128;
 pub const PAINT_W: usize = 160;
 pub const PAINT_H: usize = 64;
+/// Sprites every scene gets; a scene's own sprite of the same name wins. `_shared` has no scene.json, so it is no scene.
+const SHARED_SPRITES: &str = "_shared/sprites/";
 const REQUIRED_INKS: [&str; 8] = ["title", "title_edge", "text", "bar", "bar_track", "xp", "spark", "notch"];
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -146,7 +148,7 @@ impl Assets {
     }
 
     /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.png + .json (+ <widget>-night.png),
-    /// <scene>/sprites/<name>.png.
+    /// <scene>/sprites/<name>.png, plus _shared/sprites/<name>.png for all scenes.
     pub fn from_files(files: &[(&str, &'static [u8])]) -> Result<Assets, BoxError> {
         let file = |p: &str| files.iter().find(|(n, _)| *n == p).map(|(_, b)| *b);
         let mut scenes = HashMap::new();
@@ -165,6 +167,11 @@ impl Assets {
             };
             if let Some(missing) = REQUIRED_INKS.iter().find(|k| !scene.inks.contains_key(**k)) {
                 return Err(format!("{name}: ink {missing:?} missing").into());
+            }
+            for (p, b) in files.iter().filter(|(p, _)| p.starts_with(SHARED_SPRITES)) {
+                if let Some(sprite) = p[SHARED_SPRITES.len()..].strip_suffix(".png") {
+                    scene.sprites.insert(sprite.to_string(), Image::decode(b)?);
+                }
             }
             let prefix = format!("{name}/");
             for (p, b) in files.iter().filter(|(p, _)| p.starts_with(&prefix)) {
@@ -236,7 +243,8 @@ mod tests {
         for s in a.scenes.values() {
             let mut day: HashSet<Rgb> = s.palette.iter().copied().collect();
             day.extend(s.inks.values().copied());
-            let images = s.paintings.values().map(|p| &p.image).chain(s.sprites.values());
+            let sprites = s.sprites.iter().filter(|(n, _)| !n.starts_with("rune-")).map(|(_, i)| i); // white masks, recolored when drawn
+            let images = s.paintings.values().map(|p| &p.image).chain(sprites);
             for img in images {
                 for p in img.px.iter().filter(|p| p[3] > 0) {
                     assert!(day.contains(&[p[0], p[1], p[2]]), "{} uses off-palette {:?}", s.name, p);
@@ -273,6 +281,25 @@ mod tests {
 
     fn load(files: Vec<(&str, &'static [u8])>) -> Result<Assets, BoxError> {
         Assets::from_files(&files)
+    }
+
+    #[test]
+    fn shared_sprites_reach_every_scene_and_scenes_override_them() {
+        let (a, c) = ([1, 1, 1], [3, 3, 3]);
+        let assets = load(vec![
+            ("_shared/sprites/lit.png", solid(2, 2, a)),
+            ("_shared/sprites/both.png", solid(2, 2, a)),
+            ("one/scene.json", SCENE_JSON.as_bytes()),
+            ("one/sprites/both.png", solid(2, 2, c)),
+            ("two/scene.json", SCENE_JSON.as_bytes()),
+        ])
+        .unwrap();
+        assert_eq!(assets.scene_names(), vec!["one", "two"], "_shared is not a scene");
+        let (one, two) = (assets.scene("one").unwrap(), assets.scene("two").unwrap());
+        assert_eq!(one.sprites["lit"].px[0][..3], a);
+        assert_eq!(two.sprites["lit"].px[0][..3], a);
+        assert_eq!(one.sprites["both"].px[0][..3], c, "scene sprite wins");
+        assert_eq!(two.sprites["both"].px[0][..3], a, "shared fills in");
     }
 
     #[test]
