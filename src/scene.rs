@@ -1,5 +1,6 @@
 //! Embedded art: per scene a palette, named inks, a night table and default words, plus each widget's painting
-//! (160×64, shown ×2) with the anchors its renderer fills, and art-scale sprites. Fonts are embedded here too.
+//! (160×64 shown ×2, or 320×128 used as-is) with the anchors its renderer fills, and art-scale sprites. Fonts are
+//! embedded here too.
 use crate::BoxError;
 use crate::canvas::{Image, Rgb};
 use crate::text::Font;
@@ -127,6 +128,16 @@ fn hex(s: &str) -> Result<Rgb, BoxError> {
     Ok([ch(0)?, ch(2)?, ch(4)?])
 }
 
+/// A painting PNG at art scale (160×64, shown ×2) or at overlay scale (320×128, as-is), returned at overlay scale.
+fn painting_image(path: &str, png: &[u8]) -> Result<Image, BoxError> {
+    let img = Image::decode(png)?;
+    match (img.w, img.h) {
+        (PAINT_W, PAINT_H) => Ok(img.scaled(2)),
+        (OW, OH) => Ok(img),
+        (w, h) => Err(format!("{path}: painting must be {PAINT_W}×{PAINT_H} or {OW}×{OH}, got {w}×{h}").into()),
+    }
+}
+
 impl Assets {
     pub fn embedded() -> Result<Assets, BoxError> {
         Assets::from_files(embedded::FILES)
@@ -159,13 +170,10 @@ impl Assets {
                 if let Some(sprite) = rest.strip_prefix("sprites/").and_then(|s| s.strip_suffix(".png")) {
                     scene.sprites.insert(sprite.to_string(), Image::decode(b)?);
                 } else if let Some(widget) = rest.strip_suffix(".json").filter(|w| *w != "scene" && !w.contains('/')) {
-                    let png = file(&format!("{prefix}{widget}.png")).ok_or(format!("{p}: painting missing"))?;
-                    let img = Image::decode(png)?;
-                    if (img.w, img.h) != (PAINT_W, PAINT_H) {
-                        return Err(format!("{p}: painting must be {PAINT_W}×{PAINT_H}").into());
-                    }
+                    let png_path = format!("{prefix}{widget}.png");
+                    let png = file(&png_path).ok_or(format!("{p}: painting missing"))?;
                     let anchors: Anchors = serde_json::from_slice(b)?;
-                    scene.paintings.insert(widget.to_string(), Painting { image: img.scaled(2), anchors });
+                    scene.paintings.insert(widget.to_string(), Painting { image: painting_image(&png_path, png)?, anchors });
                 }
             }
             scenes.insert(name.to_string(), scene);
@@ -247,5 +255,42 @@ mod tests {
         assert_eq!(s.ink("title", true), s.inks["title"], "title gold stays lit at night");
         assert_eq!(s.label("commits"), "Commits");
         assert_eq!(s.label("nope"), "nope");
+    }
+
+    const SCENE_JSON: &str = r##"{"palette":["#112233"],"ink":{"title":"#112233","title_edge":"#112233","text":"#112233","bar":"#112233","bar_track":"#112233","xp":"#112233","spark":"#112233","notch":"#112233"},"night":{},"titles":{},"labels":{}}"##;
+    const ANCHORS_JSON: &str = r#"{"title":{"x":0,"y":0,"w":10},"subtitle":{"x":0,"y":0,"w":10},"message":{"x":0,"y":0,"w":10,"h":10},"style":"ink"}"#;
+
+    fn solid(w: usize, h: usize, c: Rgb) -> &'static [u8] {
+        let mut img = Image::new(w, h);
+        img.fill_rect(0, 0, w as i64 - 1, h as i64 - 1, c);
+        Box::leak(img.to_png().into_boxed_slice())
+    }
+
+    fn load(files: Vec<(&str, &'static [u8])>) -> Result<Assets, BoxError> {
+        Assets::from_files(&files)
+    }
+
+    #[test]
+    fn paintings_come_in_two_sizes() {
+        let red = [200, 0, 0];
+        for (w, h) in [(PAINT_W, PAINT_H), (OW, OH)] {
+            let a = load(vec![
+                ("t/scene.json", SCENE_JSON.as_bytes()),
+                ("t/stats.json", ANCHORS_JSON.as_bytes()),
+                ("t/stats.png", solid(w, h, red)),
+            ])
+            .unwrap_or_else(|e| panic!("{w}x{h}: {e}"));
+            let img = &a.scene("t").unwrap().paintings["stats"].image;
+            assert_eq!((img.w, img.h), (OW, OH), "{w}x{h}");
+            assert_eq!(img.px[OW * OH - 1], [200, 0, 0, 255]);
+        }
+        let err = load(vec![
+            ("t/scene.json", SCENE_JSON.as_bytes()),
+            ("t/stats.json", ANCHORS_JSON.as_bytes()),
+            ("t/stats.png", solid(100, 50, red)),
+        ])
+        .err()
+        .expect("100x50 is rejected");
+        assert!(err.to_string().contains("t/stats.png"), "{err}");
     }
 }
