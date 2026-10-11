@@ -55,8 +55,9 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
         }
     }
     let prefix = tier(s.current_streak);
-    let night = c.night;
-    let frames = |p: &str| -> Vec<&Image> { (0..).map_while(|i| scene.sprite(&format!("{p}-{i}"), night)).collect() };
+    let (night, themed) = (c.night, look.themed);
+    let frames =
+        |p: &str| -> Vec<&Image> { (0..).map_while(|i| scene.sprite(&format!("{p}-{i}"), night, themed)).collect() };
     let sprites = frames(prefix);
     // the light a burning fire throws on the painting around it: full-card overlays at painting scale, under the text
     let glows = prefix.strip_prefix("flame-").map(|t| frames(&format!("glow-{t}"))).unwrap_or_default();
@@ -108,6 +109,27 @@ mod tests {
                 assert_scene_colors(&a, &look, &frames);
             }
         }
+    }
+
+    #[test]
+    fn themed_fire_is_the_scenes_own_where_it_has_one() {
+        let a = Assets::embedded().unwrap();
+        let s = UserStats { current_streak: 45, ..sample() };
+        let draw_as = |scene: &str, themed: bool, night: bool| {
+            let look = Look { scene: scene.into(), themed, night, ..Default::default() };
+            draw(&a, Widget::Streak, &look, &s).unwrap()
+        };
+        for night in [false, true] {
+            let (own, classic) = (draw_as("observatory", true, night), draw_as("observatory", false, night));
+            assert_ne!(own, classic, "a scene with its own fire");
+            let (wip_themed, wip) = (draw_as("forest", true, night), draw_as("forest", false, night));
+            assert_eq!(wip_themed, wip, "no themed fire: the classic one");
+            let look = Look { scene: "observatory".into(), themed: true, night, ..Default::default() };
+            assert_scene_colors(&a, &look, &draw_as("observatory", true, night));
+        }
+        let default = Look { scene: "observatory".into(), ..Default::default() };
+        let by_default = draw(&a, Widget::Streak, &default, &s).unwrap();
+        assert_eq!(draw_as("observatory", false, false), by_default, "classic by default");
     }
 
     #[test]

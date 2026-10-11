@@ -100,12 +100,22 @@ pub struct Scene {
     /// <scene>/sprites-night/<name>.png: drawn instead of the sprite of the same name at night (a fire's glow is
     /// copied from the painting it lights, and the night painting differs).
     pub night_sprites: HashMap<String, Image>,
+    /// fire=themed: <scene>/sprites-themed/ and sprites-themed-night/, the scene's own fire colors. A scene without
+    /// them draws the classic fire.
+    pub themed_sprites: HashMap<String, Image>,
+    pub themed_night_sprites: HashMap<String, Image>,
 }
 
 impl Scene {
-    /// The sprite to draw at this time of day: the night version when there is one.
-    pub fn sprite(&self, name: &str, night: bool) -> Option<&Image> {
-        night.then(|| self.night_sprites.get(name)).flatten().or_else(|| self.sprites.get(name))
+    /// The sprite to draw at this time of day and in this fire style: the night version when there is one, the
+    /// themed one when asked for and the scene has it, else the classic one.
+    pub fn sprite(&self, name: &str, night: bool, themed: bool) -> Option<&Image> {
+        type Sprites = HashMap<String, Image>;
+        fn pick<'a>(day: &'a Sprites, nights: &'a Sprites, name: &str, night: bool) -> Option<&'a Image> {
+            night.then(|| nights.get(name)).flatten().or_else(|| day.get(name))
+        }
+        let own = if themed { pick(&self.themed_sprites, &self.themed_night_sprites, name, night) } else { None };
+        own.or_else(|| pick(&self.sprites, &self.night_sprites, name, night))
     }
 
     pub fn tone(&self, c: Rgb, night: bool) -> Rgb {
@@ -191,7 +201,8 @@ impl Assets {
     }
 
     /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.png + .json (+ <widget>-night.png),
-    /// <scene>/sprites/<name>.png (+ sprites-night/<name>.png), plus _shared/sprites/<name>.png for all scenes.
+    /// <scene>/sprites/<name>.png (+ sprites-night/, sprites-themed/, sprites-themed-night/), plus
+    /// _shared/sprites/<name>.png for all scenes.
     pub fn from_files(files: &[(&str, &'static [u8])]) -> Result<Assets, BoxError> {
         let file = |p: &str| files.iter().find(|(n, _)| *n == p).map(|(_, b)| *b);
         let mut scenes = HashMap::new();
@@ -208,6 +219,8 @@ impl Assets {
                 paintings: HashMap::new(),
                 sprites: HashMap::new(),
                 night_sprites: HashMap::new(),
+                themed_sprites: HashMap::new(),
+                themed_night_sprites: HashMap::new(),
             };
             if let Some(missing) = REQUIRED_INKS.iter().find(|k| !scene.inks.contains_key(**k)) {
                 return Err(format!("{name}: ink {missing:?} missing").into());
@@ -224,6 +237,12 @@ impl Assets {
                     scene.sprites.insert(sprite.to_string(), Image::decode(b)?);
                 } else if let Some(sprite) = rest.strip_prefix("sprites-night/").and_then(|s| s.strip_suffix(".png")) {
                     scene.night_sprites.insert(sprite.to_string(), Image::decode(b)?);
+                } else if let Some(sprite) = rest.strip_prefix("sprites-themed/").and_then(|s| s.strip_suffix(".png")) {
+                    scene.themed_sprites.insert(sprite.to_string(), Image::decode(b)?);
+                } else if let Some(sprite) =
+                    rest.strip_prefix("sprites-themed-night/").and_then(|s| s.strip_suffix(".png"))
+                {
+                    scene.themed_night_sprites.insert(sprite.to_string(), Image::decode(b)?);
                 } else if let Some(widget) = rest.strip_suffix(".json").filter(|w| *w != "scene" && !w.contains('/')) {
                     let png_path = format!("{prefix}{widget}.png");
                     let png = file(&png_path).ok_or(format!("{p}: painting missing"))?;
@@ -350,14 +369,16 @@ mod tests {
             day.extend(s.inks.values().copied());
             let allowed = s.allowed();
             // rune masks are white and always recolored when drawn
-            let sprites = s.sprites.iter().filter(|(n, _)| !n.starts_with("rune-")).map(|(_, i)| i);
+            let all = s.sprites.iter().chain(&s.themed_sprites);
+            let sprites = all.filter(|(n, _)| !n.starts_with("rune-")).map(|(_, i)| i);
             let images = s.paintings.values().map(|p| &p.image).chain(sprites);
             for img in images {
                 for p in img.px.iter().filter(|p| p[3] > 0) {
                     assert!(day.contains(&[p[0], p[1], p[2]]), "{} uses off-palette {:?}", s.name, p);
                 }
             }
-            for night in s.paintings.values().filter_map(|p| p.night.as_ref()).chain(s.night_sprites.values()) {
+            let night_sprites = s.night_sprites.values().chain(s.themed_night_sprites.values());
+            for night in s.paintings.values().filter_map(|p| p.night.as_ref()).chain(night_sprites) {
                 for p in night.px.iter().filter(|p| p[3] > 0) {
                     assert!(allowed.contains(&[p[0], p[1], p[2]]), "{} night painting uses off-palette {:?}", s.name, p);
                 }
@@ -411,10 +432,32 @@ mod tests {
         )
         .unwrap();
         let one = assets.scene("one").unwrap();
-        assert_eq!(one.sprite("glow", false).unwrap().px[0][..3], a);
-        assert_eq!(one.sprite("glow", true).unwrap().px[0][..3], c);
-        assert!(one.sprite("flame-small-0", true).is_some(), "no night version: the day sprite serves the night");
-        assert!(one.sprite("missing", true).is_none());
+        assert_eq!(one.sprite("glow", false, false).unwrap().px[0][..3], a);
+        assert_eq!(one.sprite("glow", true, false).unwrap().px[0][..3], c);
+        let night_falls_back = one.sprite("flame-small-0", true, false).is_some();
+        assert!(night_falls_back, "no night version: the day sprite serves the night");
+        assert!(one.sprite("missing", true, false).is_none());
+    }
+
+    #[test]
+    fn themed_sprites_win_when_asked_and_fall_back_to_classic() {
+        let (a, c, t, tn) = ([1, 1, 1], [3, 3, 3], [5, 5, 5], [7, 7, 7]);
+        let assets = with(
+            [scene("one"), scene("two")].concat(),
+            vec![
+                ("one/sprites/glow.png", Some(solid(2, 2, a))),
+                ("one/sprites-night/glow.png", Some(solid(2, 2, c))),
+                ("one/sprites-themed/glow.png", Some(solid(2, 2, t))),
+                ("one/sprites-themed-night/glow.png", Some(solid(2, 2, tn))),
+                ("two/sprites/glow.png", Some(solid(2, 2, a))),
+            ],
+        )
+        .unwrap();
+        let (one, two) = (assets.scene("one").unwrap(), assets.scene("two").unwrap());
+        assert_eq!(one.sprite("glow", false, true).unwrap().px[0][..3], t);
+        assert_eq!(one.sprite("glow", true, true).unwrap().px[0][..3], tn);
+        assert_eq!(one.sprite("glow", false, false).unwrap().px[0][..3], a, "classic unless asked");
+        assert_eq!(two.sprite("glow", false, true).unwrap().px[0][..3], a, "no themed art: the classic fire");
     }
 
     #[test]

@@ -84,6 +84,11 @@ pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Re
         Some("night") => look.night = true,
         Some(t) => fail(format!("Unknown time '{}' (use day or night)", clip(t))),
     }
+    match q.get("fire").map(String::as_str) {
+        None | Some("classic") => {}
+        Some("themed") => look.themed = true,
+        Some(f) => fail(format!("Unknown fire '{}' (use classic or themed)", clip(f))),
+    }
     match q.get("animate").map(String::as_str) {
         None | Some("true") | Some("1") => {}
         Some("false") | Some("0") => look.animate = false,
@@ -152,6 +157,16 @@ mod tests {
 
     fn err(pairs: &[(&str, &str)]) -> ParamError {
         parse(Widget::Stats, &q(pairs), &["castle", "forest"]).err().expect("should fail")
+    }
+
+    #[test]
+    fn fire_style() {
+        assert!(!ok(&[("user", "a")]).look.themed, "classic by default");
+        assert!(!ok(&[("user", "a"), ("fire", "classic")]).look.themed);
+        assert!(ok(&[("user", "a"), ("fire", "themed")]).look.themed);
+        assert!(err(&[("user", "a"), ("fire", "lava")]).message.starts_with("Unknown fire 'lava'"));
+        let upper = err(&[("user", "a"), ("fire", "Themed")]);
+        assert!(upper.message.starts_with("Unknown fire 'Themed'"), "lowercase only");
     }
 
     #[test]
