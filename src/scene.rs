@@ -97,9 +97,17 @@ pub struct Scene {
     pub labels: HashMap<String, String>,
     pub paintings: HashMap<String, Painting>,
     pub sprites: HashMap<String, Image>,
+    /// <scene>/sprites-night/<name>.png: drawn instead of the sprite of the same name at night (a fire's glow is
+    /// copied from the painting it lights, and the night painting differs).
+    pub night_sprites: HashMap<String, Image>,
 }
 
 impl Scene {
+    /// The sprite to draw at this time of day: the night version when there is one.
+    pub fn sprite(&self, name: &str, night: bool) -> Option<&Image> {
+        night.then(|| self.night_sprites.get(name)).flatten().or_else(|| self.sprites.get(name))
+    }
+
     pub fn tone(&self, c: Rgb, night: bool) -> Rgb {
         if night { self.night.get(&c).copied().unwrap_or(c) } else { c }
     }
@@ -183,7 +191,7 @@ impl Assets {
     }
 
     /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.png + .json (+ <widget>-night.png),
-    /// <scene>/sprites/<name>.png, plus _shared/sprites/<name>.png for all scenes.
+    /// <scene>/sprites/<name>.png (+ sprites-night/<name>.png), plus _shared/sprites/<name>.png for all scenes.
     pub fn from_files(files: &[(&str, &'static [u8])]) -> Result<Assets, BoxError> {
         let file = |p: &str| files.iter().find(|(n, _)| *n == p).map(|(_, b)| *b);
         let mut scenes = HashMap::new();
@@ -199,6 +207,7 @@ impl Assets {
                 labels: sf.labels,
                 paintings: HashMap::new(),
                 sprites: HashMap::new(),
+                night_sprites: HashMap::new(),
             };
             if let Some(missing) = REQUIRED_INKS.iter().find(|k| !scene.inks.contains_key(**k)) {
                 return Err(format!("{name}: ink {missing:?} missing").into());
@@ -213,6 +222,8 @@ impl Assets {
                 let rest = &p[prefix.len()..];
                 if let Some(sprite) = rest.strip_prefix("sprites/").and_then(|s| s.strip_suffix(".png")) {
                     scene.sprites.insert(sprite.to_string(), Image::decode(b)?);
+                } else if let Some(sprite) = rest.strip_prefix("sprites-night/").and_then(|s| s.strip_suffix(".png")) {
+                    scene.night_sprites.insert(sprite.to_string(), Image::decode(b)?);
                 } else if let Some(widget) = rest.strip_suffix(".json").filter(|w| *w != "scene" && !w.contains('/')) {
                     let png_path = format!("{prefix}{widget}.png");
                     let png = file(&png_path).ok_or(format!("{p}: painting missing"))?;
@@ -346,7 +357,7 @@ mod tests {
                     assert!(day.contains(&[p[0], p[1], p[2]]), "{} uses off-palette {:?}", s.name, p);
                 }
             }
-            for night in s.paintings.values().filter_map(|p| p.night.as_ref()) {
+            for night in s.paintings.values().filter_map(|p| p.night.as_ref()).chain(s.night_sprites.values()) {
                 for p in night.px.iter().filter(|p| p[3] > 0) {
                     assert!(allowed.contains(&[p[0], p[1], p[2]]), "{} night painting uses off-palette {:?}", s.name, p);
                 }
@@ -389,6 +400,21 @@ mod tests {
         assert_eq!(two.sprites["lit"].px[0][..3], a);
         assert_eq!(one.sprites["both"].px[0][..3], c, "scene sprite wins");
         assert_eq!(two.sprites["both"].px[0][..3], a, "shared fills in");
+    }
+
+    #[test]
+    fn night_sprites_replace_their_day_sprite_at_night_only() {
+        let (a, c) = ([1, 1, 1], [3, 3, 3]);
+        let assets = with(
+            scene("one"),
+            vec![("one/sprites/glow.png", Some(solid(2, 2, a))), ("one/sprites-night/glow.png", Some(solid(2, 2, c)))],
+        )
+        .unwrap();
+        let one = assets.scene("one").unwrap();
+        assert_eq!(one.sprite("glow", false).unwrap().px[0][..3], a);
+        assert_eq!(one.sprite("glow", true).unwrap().px[0][..3], c);
+        assert!(one.sprite("flame-small-0", true).is_some(), "no night version: the day sprite serves the night");
+        assert!(one.sprite("missing", true).is_none());
     }
 
     #[test]
