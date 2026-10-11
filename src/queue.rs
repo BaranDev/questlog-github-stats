@@ -36,6 +36,7 @@ pub struct QueueConfig {
     pub capacity: usize,
     pub workers: usize,
     pub per_ip_per_hour: usize,
+    pub new_per_hour: usize, // global cap on new logins per sliding hour, for all clients
     pub min_quota: u64,
     pub backoff: [Duration; 2], // waits before the 2nd and 3rd attempt; the 3rd failure holds the login
     pub fail_hold: Duration,
@@ -47,6 +48,7 @@ impl Default for QueueConfig {
             capacity: 500,
             workers: 2,
             per_ip_per_hour: 30,
+            new_per_hour: 600,
             min_quota: 200,
             backoff: [Duration::from_secs(5), Duration::from_secs(30)],
             fail_hold: Duration::from_secs(600),
@@ -73,6 +75,7 @@ struct State {
     attempts: HashMap<String, usize>,
     failed: HashMap<String, Instant>,
     ip_log: HashMap<String, VecDeque<Instant>>,
+    new_log: VecDeque<Instant>, // when each accepted new login arrived, last hour only
     avg_secs: f64,
     paused_until: Option<Instant>,
     next_sweep: Instant,
@@ -105,6 +108,7 @@ impl<F: Fetcher> Queue<F> {
             attempts: HashMap::new(),
             failed: HashMap::new(),
             ip_log: HashMap::new(),
+            new_log: VecDeque::new(),
             avg_secs: 10.0,
             paused_until: None,
             next_sweep: Instant::now(),
@@ -160,6 +164,12 @@ impl<F: Fetcher> Queue<F> {
         if s.pending.len() >= cfg.capacity {
             return Enqueued::Full;
         }
+        while s.new_log.front().is_some_and(|&t| now.duration_since(t) >= HOUR) {
+            s.new_log.pop_front();
+        }
+        if s.new_log.len() >= cfg.new_per_hour {
+            return Enqueued::Full;
+        }
         if let Some(ip) = ip {
             let log = s.ip_log.entry(ip.to_string()).or_default();
             while log.front().is_some_and(|&t| now.duration_since(t) >= HOUR) {
@@ -170,6 +180,7 @@ impl<F: Fetcher> Queue<F> {
             }
             log.push_back(now);
         }
+        s.new_log.push_back(now);
         s.pending.push_back(login.to_string());
         s.active.insert(login.to_string());
         let wait = eta(&s, cfg, s.pending.len() - 1, now);
@@ -362,8 +373,21 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn global_hourly_cap_applies_to_everyone() {
+        let cfg = QueueConfig { new_per_hour: 2, ..Default::default() };
+        let (q, _, _) = setup("q-global", cfg, vec![]);
+        assert!(matches!(q.enqueue("a", Some("ip1")), Enqueued::Waiting { .. }));
+        assert!(matches!(q.enqueue("b", Some("ip2")), Enqueued::Waiting { .. }));
+        assert_eq!(q.enqueue("c", Some("ip3")), Enqueued::Full);
+        assert_eq!(q.enqueue("c", None), Enqueued::Full);
+        assert!(matches!(q.enqueue("a", Some("ip4")), Enqueued::Waiting { .. }), "active login is not a new one");
+        tokio::time::sleep(Duration::from_secs(3601)).await;
+        assert!(matches!(q.enqueue("c", None), Enqueued::Waiting { .. }), "the cap frees up");
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn ip_log_does_not_keep_expired_entries() {
-        let cfg = QueueConfig { capacity: 5000, ..Default::default() };
+        let cfg = QueueConfig { capacity: 5000, new_per_hour: 5000, ..Default::default() };
         let (q, _, _) = setup("q-iplog", cfg, vec![]);
         for i in 0..=SWEEP_AT {
             q.enqueue(&format!("u{i}"), Some(&format!("ip{i}")));
