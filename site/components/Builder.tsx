@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { THEMES, SCENES, cardName, type Widget } from "./data";
+import { THEMES, SCENES, HOST, cardName, isReady, type Widget } from "./data";
+import Preview from "./Preview";
 import s from "./Builder.module.css";
 
 /** The per-card words: labels and values as key:Text lists, and a note. */
@@ -18,6 +19,8 @@ type Picks = {
   words: Record<Widget, Words>;
   titleColor: string;
   textColor: string;
+  fire: "themed" | "classic";
+  time: "auto" | "day" | "night";
 };
 
 const NO_WORDS: Words = { labels: "", values: "", note: "" };
@@ -32,6 +35,8 @@ const DEFAULTS: Picks = {
   words: { stats: NO_WORDS, languages: NO_WORDS, streak: NO_WORDS },
   titleColor: "",
   textColor: "",
+  fire: "themed",
+  time: "auto",
 };
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 const KEY = "questlog-builder";
@@ -70,12 +75,15 @@ function query(p: Picks, w: Widget) {
   if (hex(p.titleColor)) parts.push(`title_color=${hex(p.titleColor)}`);
   if (hex(p.textColor)) parts.push(`text_color=${hex(p.textColor)}`);
   if (hide) parts.push(`hide=${enc(hide)}`);
+  if (w === "streak" && isReady(p.scene) && p.fire === "themed") parts.push("fire=themed");
   if (!p.animate) parts.push("animate=false");
   return parts.join("&");
 }
 
 function snippet(origin: string, p: Picks, w: Widget) {
   const url = `${origin}/${w}?${query(p, w)}`;
+  const alt = `${p.user.trim()}'s ${cardName(w, p.scene)}`;
+  if (p.time !== "auto") return `<img alt="${alt}" src="${url}${p.time === "night" ? "&time=night" : ""}">`;
   return [
     "<picture>",
     `  <source media="(prefers-color-scheme: dark)" srcset="${url}&time=night">`,
@@ -106,55 +114,12 @@ function restore(): Picks {
       ) as Record<Widget, Words>,
       titleColor: str(v.titleColor, ""),
       textColor: str(v.textColor, ""),
+      fire: v.fire === "classic" ? "classic" : "themed",
+      time: ["day", "night"].includes(v.time) ? v.time : "auto",
     };
   } catch {
     return DEFAULTS;
   }
-}
-
-/**
- * A card fetched as a blob. While the server answers with the "inking" placeholder (header x-questlog), it shows
- * that card and asks again every 5 s.
- */
-function Live({ url, alt }: { url: string; alt: string }) {
-  const [src, setSrc] = useState<string>();
-  const [inking, setInking] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    let timer: number | undefined;
-    let shown: string | undefined;
-    let tries = 0;
-    const load = async () => {
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        const blob = await res.blob();
-        if (!alive) return;
-        const next = URL.createObjectURL(blob);
-        if (shown) URL.revokeObjectURL(shown);
-        shown = next;
-        setSrc(next);
-        const wait = res.headers.get("x-questlog") === "placeholder";
-        setInking(wait);
-        if (wait && ++tries < 120) timer = window.setTimeout(load, 5000);
-      } catch {
-        if (alive) setInking(false);
-      }
-    };
-    load();
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-      if (shown) URL.revokeObjectURL(shown);
-    };
-  }, [url]);
-
-  return (
-    <>
-      <div className={s.shot}>{src && <img className="pix" src={src} width={640} height={256} alt={alt} />}</div>
-      {inking && <p className={s.inking}>The scribe is inking this card. Trying again every 5 s.</p>}
-    </>
-  );
 }
 
 function Copy({ text }: { text: string }) {
@@ -186,7 +151,7 @@ function Copy({ text }: { text: string }) {
 export default function Builder() {
   const [picks, setPicks] = useState<Picks>(DEFAULTS);
   const [applied, setApplied] = useState<Picks>(DEFAULTS);
-  const [origin, setOrigin] = useState("https://questlog.cevdetbaran.com");
+  const [origin, setOrigin] = useState(HOST);
   const [ready, setReady] = useState(false);
   const valid = LOGIN.test(picks.user.trim());
 
@@ -194,19 +159,19 @@ export default function Builder() {
     const p = restore();
     setPicks(p);
     setApplied(p);
-    setOrigin(location.origin);
+    // the snippet names this host, except on the old domain, which now points people to the new one
+    setOrigin(location.hostname.endsWith("cevdetbaran.com") ? HOST : location.origin);
     setReady(true);
   }, []);
 
-  // Typing settles for a moment before the previews reload; every pick is remembered.
+  // Typing settles for a moment before the previews redraw; every pick is remembered.
   useEffect(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify(picks));
     } catch {
       // storage can be unavailable (private mode); picks then last for this visit
     }
-    if (!LOGIN.test(picks.user.trim())) return;
-    const t = window.setTimeout(() => setApplied(picks), 700);
+    const t = window.setTimeout(() => setApplied(picks), 250);
     return () => window.clearTimeout(t);
   }, [picks]);
 
@@ -269,6 +234,11 @@ export default function Builder() {
                       />
                       <span className={`${s.paint} pix`} style={{ backgroundImage: `url(/art/${scene}/stats.png)` }} />
                       <span className={s.sceneName}>{scene}</span>
+                      {!isReady(scene) && (
+                        <span className={s.wip} title="Fire being reworked">
+                          WIP
+                        </span>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -354,6 +324,40 @@ export default function Builder() {
             </div>
           </details>
 
+          <div className={s.row}>
+            <fieldset className={s.group}>
+              <legend className={s.label}>Time</legend>
+              <div className={s.chips}>
+                {(["auto", "day", "night"] as const).map((t) => (
+                  <label key={t} className={s.chip}>
+                    <input type="radio" name="time" checked={picks.time === t} onChange={() => set({ time: t })} />
+                    <span>{t === "auto" ? "Follow the theme" : t === "day" ? "Day" : "Night"}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className={s.group}>
+              <legend className={s.label}>Fire</legend>
+              <div className={s.chips}>
+                {(["themed", "classic"] as const).map((f) => (
+                  <label key={f} className={s.chip}>
+                    <input
+                      type="radio"
+                      name="fire"
+                      checked={(isReady(picks.scene) ? picks.fire : "classic") === f}
+                      disabled={!isReady(picks.scene)}
+                      onChange={() => set({ fire: f })}
+                    />
+                    <span>{f === "themed" ? "Themed" : "Classic"}</span>
+                  </label>
+                ))}
+              </div>
+              <span className={s.help}>
+                {isReady(picks.scene) ? "Themed fits the scene; classic is the original flame." : "WIP: this scene's fire is being reworked."}
+              </span>
+            </fieldset>
+          </div>
+
           <label className={s.toggle}>
             <input type="checkbox" checked={picks.animate} onChange={(e) => set({ animate: e.target.checked })} />
             <span className={s.switch} aria-hidden="true" />
@@ -361,36 +365,38 @@ export default function Builder() {
           </label>
 
           <button type="submit" className="btn btn-primary" disabled={!valid}>
-            Paint my cards
+            Update the snippets
           </button>
         </form>
 
         <div className={s.results}>
           {ready && applied.cards.length === 0 && <p className={s.empty}>Choose at least one card.</p>}
           {ready && applied.cards.map((w) => {
-            const q = `/${w}?${query(applied, w)}&scale=2`;
             const name = cardName(w, applied.scene);
+            const fire = isReady(applied.scene) ? applied.fire : "classic";
+            const options = { ...applied.words[w], ...applied, fire };
+            const times = applied.time === "auto" ? [false, true] : [applied.time === "night"];
             return (
               <article key={w} className={s.result}>
                 <header className={s.resultHead}>
                   <h3 className="display">{name}</h3>
                   <code>/{w}</code>
                 </header>
-                <div className={s.pair}>
-                  <figure>
-                    <Live url={q} alt={`${applied.user}'s ${name} by day`} />
-                    <figcaption>Day</figcaption>
-                  </figure>
-                  <figure>
-                    <Live url={`${q}&time=night`} alt={`${applied.user}'s ${name} by night`} />
-                    <figcaption>Night</figcaption>
-                  </figure>
+                <div className={times.length > 1 ? s.pair : undefined}>
+                  {times.map((night) => (
+                    <figure key={`${night}`}>
+                      <div className={s.shot}>
+                        <Preview scene={applied.scene} widget={w} night={night} options={options} alt={`${name} preview by ${night ? "night" : "day"}`} />
+                      </div>
+                      <figcaption>Preview (sample data), {night ? "night" : "day"}</figcaption>
+                    </figure>
+                  ))}
                 </div>
                 <div className={s.snippet}>
                   <pre>
-                    <code>{snippet(origin, applied, w)}</code>
+                    <code>{valid ? snippet(origin, applied, w) : "Type a valid GitHub login to get the snippet."}</code>
                   </pre>
-                  <Copy text={snippet(origin, applied, w)} />
+                  {valid && <Copy text={snippet(origin, applied, w)} />}
                 </div>
               </article>
             );
