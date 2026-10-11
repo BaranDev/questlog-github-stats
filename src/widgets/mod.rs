@@ -144,6 +144,23 @@ mod tests {
     }
 
     #[test]
+    fn every_scene_renders_every_widget_day_and_night() {
+        let a = Assets::embedded().unwrap();
+        for scene in a.scene_names() {
+            for w in [Widget::Stats, Widget::Languages, Widget::Streak] {
+                for night in [false, true] {
+                    let look = Look { scene: scene.into(), night, ..Default::default() };
+                    let frames = render(&a, w, &look, &sample()).unwrap_or_else(|| panic!("{scene} {w:?}"));
+                    assert!(!frames.is_empty());
+                    assert_scene_colors(&a, &look, &frames);
+                    let msg = message(&a, w, &look, "No adventurer by that name").unwrap();
+                    assert_scene_colors(&a, &look, &[msg]);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn message_cards_draw_in_widget_art() {
         let a = Assets::embedded().unwrap();
         for w in [Widget::Stats, Widget::Languages, Widget::Streak] {

@@ -134,6 +134,7 @@ impl<'a> Card<'a> {
 mod tests {
     use super::*;
     use crate::scene::Assets;
+    use crate::scene::fixture::*;
 
     fn drawn_right_edge(img: &Image) -> i64 {
         let mut right = -1;
@@ -202,54 +203,30 @@ mod tests {
 
     #[test]
     fn night_painting_is_used_when_present_and_the_tint_when_absent() {
-        const SCENE: &str = r##"{"palette":["#112233"],"ink":{"title":"#112233","title_edge":"#112233","text":"#112233","bar":"#112233","bar_track":"#112233","xp":"#112233","spark":"#112233","notch":"#112233"},"night":{"#112233":"#445566"},"titles":{},"labels":{}}"##;
-        const ANCHORS: &str = r#"{"title":{"x":0,"y":0,"w":10},"subtitle":{"x":0,"y":0,"w":10},"message":{"x":0,"y":0,"w":10,"h":10},"style":"ink"}"#;
-        let png = |c: Rgb| -> &'static [u8] {
-            let mut img = Image::new(OW, OH);
-            img.fill_rect(0, 0, OW as i64 - 1, OH as i64 - 1, c);
-            Box::leak(img.to_png().into_boxed_slice())
-        };
-        let with_night = Assets::from_files(&[
-            ("t/scene.json", SCENE.as_bytes()),
-            ("t/stats.json", ANCHORS.as_bytes()),
-            ("t/stats.png", png([0x11, 0x22, 0x33])),
-            ("t/stats-night.png", png([0xAA, 0xBB, 0xCC])),
-        ])
-        .unwrap();
-        assert_eq!(with_night.scene("t").unwrap().paintings.len(), 1, "-night.png is not a widget");
-        let day = Card::new(&with_night, with_night.scene("t").unwrap(), "stats", false).unwrap().frame();
-        let night = Card::new(&with_night, with_night.scene("t").unwrap(), "stats", true).unwrap().frame();
-        assert_eq!(day.px[0], [0x11, 0x22, 0x33, 255]);
+        let night_png = solid(OW, OH, [0xAA, 0xBB, 0xCC]);
+        let with_night = with(scene("t"), vec![("t/stats-night.png", Some(night_png))]).unwrap();
+        let t = with_night.scene("t").unwrap();
+        assert_eq!(t.paintings.len(), 3, "-night.png is not a widget");
+        let day = Card::new(&with_night, t, "stats", false).unwrap().frame();
+        let night = Card::new(&with_night, t, "stats", true).unwrap().frame();
+        assert_eq!([day.px[0][0], day.px[0][1], day.px[0][2]], COLOR);
         assert_eq!(night.px[0], [0xAA, 0xBB, 0xCC, 255], "own night painting");
 
-        let tinted = Assets::from_files(&[
-            ("t/scene.json", SCENE.as_bytes()),
-            ("t/stats.json", ANCHORS.as_bytes()),
-            ("t/stats.png", png([0x11, 0x22, 0x33])),
-        ])
-        .unwrap();
+        let tinted = with(scene("t"), vec![]).unwrap();
         let night = Card::new(&tinted, tinted.scene("t").unwrap(), "stats", true).unwrap().frame();
-        assert_eq!(night.px[0], [0x44, 0x55, 0x66, 255], "falls back to the night table");
+        assert_eq!([night.px[0][0], night.px[0][1], night.px[0][2]], NIGHT_COLOR, "falls back to the night table");
     }
 
     #[test]
     fn small_titles_wrap_and_fit_inside_their_box() {
-        const SCENE: &str = r##"{"palette":["#112233"],"ink":{"title":"#112233","title_edge":"#112233","text":"#112233","bar":"#112233","bar_track":"#112233","xp":"#112233","spark":"#112233","notch":"#112233"},"night":{},"titles":{},"labels":{}}"##;
-        let anchors = |size: u32| -> &'static [u8] {
-            let j = format!(
-                r#"{{"title":{{"x":8,"y":40,"w":90,"lines":2,"line_h":18,"size":{size}}},"subtitle":{{"x":0,"y":0,"w":10}},"message":{{"x":0,"y":0,"w":10,"h":10}},"style":"ink"}}"#
-            );
-            Box::leak(j.into_bytes().into_boxed_slice())
-        };
-        let png: &'static [u8] = Box::leak(Image::new(OW, OH).to_png().into_boxed_slice());
-        let a = Assets::from_files(&[
-            ("t/scene.json", SCENE.as_bytes()),
-            ("t/stats.json", anchors(20)),
-            ("t/stats.png", png),
-            ("u/scene.json", SCENE.as_bytes()),
-            ("u/stats.json", anchors(30)),
-            ("u/stats.png", png),
-        ])
+        let anchors = |size: u32| ANCHORS.replace(r#""line_h":18"#, &format!(r#""line_h":18,"size":{size}"#));
+        let a = with(
+            [scene("t"), scene("u")].concat(),
+            vec![
+                ("t/stats.json", Some(leak(anchors(20).into_bytes()))),
+                ("u/stats.json", Some(leak(anchors(30).into_bytes()))),
+            ],
+        )
         .unwrap();
         let (small, big) = (Card::new(&a, a.scene("t").unwrap(), "stats", false).unwrap(), Card::new(&a, a.scene("u").unwrap(), "stats", false).unwrap());
         assert!(std::ptr::eq(small.title_font(), &a.title_small) && std::ptr::eq(big.title_font(), &a.title_font));
@@ -262,6 +239,8 @@ mod tests {
             let lines = wrap(&a.title_small, &title, tb.w, tb.lines);
             assert!(lines.len() <= tb.lines && lines.iter().all(|l| a.title_small.length(l) <= tb.w), "{title:?}");
         }
+        let bad = ANCHORS.replace(r#""line_h":18"#, r#""line_h":18,"size":25"#);
+        assert!(with(scene("t"), vec![("t/stats.json", Some(leak(bad.into_bytes())))]).is_err(), "only 30 and 20 are allowed");
     }
 
     #[test]

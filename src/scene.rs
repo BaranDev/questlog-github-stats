@@ -126,6 +126,31 @@ impl Scene {
     }
 }
 
+/// Widget -> the anchor boxes its renderer needs.
+const WIDGET_BOXES: [(&str, &[&str]); 3] =
+    [("stats", &["left", "right"]), ("languages", &["list"]), ("streak", &["fire", "text", "notches"])];
+const REQUIRED_SPRITES: [&str; 5] = ["flame-small-0", "flame-steady-0", "flame-bonfire-0", "ashes-0", "rune-othala"];
+
+/// A scene that lacks a piece a renderer needs fails at load, naming the scene and the piece.
+fn validate(scene: &Scene) -> Result<(), BoxError> {
+    let name = &scene.name;
+    for (w, boxes) in WIDGET_BOXES {
+        let painting = scene.paintings.get(w).ok_or(format!("{name}: painting {w:?} missing ({w}.png and {w}.json)"))?;
+        for b in boxes {
+            if !painting.anchors.boxes.contains_key(*b) {
+                return Err(format!("{name}: {w} box {b:?} missing").into());
+            }
+        }
+        if !scene.titles.contains_key(w) {
+            return Err(format!("{name}: title for {w:?} missing").into());
+        }
+    }
+    if let Some(sprite) = REQUIRED_SPRITES.iter().find(|s| !scene.sprites.contains_key(**s)) {
+        return Err(format!("{name}: sprite {sprite:?} missing").into());
+    }
+    Ok(())
+}
+
 pub struct Assets {
     pub scenes: HashMap<String, Scene>,
     pub title_font: Font,
@@ -201,6 +226,7 @@ impl Assets {
                     scene.paintings.insert(widget.to_string(), Painting { image, night, anchors });
                 }
             }
+            validate(&scene)?;
             scenes.insert(name.to_string(), scene);
         }
         Ok(Assets {
@@ -222,8 +248,63 @@ impl Assets {
     }
 }
 
+/// Small complete scenes built in memory, for tests of the loader and the card code.
+#[cfg(test)]
+pub(crate) mod fixture {
+    use super::*;
+
+    pub const ANCHORS: &str = r#"{"title":{"x":8,"y":40,"w":90,"lines":2,"line_h":18},"subtitle":{"x":0,"y":0,"w":10},"message":{"x":0,"y":0,"w":10,"h":10},"style":"ink","boxes":{"left":{"x":0,"y":0,"w":1,"h":1},"right":{"x":0,"y":0,"w":1,"h":1},"list":{"x":0,"y":0,"w":1,"h":1},"fire":{"x":0,"y":0,"w":1,"h":1},"text":{"x":0,"y":0,"w":1,"h":1},"notches":{"x":0,"y":0,"w":1,"h":1}}}"#;
+    pub const COLOR: Rgb = [0x11, 0x22, 0x33];
+    pub const NIGHT_COLOR: Rgb = [0x44, 0x55, 0x66];
+
+    pub fn leak(b: Vec<u8>) -> &'static [u8] {
+        Box::leak(b.into_boxed_slice())
+    }
+
+    pub fn solid(w: usize, h: usize, c: Rgb) -> &'static [u8] {
+        let mut img = Image::new(w, h);
+        img.fill_rect(0, 0, w as i64 - 1, h as i64 - 1, c);
+        leak(img.to_png())
+    }
+
+    pub type Files = Vec<(String, &'static [u8])>;
+
+    /// Every file a valid scene needs: 160×64 paintings, anchors, titles, the required sprites.
+    pub fn scene(name: &str) -> Files {
+        let inks = ["title", "title_edge", "text", "bar", "bar_track", "xp", "spark", "notch"]
+            .map(|k| format!(r##""{k}":"#112233""##))
+            .join(",");
+        let json = format!(
+            r##"{{"palette":["#112233"],"ink":{{{inks}}},"night":{{"#112233":"#445566"}},"titles":{{"stats":"S","languages":"L","streak":"C"}},"labels":{{}}}}"##
+        );
+        let mut files: Files = vec![(format!("{name}/scene.json"), leak(json.into_bytes()))];
+        for w in ["stats", "languages", "streak"] {
+            files.push((format!("{name}/{w}.json"), ANCHORS.as_bytes()));
+            files.push((format!("{name}/{w}.png"), solid(PAINT_W, PAINT_H, COLOR)));
+        }
+        for s in REQUIRED_SPRITES {
+            files.push((format!("{name}/sprites/{s}.png"), solid(2, 2, COLOR)));
+        }
+        files
+    }
+
+    /// Load `files` plus `extra`; a later entry replaces an earlier one with the same path, and `None` removes it.
+    pub fn with(files: Files, extra: Vec<(&str, Option<&'static [u8]>)>) -> Result<Assets, BoxError> {
+        let mut kept: Files = files;
+        for (p, b) in extra {
+            kept.retain(|(q, _)| q != p);
+            if let Some(b) = b {
+                kept.push((p.to_string(), b));
+            }
+        }
+        let refs: Vec<(&str, &'static [u8])> = kept.iter().map(|(p, b)| (p.as_str(), *b)).collect();
+        Assets::from_files(&refs)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::fixture::*;
     use super::*;
 
     fn assets() -> Assets {
@@ -231,24 +312,23 @@ mod tests {
     }
 
     #[test]
-    fn forest_is_complete() {
+    fn every_scene_is_complete() {
         let a = assets();
-        assert_eq!(a.scene_names(), vec!["forest"]);
-        let s = a.scene("forest").unwrap();
-        for w in ["stats", "languages", "streak"] {
-            let p = &s.paintings[w];
-            assert_eq!((p.image.w, p.image.h), (OW, OH), "{w}");
-            assert!(s.titles.contains_key(w), "{w} title");
-        }
-        for (w, boxes) in [("stats", &["left", "right"][..]), ("languages", &["list"]), ("streak", &["fire", "text", "notches"])] {
-            for b in boxes {
-                assert!(s.paintings[w].anchors.boxes.contains_key(*b), "{w}.{b}");
+        assert!(a.scene_names().contains(&"forest"));
+        assert!(!a.scene_names().contains(&"_shared"));
+        for s in a.scenes.values() {
+            for w in ["stats", "languages", "streak"] {
+                let p = &s.paintings[w];
+                assert_eq!((p.image.w, p.image.h), (OW, OH), "{} {w}", s.name);
+                if let Some(n) = &p.night {
+                    assert_eq!((n.w, n.h), (OW, OH), "{} {w} night", s.name);
+                }
+                assert!(s.titles.contains_key(w), "{} {w} title", s.name);
+            }
+            for t in REQUIRED_SPRITES {
+                assert!(s.sprites.contains_key(t), "{} {t}", s.name);
             }
         }
-        for t in ["small", "steady", "bonfire"] {
-            assert!(s.sprites.contains_key(&format!("flame-{t}-0")));
-        }
-        assert!(s.sprites.contains_key("ashes-0") && s.sprites.contains_key("rune"));
     }
 
     #[test]
@@ -257,14 +337,20 @@ mod tests {
         for s in a.scenes.values() {
             let mut day: HashSet<Rgb> = s.palette.iter().copied().collect();
             day.extend(s.inks.values().copied());
-            let sprites = s.sprites.iter().filter(|(n, _)| !n.starts_with("rune-")).map(|(_, i)| i); // white masks, recolored when drawn
+            let allowed = s.allowed();
+            // rune masks are white and always recolored when drawn
+            let sprites = s.sprites.iter().filter(|(n, _)| !n.starts_with("rune-")).map(|(_, i)| i);
             let images = s.paintings.values().map(|p| &p.image).chain(sprites);
             for img in images {
                 for p in img.px.iter().filter(|p| p[3] > 0) {
                     assert!(day.contains(&[p[0], p[1], p[2]]), "{} uses off-palette {:?}", s.name, p);
                 }
             }
-            let allowed = s.allowed();
+            for night in s.paintings.values().filter_map(|p| p.night.as_ref()) {
+                for p in night.px.iter().filter(|p| p[3] > 0) {
+                    assert!(allowed.contains(&[p[0], p[1], p[2]]), "{} night painting uses off-palette {:?}", s.name, p);
+                }
+            }
             for c in &day {
                 assert!(s.night.contains_key(c), "{}: no night color for {:?}", s.name, c);
                 assert!(allowed.contains(&s.tone(*c, true)));
@@ -284,29 +370,17 @@ mod tests {
         assert_eq!(s.label("nope"), "nope");
     }
 
-    const SCENE_JSON: &str = r##"{"palette":["#112233"],"ink":{"title":"#112233","title_edge":"#112233","text":"#112233","bar":"#112233","bar_track":"#112233","xp":"#112233","spark":"#112233","notch":"#112233"},"night":{},"titles":{},"labels":{}}"##;
-    const ANCHORS_JSON: &str = r#"{"title":{"x":0,"y":0,"w":10},"subtitle":{"x":0,"y":0,"w":10},"message":{"x":0,"y":0,"w":10,"h":10},"style":"ink"}"#;
-
-    fn solid(w: usize, h: usize, c: Rgb) -> &'static [u8] {
-        let mut img = Image::new(w, h);
-        img.fill_rect(0, 0, w as i64 - 1, h as i64 - 1, c);
-        Box::leak(img.to_png().into_boxed_slice())
-    }
-
-    fn load(files: Vec<(&str, &'static [u8])>) -> Result<Assets, BoxError> {
-        Assets::from_files(&files)
-    }
-
     #[test]
     fn shared_sprites_reach_every_scene_and_scenes_override_them() {
         let (a, c) = ([1, 1, 1], [3, 3, 3]);
-        let assets = load(vec![
-            ("_shared/sprites/lit.png", solid(2, 2, a)),
-            ("_shared/sprites/both.png", solid(2, 2, a)),
-            ("one/scene.json", SCENE_JSON.as_bytes()),
-            ("one/sprites/both.png", solid(2, 2, c)),
-            ("two/scene.json", SCENE_JSON.as_bytes()),
-        ])
+        let assets = with(
+            [scene("one"), scene("two")].concat(),
+            vec![
+                ("_shared/sprites/lit.png", Some(solid(2, 2, a))),
+                ("_shared/sprites/both.png", Some(solid(2, 2, a))),
+                ("one/sprites/both.png", Some(solid(2, 2, c))),
+            ],
+        )
         .unwrap();
         assert_eq!(assets.scene_names(), vec!["one", "two"], "_shared is not a scene");
         let (one, two) = (assets.scene("one").unwrap(), assets.scene("two").unwrap());
@@ -317,26 +391,50 @@ mod tests {
     }
 
     #[test]
+    fn shared_sprites_can_complete_a_scene() {
+        let a = with(
+            scene("t"),
+            vec![("t/sprites/rune-othala.png", None), ("_shared/sprites/rune-othala.png", Some(solid(5, 9, [255; 3])))],
+        )
+        .unwrap();
+        assert!(a.scene("t").unwrap().sprites.contains_key("rune-othala"));
+    }
+
+    #[test]
     fn paintings_come_in_two_sizes() {
         let red = [200, 0, 0];
         for (w, h) in [(PAINT_W, PAINT_H), (OW, OH)] {
-            let a = load(vec![
-                ("t/scene.json", SCENE_JSON.as_bytes()),
-                ("t/stats.json", ANCHORS_JSON.as_bytes()),
-                ("t/stats.png", solid(w, h, red)),
-            ])
-            .unwrap_or_else(|e| panic!("{w}x{h}: {e}"));
+            let a = with(scene("t"), vec![("t/stats.png", Some(solid(w, h, red)))]).unwrap_or_else(|e| panic!("{w}x{h}: {e}"));
             let img = &a.scene("t").unwrap().paintings["stats"].image;
             assert_eq!((img.w, img.h), (OW, OH), "{w}x{h}");
             assert_eq!(img.px[OW * OH - 1], [200, 0, 0, 255]);
         }
-        let err = load(vec![
-            ("t/scene.json", SCENE_JSON.as_bytes()),
-            ("t/stats.json", ANCHORS_JSON.as_bytes()),
-            ("t/stats.png", solid(100, 50, red)),
-        ])
-        .err()
-        .expect("100x50 is rejected");
+        let err = with(scene("t"), vec![("t/stats.png", Some(solid(100, 50, red)))]).err().expect("100x50 is rejected");
         assert!(err.to_string().contains("t/stats.png"), "{err}");
+    }
+
+    #[test]
+    fn a_scene_missing_a_piece_fails_naming_scene_and_piece() {
+        assert!(with(scene("t"), vec![]).is_ok());
+        let no_title = r##"{"palette":[],"ink":{"title":"#000000","title_edge":"#000000","text":"#000000","bar":"#000000","bar_track":"#000000","xp":"#000000","spark":"#000000","notch":"#000000"},"night":{},"titles":{"stats":"S","languages":"L"},"labels":{}}"##;
+        let mut cases: Vec<(Vec<(String, Option<&'static [u8]>)>, String)> = Vec::new();
+        for w in ["stats", "languages", "streak"] {
+            cases.push((vec![(format!("t/{w}.json"), None)], w.to_string()));
+        }
+        for s in REQUIRED_SPRITES {
+            cases.push((vec![(format!("t/sprites/{s}.png"), None)], s.to_string()));
+        }
+        cases.push((vec![("t/scene.json".to_string(), Some(no_title.as_bytes()))], "streak".to_string()));
+        for (w, b) in [("stats", "right"), ("languages", "list"), ("streak", "notches")] {
+            let gone = format!(r#""{b}":{{"x":0,"y":0,"w":1,"h":1}}"#);
+            let json = ANCHORS.replace(&format!("{gone},"), "").replace(&format!(",{gone}"), "");
+            assert_ne!(json, ANCHORS, "{b} removed");
+            cases.push((vec![(format!("t/{w}.json"), Some(leak(json.into_bytes())))], b.to_string()));
+        }
+        for (extra, piece) in cases {
+            let extra: Vec<(&str, Option<&'static [u8]>)> = extra.iter().map(|(p, b)| (p.as_str(), *b)).collect();
+            let msg = with(scene("t"), extra).err().unwrap_or_else(|| panic!("{piece}: loaded")).to_string();
+            assert!(msg.contains(&piece) && (msg.starts_with("t:") || msg.contains("t/")), "{piece}: {msg}");
+        }
     }
 }
