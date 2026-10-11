@@ -1,6 +1,6 @@
 # questlog-github-stats
 
-Hand-painted pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a campfire for your streak. Paste one line into your profile README: no token, no workflow, no setup.
+Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a campfire for your streak. Paste one line into your profile README: no token, no workflow, no setup.
 
 ![The forest scene: Character Sheet, Spellbook and Campfire, by day and by night](assets/readme/hero.png)
 

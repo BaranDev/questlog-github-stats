@@ -9,7 +9,7 @@ const tiny = localFont({ src: "./fonts/Tiny5-Regular.ttf", variable: "--font-tin
 export const metadata: Metadata = {
   title: "questlog: your GitHub profile, painted like a realm",
   description:
-    "Hand-painted pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a fire for your streak. Paste one line, no setup.",
+    "Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a fire for your streak. Paste one line, no setup.",
   icons: { icon: "/static/favicon.svg" },
 };
 

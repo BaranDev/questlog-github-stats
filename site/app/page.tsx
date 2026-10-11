@@ -23,7 +23,7 @@ export default function Home() {
             <h1 className={s.h1}>
               Your GitHub profile, painted like a <span className={s.realm}>realm.</span>
             </h1>
-            <p className={s.heroLine}>Hand-painted pixel-art cards for your README. No setup.</p>
+            <p className={s.heroLine}>Pixel-art cards for your README. No setup.</p>
             <div className={s.ctas}>
               <a className="btn btn-primary" href="#demo">
                 Make my cards

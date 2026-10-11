@@ -26,7 +26,7 @@ export default function Bento() {
           </div>
           <div className={s.copy}>
             <p className={s.big}>16</p>
-            <h3 className={s.title}>scenes, painted by hand</h3>
+            <h3 className={s.title}>painted scenes</h3>
             <p className={s.text}>
               Forests, castles, cozy corners and scholarly halls. Every scene has all three cards, painted to match.
             </p>
