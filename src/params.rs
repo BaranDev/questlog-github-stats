@@ -4,6 +4,9 @@ use crate::widgets::{Look, Widget};
 use std::collections::HashMap;
 
 const MAX_TEXT: usize = 60;
+const MAX_LABELS: usize = 20;
+const MAX_HIDE: usize = 20;
+const MAX_HIDE_KEY: usize = 40;
 
 #[derive(Debug)]
 pub struct Request {
@@ -38,9 +41,10 @@ fn text(s: &str) -> String {
 fn labels(s: &str) -> Option<HashMap<String, String>> {
     s.split(',')
         .filter(|p| !p.trim().is_empty())
+        .take(MAX_LABELS)
         .map(|p| {
             let (k, v) = p.split_once(':')?;
-            let k = k.trim().to_lowercase();
+            let k = clip(&k.trim().to_ascii_lowercase());
             (!k.is_empty()).then(|| (k, text(v)))
         })
         .collect()
@@ -80,9 +84,15 @@ pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Re
         }
     }
     if let Some(h) = q.get("hide") {
-        look.hide = h.split(',').map(|k| k.trim().to_lowercase()).filter(|k| !k.is_empty()).collect();
+        look.hide = h
+            .split(',')
+            .map(|k| k.trim().to_ascii_lowercase())
+            .filter(|k| !k.is_empty())
+            .take(MAX_HIDE)
+            .map(|k| k.chars().take(MAX_HIDE_KEY).collect())
+            .collect();
     }
-    let user = q.get("user").map(|u| u.trim().to_lowercase()).unwrap_or_default();
+    let user = q.get("user").map(|u| u.trim().to_ascii_lowercase()).unwrap_or_default();
     if user.is_empty() {
         fail("Add ?user=your-github-login".into());
     } else if !valid_login(&user) {
@@ -139,6 +149,22 @@ mod tests {
         assert_eq!(r.look.title.as_deref(), Some("My Journey"));
         let long = "t".repeat(200);
         assert_eq!(ok(&[("user", "a"), ("title", long.as_str())]).look.title.unwrap().len(), 60);
+    }
+
+    #[test]
+    fn non_ascii_logins_are_refused() {
+        assert!(err(&[("user", "\u{212A}elvin")]).message.contains("not a GitHub login"), "Kelvin sign");
+    }
+
+    #[test]
+    fn labels_and_hide_are_capped() {
+        let many: Vec<String> = (0..50).map(|i| format!("k{i}")).collect();
+        let labels: Vec<String> = many.iter().map(|k| format!("{k}:v")).collect();
+        let r = ok(&[("user", "a"), ("labels", &labels.join(",")), ("hide", &many.join(","))]);
+        assert_eq!((r.look.labels.len(), r.look.hide.len()), (20, 20));
+        let long = "x".repeat(100);
+        let r = ok(&[("user", "a"), ("labels", &format!("{long}:v")), ("hide", &long)]);
+        assert!(r.look.labels.keys().all(|k| k.len() == 20) && r.look.hide.iter().all(|k| k.len() == 40));
     }
 
     #[test]

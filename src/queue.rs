@@ -63,6 +63,8 @@ pub enum Enqueued {
 }
 
 const HOUR: Duration = Duration::from_secs(3600);
+/// Past this many entries, the IP log and the failed map are swept of expired entries.
+const SWEEP_AT: usize = 1000;
 
 struct State {
     pending: VecDeque<String>,
@@ -133,6 +135,9 @@ impl<F: Fetcher> Queue<F> {
             }
             s.failed.remove(login);
         }
+        if s.failed.len() > SWEEP_AT {
+            s.failed.retain(|_, &mut until| now < until);
+        }
         if s.active.contains(login) {
             let pos = s.pending.iter().position(|l| l == login).unwrap_or(0);
             return Enqueued::Waiting { eta_secs: eta(&s, cfg, pos, now) };
@@ -149,6 +154,9 @@ impl<F: Fetcher> Queue<F> {
                 return Enqueued::IpLimited;
             }
             log.push_back(now);
+            if s.ip_log.len() > SWEEP_AT {
+                s.ip_log.retain(|_, log| log.back().is_some_and(|&t| now.duration_since(t) < HOUR));
+            }
         }
         s.pending.push_back(login.to_string());
         s.active.insert(login.to_string());
@@ -334,6 +342,22 @@ mod tests {
         assert_eq!(q.enqueue("d", None), Enqueued::Full);
         tokio::time::sleep(Duration::from_secs(3601)).await;
         assert_eq!(q.enqueue("a", Some("ip1")), Enqueued::Waiting { eta_secs: 10 }, "already queued: no new slot used");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn ip_log_does_not_keep_expired_entries() {
+        let cfg = QueueConfig { capacity: 5000, ..Default::default() };
+        let (q, _, _) = setup("q-iplog", cfg, vec![]);
+        for i in 0..=SWEEP_AT {
+            q.enqueue(&format!("u{i}"), Some(&format!("ip{i}")));
+        }
+        tokio::time::sleep(Duration::from_secs(3601)).await;
+        for i in 0..=SWEEP_AT {
+            q.enqueue(&format!("v{i}"), Some(&format!("new{i}")));
+        }
+        let s = q.inner.state.lock().unwrap();
+        assert!(s.ip_log.values().all(|l| !l.is_empty()));
+        assert!(!s.ip_log.contains_key("ip0"), "expired entries are swept");
     }
 
     #[tokio::test(start_paused = true)]
