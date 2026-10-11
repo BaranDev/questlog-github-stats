@@ -64,6 +64,8 @@ pub struct Anchors {
 
 pub struct Painting {
     pub image: Image,
+    /// `<widget>-night.png`, when the scene paints its own night version; otherwise the night table tints `image`.
+    pub night: Option<Image>,
     pub anchors: Anchors,
 }
 
@@ -143,7 +145,7 @@ impl Assets {
         Assets::from_files(embedded::FILES)
     }
 
-    /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.png + .json,
+    /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.png + .json (+ <widget>-night.png),
     /// <scene>/sprites/<name>.png.
     pub fn from_files(files: &[(&str, &'static [u8])]) -> Result<Assets, BoxError> {
         let file = |p: &str| files.iter().find(|(n, _)| *n == p).map(|(_, b)| *b);
@@ -173,7 +175,10 @@ impl Assets {
                     let png_path = format!("{prefix}{widget}.png");
                     let png = file(&png_path).ok_or(format!("{p}: painting missing"))?;
                     let anchors: Anchors = serde_json::from_slice(b)?;
-                    scene.paintings.insert(widget.to_string(), Painting { image: painting_image(&png_path, png)?, anchors });
+                    let image = painting_image(&png_path, png)?;
+                    let night_path = format!("{prefix}{widget}-night.png");
+                    let night = file(&night_path).map(|b| painting_image(&night_path, b)).transpose()?;
+                    scene.paintings.insert(widget.to_string(), Painting { image, night, anchors });
                 }
             }
             scenes.insert(name.to_string(), scene);

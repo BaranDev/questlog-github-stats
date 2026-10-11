@@ -116,7 +116,10 @@ impl<'a> Card<'a> {
     }
 
     pub fn frame(&self) -> Image {
-        let mut out = self.scene.tint(&self.painting.image, self.night);
+        let mut out = match (&self.painting.night, self.night) {
+            (Some(night), true) => night.clone(),
+            _ => self.scene.tint(&self.painting.image, self.night),
+        };
         out.alpha_composite(&self.layer, 0, 0);
         out
     }
@@ -190,6 +193,38 @@ mod tests {
             let allowed = s.allowed();
             assert!(c.frame().px.iter().all(|p| allowed.contains(&[p[0], p[1], p[2]])), "night={night}");
         }
+    }
+
+    #[test]
+    fn night_painting_is_used_when_present_and_the_tint_when_absent() {
+        const SCENE: &str = r##"{"palette":["#112233"],"ink":{"title":"#112233","title_edge":"#112233","text":"#112233","bar":"#112233","bar_track":"#112233","xp":"#112233","spark":"#112233","notch":"#112233"},"night":{"#112233":"#445566"},"titles":{},"labels":{}}"##;
+        const ANCHORS: &str = r#"{"title":{"x":0,"y":0,"w":10},"subtitle":{"x":0,"y":0,"w":10},"message":{"x":0,"y":0,"w":10,"h":10},"style":"ink"}"#;
+        let png = |c: Rgb| -> &'static [u8] {
+            let mut img = Image::new(OW, OH);
+            img.fill_rect(0, 0, OW as i64 - 1, OH as i64 - 1, c);
+            Box::leak(img.to_png().into_boxed_slice())
+        };
+        let with_night = Assets::from_files(&[
+            ("t/scene.json", SCENE.as_bytes()),
+            ("t/stats.json", ANCHORS.as_bytes()),
+            ("t/stats.png", png([0x11, 0x22, 0x33])),
+            ("t/stats-night.png", png([0xAA, 0xBB, 0xCC])),
+        ])
+        .unwrap();
+        assert_eq!(with_night.scene("t").unwrap().paintings.len(), 1, "-night.png is not a widget");
+        let day = Card::new(&with_night, with_night.scene("t").unwrap(), "stats", false).unwrap().frame();
+        let night = Card::new(&with_night, with_night.scene("t").unwrap(), "stats", true).unwrap().frame();
+        assert_eq!(day.px[0], [0x11, 0x22, 0x33, 255]);
+        assert_eq!(night.px[0], [0xAA, 0xBB, 0xCC, 255], "own night painting");
+
+        let tinted = Assets::from_files(&[
+            ("t/scene.json", SCENE.as_bytes()),
+            ("t/stats.json", ANCHORS.as_bytes()),
+            ("t/stats.png", png([0x11, 0x22, 0x33])),
+        ])
+        .unwrap();
+        let night = Card::new(&tinted, tinted.scene("t").unwrap(), "stats", true).unwrap().frame();
+        assert_eq!(night.px[0], [0x44, 0x55, 0x66, 255], "falls back to the night table");
     }
 
     #[test]
