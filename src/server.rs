@@ -83,12 +83,21 @@ async fn card<F: Fetcher>(
         return message(&app, w, req.look, UNKNOWN.into(), "unknown").await;
     }
     match app.queue.enqueue(&req.user, client_ip(&headers).as_deref()) {
-        Enqueued::Waiting { eta_secs } => {
-            let msg = format!("The scribe is inking your sheet... ready in ~{eta_secs} s");
-            message(&app, w, req.look, msg, "placeholder").await
+        Enqueued::Waiting { eta_secs, paused } => {
+            message(&app, w, req.look, placeholder_text(eta_secs, paused), "placeholder").await
         }
         Enqueued::Full | Enqueued::IpLimited => message(&app, w, req.look, BUSY.into(), "busy").await,
         Enqueued::Failed => message(&app, w, req.look, FAILED.into(), "failed").await,
+    }
+}
+
+/// The placeholder line: a quota pause says why and counts in minutes, a normal wait counts in seconds.
+fn placeholder_text(eta_secs: u64, paused: bool) -> String {
+    if paused {
+        let mins = eta_secs.div_ceil(60).max(1);
+        format!("GitHub asks us to wait. You're in the priority queue, ready in ~{mins} min")
+    } else {
+        format!("The scribe is inking your sheet... ready in ~{eta_secs} s")
     }
 }
 
@@ -215,6 +224,22 @@ mod tests {
         assert_eq!((kind.as_str(), cache.as_str()), ("card", READY));
         let (kind, _, _) = get(&format!("{base}/streak?user=octocat&animate=false"), &[]).await;
         assert_eq!(kind, "card", "one fetch serves every widget");
+    }
+
+    #[test]
+    fn placeholder_text_by_pause() {
+        assert_eq!(placeholder_text(10, false), "The scribe is inking your sheet... ready in ~10 s");
+        assert_eq!(placeholder_text(1381, true), "GitHub asks us to wait. You're in the priority queue, ready in ~24 min");
+        assert_eq!(placeholder_text(5, true), "GitHub asks us to wait. You're in the priority queue, ready in ~1 min");
+    }
+
+    #[tokio::test]
+    async fn placeholder_answers_during_a_pause() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        app.queue.pause_for(std::time::Duration::from_secs(600));
+        let (kind, cache, body) = get(&format!("{base}/stats?user=paused"), &[]).await;
+        assert_eq!((kind.as_str(), cache.as_str()), ("placeholder", NO_CACHE));
+        assert!(body.starts_with(b"\x89PNG"));
     }
 
     #[tokio::test]

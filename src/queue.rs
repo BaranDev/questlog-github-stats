@@ -56,7 +56,7 @@ impl Default for QueueConfig {
 
 #[derive(Debug, PartialEq)]
 pub enum Enqueued {
-    Waiting { eta_secs: u64 },
+    Waiting { eta_secs: u64, paused: bool },
     Full,
     IpLimited,
     Failed,
@@ -124,6 +124,12 @@ impl<F: Fetcher> Queue<F> {
         self.inner.state.lock().unwrap().pending.len()
     }
 
+    /// Test hook: starts a quota pause as if GitHub's quota had run low.
+    #[cfg(test)]
+    pub(crate) fn pause_for(&self, d: Duration) {
+        pause(&mut self.inner.state.lock().unwrap(), Instant::now() + d);
+    }
+
     pub fn quota(&self) -> Option<u64> {
         self.inner.state.lock().unwrap().quota
     }
@@ -149,7 +155,7 @@ impl<F: Fetcher> Queue<F> {
         }
         if s.active.contains(login) {
             let pos = s.pending.iter().position(|l| l == login).unwrap_or(0);
-            return Enqueued::Waiting { eta_secs: eta(&s, cfg, pos, now) };
+            return Enqueued::Waiting { eta_secs: eta(&s, cfg, pos, now), paused: paused(&s, now) };
         }
         if s.pending.len() >= cfg.capacity {
             return Enqueued::Full;
@@ -167,9 +173,10 @@ impl<F: Fetcher> Queue<F> {
         s.pending.push_back(login.to_string());
         s.active.insert(login.to_string());
         let wait = eta(&s, cfg, s.pending.len() - 1, now);
+        let is_paused = paused(&s, now);
         drop(s);
         self.inner.notify.notify_one();
-        Enqueued::Waiting { eta_secs: wait }
+        Enqueued::Waiting { eta_secs: wait, paused: is_paused }
     }
 
     async fn work(&self) {
@@ -278,6 +285,10 @@ fn pause(s: &mut State, until: Instant) {
     s.paused_until = Some(s.paused_until.map_or(until, |p| p.max(until)));
 }
 
+fn paused(s: &State, now: Instant) -> bool {
+    s.paused_until.is_some_and(|p| p > now)
+}
+
 /// Seconds until position `pos` is fetched: whole rounds of the workers at the average fetch time, plus any quota
 /// pause, rounded up to 5 s.
 fn eta(s: &State, cfg: &QueueConfig, pos: usize, now: Instant) -> u64 {
@@ -347,7 +358,7 @@ mod tests {
         assert!(matches!(q.enqueue("c", Some("ip2")), Enqueued::Waiting { .. }));
         assert_eq!(q.enqueue("d", None), Enqueued::Full);
         tokio::time::sleep(Duration::from_secs(3601)).await;
-        assert_eq!(q.enqueue("a", Some("ip1")), Enqueued::Waiting { eta_secs: 10 }, "already queued: no new slot used");
+        assert_eq!(q.enqueue("a", Some("ip1")), Enqueued::Waiting { eta_secs: 10, paused: false }, "already queued: no new slot used");
     }
 
     #[tokio::test(start_paused = true)]
@@ -388,10 +399,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn eta_counts_worker_rounds() {
         let (q, _, _) = setup("q-eta", QueueConfig::default(), vec![]);
-        assert_eq!(q.enqueue("a", None), Enqueued::Waiting { eta_secs: 10 });
-        assert_eq!(q.enqueue("b", None), Enqueued::Waiting { eta_secs: 10 });
-        assert_eq!(q.enqueue("c", None), Enqueued::Waiting { eta_secs: 20 });
-        assert_eq!(q.enqueue("c", None), Enqueued::Waiting { eta_secs: 20 });
+        assert_eq!(q.enqueue("a", None), Enqueued::Waiting { eta_secs: 10, paused: false });
+        assert_eq!(q.enqueue("b", None), Enqueued::Waiting { eta_secs: 10, paused: false });
+        assert_eq!(q.enqueue("c", None), Enqueued::Waiting { eta_secs: 20, paused: false });
+        assert_eq!(q.enqueue("c", None), Enqueued::Waiting { eta_secs: 20, paused: false });
     }
 
     #[tokio::test(start_paused = true)]
@@ -424,13 +435,27 @@ mod tests {
         q.start();
         q.enqueue("a", None);
         tokio::time::sleep(Duration::from_secs(5)).await;
-        let Enqueued::Waiting { eta_secs } = q.enqueue("b", None) else { panic!("b should queue") };
+        let Enqueued::Waiting { eta_secs, paused } = q.enqueue("b", None) else { panic!("b should queue") };
         assert!(eta_secs >= 90, "the wait includes the quota pause, got {eta_secs}");
+        assert!(paused, "the placeholder can say why");
         tokio::time::sleep(Duration::from_secs(50)).await;
         assert_eq!(*mock.calls.lock().unwrap(), vec!["a"], "paused");
         tokio::time::sleep(Duration::from_secs(100)).await;
         assert_eq!(*mock.calls.lock().unwrap(), vec!["a", "b"], "resumed after the reset");
         assert_eq!(q.quota(), Some(10));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn waiting_says_whether_the_queue_is_paused() {
+        let low = Quota { remaining: 10, reset_at: now_secs() + 100 };
+        let (q, _, _) = setup("q-paused-flag", QueueConfig::default(), vec![("a", ok("a", Some(low))), ("b", ok("b", None))]);
+        q.start();
+        let Enqueued::Waiting { paused, .. } = q.enqueue("a", None) else { panic!("a should queue") };
+        assert!(!paused, "no pause yet");
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        let Enqueued::Waiting { eta_secs, paused } = q.enqueue("b", None) else { panic!("b should queue") };
+        assert!(paused);
+        assert!(eta_secs >= 90, "the ETA covers the pause, got {eta_secs}");
     }
 
     #[tokio::test(start_paused = true)]
