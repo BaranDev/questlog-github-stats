@@ -11,7 +11,7 @@ use crate::store::Store;
 use crate::widgets::{self, Look, Widget};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderName, StatusCode, header};
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use std::collections::HashMap;
@@ -22,7 +22,11 @@ pub const READY: &str = "public, max-age=43200";
 /// Stale cards (a refresh is queued) must not sit in edge caches for hours.
 pub const STALE: &str = "public, max-age=600";
 pub const NO_CACHE: &str = "no-cache";
-const INDEX: &str = include_str!("../static/index.html");
+pub const PAGE: &str = "public, max-age=300";
+pub const ASSET: &str = "public, max-age=604800";
+mod embedded_static {
+    include!(concat!(env!("OUT_DIR"), "/static_files.rs"));
+}
 const UNKNOWN: &str = "No adventurer by that name";
 const BUSY: &str = "The scriptorium is busy, try again soon";
 const FAILED: &str = "The road is closed";
@@ -36,10 +40,56 @@ pub struct App<F: Fetcher> {
 
 pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
     Router::new()
-        .route("/", get(|| async { Html(INDEX) }))
+        .route("/", get(|| async { static_file("index.html", PAGE) }))
+        .route("/wiki", get(|| async { static_file("wiki.html", PAGE) }))
+        .route("/static/{*path}", get(|Path(p): Path<String>| async move { static_file(&p, ASSET) }))
+        .route("/art/{scene}/{file}", get(art::<F>))
         .route("/health", get(health::<F>))
         .route("/{widget}", get(card::<F>))
         .with_state(app)
+}
+
+fn content_type(path: &str) -> &'static str {
+    match path.rsplit_once('.').map(|(_, e)| e).unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" => "text/javascript; charset=utf-8",
+        "json" => "application/json",
+        "txt" => "text/plain; charset=utf-8",
+        "png" => "image/png",
+        "svg" => "image/svg+xml",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        "woff2" => "font/woff2",
+        _ => "application/octet-stream",
+    }
+}
+
+/// A file from the embedded static/ table, matched exactly, so no path can reach anything else.
+fn static_file(path: &str, cache: &'static str) -> Response {
+    match embedded_static::STATIC_FILES.iter().find(|(n, _)| *n == path) {
+        Some((_, bytes)) => {
+            ([(header::CONTENT_TYPE, content_type(path)), (header::CACHE_CONTROL, cache)], *bytes).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, "not found").into_response(),
+    }
+}
+
+/// The scene paintings, for the pages: `<scene>/<widget>[-night].png` of a real scene, nothing else from art/.
+async fn art<F: Fetcher>(State(app): State<Arc<App<F>>>, Path((scene, file)): Path<(String, String)>) -> Response {
+    let ok = file.strip_suffix(".png").is_some_and(|f| {
+        let f = f.strip_suffix("-night").unwrap_or(f);
+        Widget::from_path(f).is_some()
+    });
+    if !ok || !app.assets.scene_names().contains(&scene.as_str()) {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    }
+    match crate::scene::embedded::FILES.iter().find(|(n, _)| *n == format!("{scene}/{file}")) {
+        Some((_, bytes)) => {
+            ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, ASSET)], *bytes).into_response()
+        }
+        None => (StatusCode::NOT_FOUND, "not found").into_response(),
+    }
 }
 
 async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::Value> {
@@ -301,6 +351,44 @@ mod tests {
         assert_eq!(h("x-questlog"), "error");
         let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
         assert!(body.starts_with(b"\x89PNG"));
+    }
+
+    async fn raw(url: &str) -> (u16, String, String, Vec<u8>) {
+        let res = reqwest::get(url).await.unwrap();
+        let h = |n: &str| res.headers().get(n).map(|v| v.to_str().unwrap().to_string()).unwrap_or_default();
+        let (ct, cc) = (h("content-type"), h("cache-control"));
+        (res.status().as_u16(), ct, cc, res.bytes().await.unwrap().to_vec())
+    }
+
+    #[tokio::test]
+    async fn pages_and_static_files() {
+        let (base, _) = serve(QueueConfig::default()).await;
+        for (path, html) in [("/", true), ("/wiki", true), ("/static/index.html", true)] {
+            let (st, ct, cc, body) = raw(&format!("{base}{path}")).await;
+            assert_eq!((st, ct.as_str()), (200, "text/html; charset=utf-8"), "{path}");
+            assert_eq!(cc, if path == "/static/index.html" { ASSET } else { PAGE }, "{path}");
+            assert!(html && !body.is_empty());
+        }
+        for bad in ["/static/missing.css", "/static/", "/static/%2e%2e/Cargo.toml", "/static/..%2fCargo.toml", "/static/../Cargo.toml"] {
+            assert_eq!(raw(&format!("{base}{bad}")).await.0, 404, "{bad}");
+        }
+        assert_eq!(content_type("a/b.woff2"), "font/woff2");
+        assert_eq!(content_type("x.js"), "text/javascript; charset=utf-8");
+        assert_eq!(content_type("x.svg"), "image/svg+xml");
+    }
+
+    #[tokio::test]
+    async fn art_serves_scene_paintings_only() {
+        let (base, _) = serve(QueueConfig::default()).await;
+        for f in ["stats.png", "languages-night.png", "streak.png", "streak-night.png"] {
+            let (st, ct, cc, body) = raw(&format!("{base}/art/castle-aurora/{f}")).await;
+            assert_eq!((st, ct.as_str(), cc.as_str()), (200, "image/png", ASSET), "{f}");
+            assert_eq!(dims(&body), (320, 128), "{f}");
+        }
+        for bad in ["/art/_shared/stats.png", "/art/_shared/sprites/x.png", "/art/castle/scene.json", "/art/castle/stats.json",
+            "/art/castle/nope.png", "/art/nowhere/stats.png", "/art/castle/sprites/a.png", "/art/castle"] {
+            assert_eq!(raw(&format!("{base}{bad}")).await.0, 404, "{bad}");
+        }
     }
 
     #[tokio::test]

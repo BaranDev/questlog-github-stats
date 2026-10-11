@@ -7,7 +7,7 @@ use crate::text::Font;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
-mod embedded {
+pub mod embedded {
     include!(concat!(env!("OUT_DIR"), "/art_files.rs"));
 }
 static TITLE_FONT: &[u8] = include_bytes!("../fonts/NodestoCapsCondensed-Bold.otf");
