@@ -1,4 +1,4 @@
-import { THEMES, card } from "./data";
+import { THEMES, card, isReady } from "./data";
 import s from "./Themes.module.css";
 
 function Pill({ scene }: { scene: string }) {
@@ -35,7 +35,14 @@ export default function Themes() {
                         loading="lazy"
                         alt={`Character Sheet in the ${scene} scene`}
                       />
-                      <span>{scene}</span>
+                      <span>
+                        {scene}
+                        {!isReady(scene) && (
+                          <small className={s.wip} title="Fire being reworked">
+                            WIP
+                          </small>
+                        )}
+                      </span>
                     </a>
                   </li>
                 ))}

@@ -9,13 +9,16 @@ import s from "./Gallery.module.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
-const SHOTS: [Widget, string, "day" | "night"][] = [
+// The streak shots come in pairs: the scene's themed fire, then the classic flame.
+const SHOTS: [Widget, string, "day" | "night", ("themed" | "classic")?][] = [
   ["stats", "castle-aurora", "night"],
   ["languages", "fairy-garden", "day"],
-  ["streak", "observatory", "night"],
+  ["streak", "observatory", "night", "themed"],
+  ["streak", "observatory", "night", "classic"],
   ["stats", "rose-garden", "day"],
   ["languages", "war-room", "night"],
-  ["streak", "witch-cottage", "day"],
+  ["streak", "cloud-kingdom", "day", "themed"],
+  ["streak", "cloud-kingdom", "day", "classic"],
 ];
 
 export default function Gallery() {
@@ -47,12 +50,12 @@ export default function Gallery() {
         <p className="lede">Light mode shows the day painting, dark mode brings the night. Same card, same numbers.</p>
       </div>
       <div className={s.grid}>
-        {SHOTS.map(([w, scene, time]) => (
-          <figure key={w + scene} className={s.shot}>
+        {SHOTS.map(([w, scene, time, fire]) => (
+          <figure key={w + scene + fire} className={s.shot}>
             <div className={s.frame}>
               <img
                 className="pix"
-                src={card(w, scene, `&time=${time}&scale=2`)}
+                src={card(w, scene, `&time=${time}${fire ? `&fire=${fire}` : ""}&scale=2`)}
                 width={640}
                 height={256}
                 loading="lazy"
@@ -63,6 +66,7 @@ export default function Gallery() {
               <strong className="display">{cardName(w, scene)}</strong>
               <span>
                 {scene}, {time}
+                {fire && `, ${fire} fire`}
               </span>
             </figcaption>
           </figure>
