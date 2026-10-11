@@ -1,5 +1,6 @@
 //! URL query → what to draw, or the message for an error card. Logins are validated before anything else touches
 //! them, so junk never reaches GitHub or the disk.
+use crate::canvas::Rgb;
 use crate::widgets::{Look, Widget};
 use std::collections::HashMap;
 
@@ -7,6 +8,7 @@ const MAX_TEXT: usize = 60;
 const MAX_LABELS: usize = 20;
 const MAX_HIDE: usize = 20;
 const MAX_HIDE_KEY: usize = 40;
+const MAX_NOTE: usize = 2;
 
 #[derive(Debug)]
 pub struct Request {
@@ -38,7 +40,8 @@ fn text(s: &str) -> String {
     s.trim().chars().take(MAX_TEXT).collect()
 }
 
-fn labels(s: &str) -> Option<HashMap<String, String>> {
+/// `key:Text,key:Text`, for labels and values.
+fn pairs(s: &str) -> Option<HashMap<String, String>> {
     s.split(',')
         .filter(|p| !p.trim().is_empty())
         .take(MAX_LABELS)
@@ -48,6 +51,17 @@ fn labels(s: &str) -> Option<HashMap<String, String>> {
             (!k.is_empty()).then(|| (k, text(v)))
         })
         .collect()
+}
+
+/// `RRGGBB` or `RGB` hex digits, with an optional leading `#`; nothing else.
+fn color(s: &str) -> Option<Rgb> {
+    let h = s.strip_prefix('#').unwrap_or(s);
+    let d = h.chars().take(7).map(|c| c.to_digit(16).map(|d| d as u8)).collect::<Option<Vec<u8>>>()?;
+    match d[..] {
+        [r, g, b] => Some([r * 17, g * 17, b * 17]),
+        [r1, r2, g1, g2, b1, b2] => Some([r1 * 16 + r2, g1 * 16 + g2, b1 * 16 + b2]),
+        _ => None,
+    }
 }
 
 pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Result<Request, ParamError> {
@@ -84,10 +98,23 @@ pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Re
     }
     look.title = q.get("title").map(|t| text(t)).filter(|t| !t.is_empty());
     look.subtitle = q.get("subtitle").map(|t| text(t)).filter(|t| !t.is_empty());
-    if let Some(l) = q.get("labels") {
-        match labels(l) {
-            Some(m) => look.labels = m,
-            None => fail("Bad labels: use key:Text,key:Text".into()),
+    for (name, map) in [("labels", &mut look.labels), ("values", &mut look.values)] {
+        if let Some(l) = q.get(name) {
+            match pairs(l) {
+                Some(m) => *map = m,
+                None => fail(format!("Bad {name}: use key:Text,key:Text")),
+            }
+        }
+    }
+    if let Some(n) = q.get("note") {
+        look.note = n.split('|').map(text).filter(|l| !l.is_empty()).take(MAX_NOTE).collect();
+    }
+    for (name, slot) in [("title_color", &mut look.title_color), ("text_color", &mut look.text_color), ("outline_color", &mut look.outline_color)] {
+        if let Some(v) = q.get(name) {
+            match color(v) {
+                Some(c) => *slot = Some(c),
+                None => fail(format!("Bad {name}: use RRGGBB or RGB")),
+            }
         }
     }
     if let Some(h) = q.get("hide") {
@@ -156,6 +183,33 @@ mod tests {
         assert_eq!(r.look.title.as_deref(), Some("My Journey"));
         let long = "t".repeat(200);
         assert_eq!(ok(&[("user", "a"), ("title", long.as_str())]).look.title.unwrap().len(), 60);
+    }
+
+    #[test]
+    fn values_and_notes() {
+        let r = ok(&[("user", "a"), ("values", "Level:Archmage, commits:∞,typescript:Master"), ("note", " Line one |Line two|three")]);
+        assert_eq!((r.look.values["level"].as_str(), r.look.values["commits"].as_str()), ("Archmage", "∞"));
+        assert_eq!(r.look.values["typescript"], "Master");
+        assert_eq!(r.look.note, vec!["Line one", "Line two"], "at most two lines, trimmed");
+        assert!(ok(&[("user", "a"), ("note", "||")]).look.note.is_empty());
+        let long = "n".repeat(200);
+        assert_eq!(ok(&[("user", "a"), ("note", &format!("{long}|{long}"))]).look.note.iter().map(String::len).collect::<Vec<_>>(), [60, 60]);
+        let many: Vec<String> = (0..50).map(|i| format!("k{i}:v")).collect();
+        assert_eq!(ok(&[("user", "a"), ("values", &many.join(","))]).look.values.len(), 20);
+        assert_eq!(err(&[("user", "a"), ("values", "junk")]).message, "Bad values: use key:Text,key:Text");
+    }
+
+    #[test]
+    fn colors_are_hex_only() {
+        let r = ok(&[("user", "a"), ("title_color", "#FF8800"), ("text_color", "0af"), ("outline_color", "123456")]);
+        assert_eq!(r.look.title_color, Some([0xFF, 0x88, 0x00]));
+        assert_eq!(r.look.text_color, Some([0x00, 0xAA, 0xFF]));
+        assert_eq!(r.look.outline_color, Some([0x12, 0x34, 0x56]));
+        for bad in ["", "#", "red", "#12345", "1234567", "##fff", " fff", "fff ", "12345g", "+fff", "ｆｆｆ"] {
+            assert_eq!(err(&[("user", "a"), ("text_color", bad)]).message, "Bad text_color: use RRGGBB or RGB", "{bad:?}");
+        }
+        let e = err(&[("user", "a"), ("title_color", "nope"), ("text_color", "fff")]);
+        assert_eq!((e.message.as_str(), e.look.title_color, e.look.text_color), ("Bad title_color: use RRGGBB or RGB", None, Some([255; 3])));
     }
 
     #[test]

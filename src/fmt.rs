@@ -50,6 +50,13 @@ pub fn fit(font: &Font, s: &str, max_w: i64) -> String {
     format!("{}...", chars[..keep].iter().collect::<String>().trim_end())
 }
 
+/// "label value" within `w`: the label is trimmed before the value, and the value only when it alone is too wide.
+pub fn line(font: &Font, label: &str, value: &str, w: i64) -> String {
+    let value = fit(font, value, w);
+    let label = fit(font, label, w - font.length(&value) - font.length(" "));
+    if label.is_empty() { value } else { format!("{label} {value}") }
+}
+
 /// Greedy word wrap into at most `max_lines`; whatever doesn't fit lands on the last line, trimmed with "...".
 pub fn wrap(font: &Font, s: &str, max_w: i64, max_lines: usize) -> Vec<String> {
     let words: Vec<&str> = s.split_whitespace().collect();

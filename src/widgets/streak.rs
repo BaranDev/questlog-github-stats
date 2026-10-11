@@ -2,8 +2,8 @@
 //! streak, and the numbers beside it. The flames flicker.
 use crate::canvas::Image;
 use crate::card::{Card, LINE};
-use crate::fmt::{fit, number};
-use crate::text::Font;
+use crate::fmt::{line, number};
+use crate::scene::OH;
 use crate::stats::UserStats;
 use crate::widgets::{FRAMES, Look};
 
@@ -14,12 +14,6 @@ pub fn tier(current: u32) -> &'static str {
         7..=29 => "flame-steady",
         _ => "flame-bonfire",
     }
-}
-
-/// "label value" within `w`: the label is trimmed before the value is ever touched.
-fn line(font: &Font, label: &str, value: &str, w: i64) -> String {
-    let label = fit(font, label, w - font.length(value) - font.length(" "));
-    if label.is_empty() { value.to_string() } else { format!("{label} {value}") }
 }
 
 pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
@@ -38,10 +32,20 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
             continue;
         }
         let n = number(&assets.text_font, v, text.w / 2);
-        let value = if unit { format!("{n} {days}") } else { n };
+        let value = look.value(k, if unit { format!("{n} {days}") } else { n });
         c.say(&line(&assets.text_font, &look.label(scene, k), &value, text.w), text.x, y);
         y += LINE;
     }
+    // A note goes where most of it fits, preferring: under the lines (when hidden ones left room), under the
+    // notches, then above the lines and below the titles.
+    let tb = painting.anchors.title;
+    let top = (tb.y + tb.lines as i64 * tb.line_h).max(painting.anchors.subtitle.y + LINE);
+    let above = (text.y - look.note.len() as i64 * LINE).max(top);
+    c.note(&look.note, &[
+        (text.x, y, text.w, text.y + text.h),
+        (text.x, notches.y + notches.h + 2, text.w, OH as i64 - 2),
+        (text.x, above, text.w, text.y),
+    ]);
     if shown("best") {
         let marks = (s.best_streak as i64 / 5).min(notches.w / 4);
         let ink = c.ink("notch");
