@@ -6,6 +6,11 @@ services:
     expose: ["8080"]
     networks: [edge]
     mem_limit: 256m
+    cpus: "1.0"          # a render storm can't starve the other apps on the box
+    pids_limit: 64
+    read_only: true      # only the /data volume is writable
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     env_file: .env
     volumes:
       - questlog-data:/data
