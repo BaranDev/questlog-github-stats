@@ -1,0 +1,120 @@
+/* Hero: editorial split, words left, the live card right, a wide field of night between them. */
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  column-gap: clamp(3rem, 7vw, 7rem);
+  align-items: center;
+  width: min(100% - 2 * var(--gutter), var(--wide));
+  min-height: min(100svh, 62rem);
+  margin: 0 auto;
+  padding: 9rem 0 6rem;
+}
+
+.heroCopy {
+  display: grid;
+  gap: 2rem;
+  max-width: 62rem;
+}
+
+.h1 {
+  max-width: 62rem;
+  font-size: clamp(2.6rem, 5vw, 5rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.realm {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.12em;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  text-shadow: 0 0 42px rgba(193, 117, 48, 0.55);
+}
+
+.heroLine {
+  max-width: 34rem;
+  color: var(--muted);
+  font-size: clamp(1.1rem, 1.5vw, 1.3rem);
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.heroArt {
+  position: relative;
+  justify-self: end;
+  width: min(100%, 36rem);
+}
+
+.heroArt::before {
+  content: "";
+  position: absolute;
+  inset: -30% -25%;
+  z-index: -1;
+  background:
+    radial-gradient(closest-side, rgba(193, 117, 48, 0.32), transparent 72%),
+    radial-gradient(closest-side at 70% 30%, rgba(60, 84, 170, 0.35), transparent 70%);
+  filter: blur(10px);
+}
+
+.heroArt img {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(245, 222, 160, 0.16),
+    0 50px 90px -40px rgba(0, 0, 0, 0.95);
+  -webkit-box-reflect: below 14px linear-gradient(transparent 62%, rgba(255, 255, 255, 0.16));
+}
+
+@media (max-width: 960px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 4rem;
+    min-height: 0;
+    padding: 8rem 0 4rem;
+  }
+
+  .heroArt {
+    justify-self: start;
+    width: min(100%, 40rem);
+  }
+}
+
+/* The closing call to action */
+.cta {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 3rem;
+  width: min(100% - 2 * var(--gutter), var(--wide));
+  margin: 0 auto;
+  padding: clamp(7rem, 14vw, 13rem) 0;
+  text-align: center;
+}
+
+.cta::before {
+  content: "";
+  position: absolute;
+  inset: 0 -20%;
+  z-index: -1;
+  background:
+    radial-gradient(42% 46% at 50% 55%, rgba(193, 117, 48, 0.34), transparent 70%),
+    radial-gradient(60% 50% at 50% 40%, rgba(40, 56, 122, 0.4), transparent 72%);
+}
+
+.ctaTitle {
+  font-size: clamp(2.4rem, 5.6vw, 5.75rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.ctaTitle br {
+  display: block;
+}

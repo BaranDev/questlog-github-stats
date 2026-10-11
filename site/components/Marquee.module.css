@@ -1,0 +1,82 @@
+.wrap {
+  position: relative;
+  padding-bottom: var(--section);
+}
+
+.wrap .head {
+  padding-bottom: 0;
+}
+
+/* Full-bleed row that fades out at both edges. */
+.marquee {
+  overflow: hidden;
+  padding: 1.5rem 0;
+  border-block: 1px solid var(--line);
+  background: linear-gradient(90deg, transparent, rgba(255, 246, 225, 0.03), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: scroll 70s linear infinite;
+}
+
+.marquee:hover .track {
+  animation-play-state: paused;
+}
+
+.row {
+  display: flex;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 2.25rem;
+  font-size: clamp(1.4rem, 2.4vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.item svg {
+  filter: drop-shadow(0 0 10px currentColor);
+}
+
+@keyframes scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* No motion: the languages sit still and wrap. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .track {
+    width: auto;
+    animation: none;
+  }
+
+  .row {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 1.25rem;
+    padding: 0 var(--gutter);
+  }
+
+  .row[aria-hidden] {
+    display: none;
+  }
+}

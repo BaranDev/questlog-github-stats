@@ -1,0 +1,111 @@
+.stage {
+  position: relative;
+  overflow: clip;
+}
+
+.inner {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: clamp(3rem, 7vw, 7rem);
+  align-items: start;
+  width: min(100% - 2 * var(--gutter), var(--wide));
+  margin: 0 auto;
+  padding: var(--section) 0;
+}
+
+.copy {
+  position: sticky;
+  top: 8rem;
+  display: grid;
+  gap: 1.4rem;
+}
+
+.deck {
+  display: grid;
+  gap: 2rem;
+}
+
+.card {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #1d1926, #141119);
+  box-shadow: 0 40px 80px -40px rgba(0, 0, 0, 0.95);
+  transform-origin: 50% 0%;
+  will-change: transform;
+}
+
+.card img {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+}
+
+.card figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem 1.25rem;
+  padding: 1rem 0.6rem 0.5rem;
+}
+
+.card strong {
+  flex: none;
+  font-size: 1.85rem;
+  line-height: 1;
+  color: var(--gold);
+}
+
+.card span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* With motion allowed, the section pins and the cards stack into one pile. */
+.stacking {
+  height: 100vh;
+  height: 100svh;
+}
+
+.stacking .inner {
+  height: 100%;
+  align-items: center;
+  padding: 5rem 0 2rem;
+}
+
+.stacking .copy {
+  position: static;
+}
+
+.stacking .deck {
+  grid-template-areas: "card";
+  padding-top: 3.5rem;
+}
+
+.stacking .card {
+  grid-area: card;
+}
+
+@media (max-width: 960px) {
+  .inner {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: 2.5rem;
+  }
+
+  .copy {
+    position: static;
+  }
+
+  .card figcaption {
+    flex-direction: column;
+  }
+
+  .card strong {
+    font-size: 1.6rem;
+  }
+
+  .stacking .inner {
+    padding-top: 6rem;
+  }
+}

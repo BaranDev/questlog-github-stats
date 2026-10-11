@@ -1,0 +1,189 @@
+/* Inline typography images: little paintings set into the heading. */
+.heading {
+  max-width: 70rem;
+  margin-bottom: clamp(3rem, 6vw, 5rem);
+  font-size: clamp(2.1rem, 4.6vw, 4.5rem);
+  line-height: 1.14;
+}
+
+.pill {
+  display: inline-block;
+  width: 2.25em;
+  height: 0.9em;
+  margin: 0 0.06em;
+  vertical-align: -0.1em;
+  border-radius: 999px;
+  background-size: cover;
+  background-position: center;
+  box-shadow:
+    0 0 0 1px rgba(245, 222, 160, 0.3),
+    0 12px 26px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* Horizontal accordion: four slices, the hovered or focused one opens. */
+.accordion {
+  display: flex;
+  gap: 12px;
+  height: clamp(34rem, 74vh, 42rem);
+}
+
+.slice {
+  --open: 0;
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--night-2);
+  transition: flex-grow 0.85s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.slice:hover,
+.slice:focus-within,
+.accordion:not(:hover):not(:focus-within) .slice:first-child {
+  --open: 1;
+  flex-grow: 5;
+}
+
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.04);
+  transition: transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.slice:hover .bg {
+  transform: scale(1.1);
+}
+
+.slice::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(15, 13, 20, 0.05) 10%, rgba(15, 13, 20, 0.45) 45%, rgba(15, 13, 20, 0.94) 100%);
+}
+
+.spine {
+  position: absolute;
+  left: 1.1rem;
+  bottom: 1.6rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--display);
+  font-size: clamp(2rem, 3vw, 2.9rem);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--gold);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  opacity: calc(1 - var(--open));
+  transition: opacity 0.4s;
+}
+
+.body {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: grid;
+  gap: 0.75rem;
+  width: min(46rem, (100vw - 2 * var(--gutter)) * 0.58);
+  padding: clamp(1.5rem, 2.6vw, 2.5rem);
+  opacity: var(--open);
+  transform: translateY(calc((1 - var(--open)) * 1.5rem));
+  transition:
+    opacity 0.45s 0.12s,
+    transform 0.7s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.name {
+  font-family: var(--display);
+  font-size: clamp(2.6rem, 4vw, 3.75rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 0.9;
+  color: var(--gold);
+}
+
+.blurb {
+  max-width: 34rem;
+  color: var(--parchment);
+  opacity: 0.85;
+}
+
+.thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 320px));
+  gap: 1rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumbs a {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.thumbs img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(245, 222, 160, 0.14),
+    0 18px 30px -18px rgba(0, 0, 0, 0.9);
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.thumbs a:hover img,
+.thumbs a:focus-visible img {
+  transform: translateY(-3px);
+}
+
+.thumbs a:hover,
+.thumbs a:focus-visible {
+  color: var(--gold);
+}
+
+.thumbs span {
+  font-family: var(--tiny);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 820px) {
+  .accordion {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .slice,
+  .slice:hover,
+  .slice:focus-within,
+  .accordion:not(:hover):not(:focus-within) .slice:first-child {
+    --open: 1;
+    flex: none;
+  }
+
+  .spine {
+    display: none;
+  }
+
+  .body {
+    position: relative;
+    width: auto;
+    padding-top: 9rem;
+  }
+
+  .thumbs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+}
