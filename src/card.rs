@@ -1,5 +1,6 @@
 //! Drawing one card: the scene painting (night-toned on request) under a transparent 320×128 layer for text,
-//! bars and sprites. Every color comes from the scene, so cards obey the palette rule by construction.
+//! bars and sprites. Every color comes from the scene, so cards obey the palette rule by construction; the only
+//! exceptions are the text colors a URL asks for, used as given day and night.
 use crate::canvas::{Image, Rgb};
 use crate::fmt::{fit, wrap};
 use crate::scene::{Assets, OH, OW, Painting, Scene, Style, TITLE_SMALL_SIZE};
@@ -13,12 +14,28 @@ pub struct Card<'a> {
     pub painting: &'a Painting,
     pub night: bool,
     pub layer: Image,
+    /// Requested text colors (title fill, body fill, text outline), drawn untoned.
+    pub title_color: Option<Rgb>,
+    pub text_color: Option<Rgb>,
+    pub outline_color: Option<Rgb>,
 }
+
+/// Where note lines may go: x, top y, width, and the y they must end above.
+pub type Spot = (i64, i64, i64, i64);
 
 impl<'a> Card<'a> {
     pub fn new(assets: &'a Assets, scene: &'a Scene, widget: &str, night: bool) -> Option<Card<'a>> {
         let painting = scene.paintings.get(widget)?;
-        Some(Card { assets, scene, painting, night, layer: Image::new(OW, OH) })
+        Some(Card {
+            assets,
+            scene,
+            painting,
+            night,
+            layer: Image::new(OW, OH),
+            title_color: None,
+            text_color: None,
+            outline_color: None,
+        })
     }
 
     pub fn ink(&self, name: &str) -> Rgb {
@@ -41,25 +58,32 @@ impl<'a> Card<'a> {
         self.stamp(&m, x, y, c);
     }
 
-    /// Title-colored text with a 1 px dark edge (and a drop shadow), stamped as offsets like the Pillow cards.
-    pub fn outlined(&mut self, font: &Font, s: &str, x: i64, y: i64, shadow: bool) {
+    fn title_ink(&self) -> Rgb {
+        self.title_color.unwrap_or(self.ink("title"))
+    }
+
+    /// Text in `fill` with a 1 px dark edge (and a drop shadow), stamped as offsets like the Pillow cards.
+    pub fn outlined(&mut self, font: &Font, s: &str, x: i64, y: i64, shadow: bool, fill: Rgb) {
         let m = font.render(s);
         let (x, y) = (x - m.x_offset + 1, y - m.y_offset + 1);
         let span: &[i64] = if shadow { &[-1, 0, 1, 2] } else { &[-1, 0, 1] };
-        let (edge, gold) = (self.ink("title_edge"), self.ink("title"));
+        let edge = self.outline_color.unwrap_or(self.ink("title_edge"));
         for &dx in span {
             for &dy in span {
                 self.stamp(&m, x + dx, y + dy, edge);
             }
         }
-        self.stamp(&m, x, y, gold);
+        self.stamp(&m, x, y, fill);
     }
 
     /// Body text in the painting's style: plain ink on paper, outlined on busy art.
     pub fn say(&mut self, s: &str, x: i64, y: i64) {
         match self.painting.anchors.style {
-            Style::Ink => self.text(s, x, y, self.ink("text")),
-            Style::Outlined => self.outlined(&self.assets.text_font, s, x, y, false),
+            Style::Ink => self.text(s, x, y, self.text_color.unwrap_or(self.ink("text"))),
+            Style::Outlined => {
+                let fill = self.text_color.unwrap_or(self.ink("title"));
+                self.outlined(&self.assets.text_font, s, x, y, false, fill)
+            }
         }
     }
 
@@ -74,7 +98,7 @@ impl<'a> Card<'a> {
         let (tb, font) = (self.painting.anchors.title, self.title_font());
         let lines = wrap(font, s, tb.w, tb.lines);
         for (i, line) in lines.iter().enumerate() {
-            self.outlined(font, line, tb.x, tb.y + i as i64 * tb.line_h, true);
+            self.outlined(font, line, tb.x, tb.y + i as i64 * tb.line_h, true, self.title_ink());
         }
         lines.first().map_or(0, |l| font.length(l) + 3)
     }
@@ -85,22 +109,36 @@ impl<'a> Card<'a> {
         let tb = self.painting.anchors.subtitle;
         let x = tb.x.max(self.painting.anchors.title.x + title_width + 6);
         let line = fit(&self.assets.text_font, s, tb.x + tb.w - x);
-        self.outlined(&self.assets.text_font, &line, x, tb.y, false);
+        self.outlined(&self.assets.text_font, &line, x, tb.y, false, self.title_ink());
     }
 
     pub fn subtitle(&mut self, s: &str) {
         let tb = self.painting.anchors.subtitle;
         let line = fit(&self.assets.text_font, s, tb.w);
-        self.outlined(&self.assets.text_font, &line, tb.x, tb.y, false);
+        self.outlined(&self.assets.text_font, &line, tb.x, tb.y, false, self.title_ink());
     }
 
-    /// Label left, value right-aligned; the label gives way (trimmed) so big numbers never collide.
+    /// Label left, value right-aligned; the label gives way (trimmed) so big numbers never collide. A value
+    /// wider than the row is trimmed too.
     pub fn row(&mut self, label: &str, value: &str, x: i64, y: i64, w: i64) -> String {
-        let vw = self.assets.text_font.length(value);
+        let value = fit(&self.assets.text_font, value, w);
+        let vw = self.assets.text_font.length(&value);
         let label = fit(&self.assets.text_font, label, w - vw - 2);
         self.say(&label, x, y);
-        self.say(value, x + w - vw, y);
+        self.say(&value, x + w - vw, y);
         label
+    }
+
+    /// Note lines in the first spot that holds the most of them, each trimmed to the spot's width. Lines that fit
+    /// nowhere are dropped.
+    pub fn note(&mut self, lines: &[String], spots: &[Spot]) {
+        let room = |&(_, y, _, bottom): &Spot| ((bottom - y) / LINE).max(0) as usize;
+        let Some(&spot) = spots.iter().rev().max_by_key(|s| room(s).min(lines.len())) else { return };
+        let (x, y, w, _) = spot;
+        for (i, line) in lines.iter().take(room(&spot)).enumerate() {
+            let line = fit(&self.assets.text_font, line, w);
+            self.say(&line, x, y + i as i64 * LINE);
+        }
     }
 
     /// A 2 px bar: the track in `bar_track`, filled in whole art pixels.

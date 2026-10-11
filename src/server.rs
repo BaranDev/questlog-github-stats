@@ -524,7 +524,11 @@ mod tests {
             .iter()
             .map(|k| format!("{k}:{han}"))
             .collect();
-        let url = format!("{base}/stats?user=kanji&title={han}&subtitle={han}&labels={}", labels.join(","));
+        let note = format!("{han}|{han}|{han}");
+        let url = format!(
+            "{base}/stats?user=kanji&title={han}&subtitle={han}&labels={0}&values={0}&note={note}&title_color=fff&text_color=%23123456",
+            labels.join(",")
+        );
         let start = std::time::Instant::now();
         let (kind, _, _) = get(&url, &[]).await;
         assert_eq!(kind, "card");

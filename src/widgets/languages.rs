@@ -2,7 +2,7 @@
 //! its share and a bar scaled to the top language. Sparkles drift up from the runes. Runes and bars keep their
 //! colors at night: they glow.
 use crate::canvas::{Image, Rgb};
-use crate::card::Card;
+use crate::card::{Card, LINE};
 use crate::stats::UserStats;
 use crate::widgets::{FRAMES, Look};
 
@@ -82,10 +82,12 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
         c.subtitle(sub);
     }
     let list = painting.anchors.boxes["list"];
+    // Five rows fill the page; each note line takes the place of the last language rows.
+    let rows = ((5 * ROW - look.note.len() as i64 * LINE) / ROW) as usize;
     let langs: Vec<&(String, f64)> =
-        s.languages.iter().filter(|(n, _)| !look.hide.contains(&n.to_lowercase())).take(5).collect();
+        s.languages.iter().filter(|(n, _)| !look.hide.contains(&n.to_lowercase())).take(rows).collect();
     if langs.is_empty() {
-        c.message("No spells learned yet");
+        c.message(look.word("empty", "No spells learned yet"));
         return vec![c.frame()];
     }
     let top = langs[0].1.max(f64::EPSILON);
@@ -96,10 +98,13 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
         let mask = scene.sprites.get(&format!("rune-{rune_name}")).unwrap_or(&scene.sprites["rune-othala"]);
         rune(&mut c, mask, list.x + 1, y, color);
         runes.push((list.x + 3, y - 1));
-        let pct = format!("{}%", (share * 100.0).round() as u64);
-        c.row(name, &pct, list.x + 12, y, list.w - 12);
+        let key = name.to_lowercase();
+        let pct = look.value(&key, format!("{}{}", (share * 100.0).round() as u64, look.word("percent", "%")));
+        c.row(look.word(&key, name), &pct, list.x + 12, y, list.w - 12);
         c.bar(list.x + 12, y + 7, list.w - 12, share / top, color);
     }
+    let y = list.y + langs.len() as i64 * ROW;
+    c.note(&look.note, &[(list.x + 12, y, list.w - 12, (list.y + list.h).max(list.y + 5 * ROW))]);
     let (base, spark) = (c.layer.clone(), c.ink("spark"));
     (0..FRAMES)
         .map(|f| {
