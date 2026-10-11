@@ -3,7 +3,9 @@
 use std::{env, fs, path::Path};
 
 fn walk(dir: &Path, root: &Path, base: &str, out: &mut Vec<String>) {
-    let mut entries: Vec<_> = fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
+    // static/ is the site build output; a fresh clone without it still compiles (the pages then 404).
+    let Ok(dir_entries) = fs::read_dir(dir) else { return };
+    let mut entries: Vec<_> = dir_entries.map(|e| e.unwrap().path()).collect();
     entries.sort();
     for p in entries {
         if p.is_dir() {
