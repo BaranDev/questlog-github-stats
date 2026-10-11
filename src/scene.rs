@@ -15,6 +15,8 @@ static TEXT_FONT: &[u8] = include_bytes!("../fonts/Tiny5-Regular.ttf");
 
 pub const OW: usize = 320;
 pub const OH: usize = 128;
+pub const TITLE_SIZE: u32 = 30;
+pub const TITLE_SMALL_SIZE: u32 = 20;
 pub const PAINT_W: usize = 160;
 pub const PAINT_H: usize = 64;
 /// Sprites every scene gets; a scene's own sprite of the same name wins. `_shared` has no scene.json, so it is no scene.
@@ -35,6 +37,9 @@ fn one() -> usize {
 fn title_line() -> i64 {
     24
 }
+fn title_size() -> u32 {
+    TITLE_SIZE
+}
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 pub struct TextBox {
@@ -45,6 +50,9 @@ pub struct TextBox {
     pub lines: usize,
     #[serde(default = "title_line")]
     pub line_h: i64,
+    /// Title font size: 30, or 20 for the smaller title. Ignored on subtitles.
+    #[serde(default = "title_size")]
+    pub size: u32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -120,6 +128,7 @@ impl Scene {
 pub struct Assets {
     pub scenes: HashMap<String, Scene>,
     pub title_font: Font,
+    pub title_small: Font,
     pub text_font: Font,
 }
 
@@ -185,6 +194,9 @@ impl Assets {
                     let image = painting_image(&png_path, png)?;
                     let night_path = format!("{prefix}{widget}-night.png");
                     let night = file(&night_path).map(|b| painting_image(&night_path, b)).transpose()?;
+                    if ![TITLE_SIZE, TITLE_SMALL_SIZE].contains(&anchors.title.size) {
+                        return Err(format!("{p}: title size must be {TITLE_SIZE} or {TITLE_SMALL_SIZE}").into());
+                    }
                     scene.paintings.insert(widget.to_string(), Painting { image, night, anchors });
                 }
             }
@@ -192,7 +204,8 @@ impl Assets {
         }
         Ok(Assets {
             scenes,
-            title_font: Font::from_bytes(TITLE_FONT, 30)?,
+            title_font: Font::from_bytes(TITLE_FONT, TITLE_SIZE)?,
+            title_small: Font::from_bytes(TITLE_FONT, TITLE_SMALL_SIZE)?,
             text_font: Font::from_bytes(TEXT_FONT, 8)?,
         })
     }

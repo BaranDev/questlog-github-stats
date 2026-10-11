@@ -2,8 +2,8 @@
 //! bars and sprites. Every color comes from the scene, so cards obey the palette rule by construction.
 use crate::canvas::{Image, Rgb};
 use crate::fmt::{fit, wrap};
-use crate::scene::{Assets, OH, OW, Painting, Scene, Style};
-use crate::text::TextMask;
+use crate::scene::{Assets, OH, OW, Painting, Scene, Style, TITLE_SMALL_SIZE};
+use crate::text::{Font, TextMask};
 
 pub const LINE: i64 = 10;
 
@@ -42,8 +42,7 @@ impl<'a> Card<'a> {
     }
 
     /// Title-colored text with a 1 px dark edge (and a drop shadow), stamped as offsets like the Pillow cards.
-    pub fn outlined(&mut self, title_font: bool, s: &str, x: i64, y: i64, shadow: bool) {
-        let font = if title_font { &self.assets.title_font } else { &self.assets.text_font };
+    pub fn outlined(&mut self, font: &Font, s: &str, x: i64, y: i64, shadow: bool) {
         let m = font.render(s);
         let (x, y) = (x - m.x_offset + 1, y - m.y_offset + 1);
         let span: &[i64] = if shadow { &[-1, 0, 1, 2] } else { &[-1, 0, 1] };
@@ -60,21 +59,27 @@ impl<'a> Card<'a> {
     pub fn say(&mut self, s: &str, x: i64, y: i64) {
         match self.painting.anchors.style {
             Style::Ink => self.text(s, x, y, self.ink("text")),
-            Style::Outlined => self.outlined(false, s, x, y, false),
+            Style::Outlined => self.outlined(&self.assets.text_font, s, x, y, false),
         }
     }
 
+    /// The font a title box asks for (`size` 20 is the smaller one).
+    pub fn title_font(&self) -> &'a Font {
+        let assets = self.assets;
+        if self.painting.anchors.title.size == TITLE_SMALL_SIZE { &assets.title_small } else { &assets.title_font }
+    }
+
     pub fn title(&mut self, s: &str) {
-        let tb = self.painting.anchors.title;
-        for (i, line) in wrap(&self.assets.title_font, s, tb.w, tb.lines).iter().enumerate() {
-            self.outlined(true, line, tb.x, tb.y + i as i64 * tb.line_h, true);
+        let (tb, font) = (self.painting.anchors.title, self.title_font());
+        for (i, line) in wrap(font, s, tb.w, tb.lines).iter().enumerate() {
+            self.outlined(font, line, tb.x, tb.y + i as i64 * tb.line_h, true);
         }
     }
 
     pub fn subtitle(&mut self, s: &str) {
         let tb = self.painting.anchors.subtitle;
         let line = fit(&self.assets.text_font, s, tb.w);
-        self.outlined(false, &line, tb.x, tb.y, false);
+        self.outlined(&self.assets.text_font, &line, tb.x, tb.y, false);
     }
 
     /// Label left, value right-aligned; the label gives way (trimmed) so big numbers never collide.
@@ -225,6 +230,38 @@ mod tests {
         .unwrap();
         let night = Card::new(&tinted, tinted.scene("t").unwrap(), "stats", true).unwrap().frame();
         assert_eq!(night.px[0], [0x44, 0x55, 0x66, 255], "falls back to the night table");
+    }
+
+    #[test]
+    fn small_titles_wrap_and_fit_inside_their_box() {
+        const SCENE: &str = r##"{"palette":["#112233"],"ink":{"title":"#112233","title_edge":"#112233","text":"#112233","bar":"#112233","bar_track":"#112233","xp":"#112233","spark":"#112233","notch":"#112233"},"night":{},"titles":{},"labels":{}}"##;
+        let anchors = |size: u32| -> &'static [u8] {
+            let j = format!(
+                r#"{{"title":{{"x":8,"y":40,"w":90,"lines":2,"line_h":18,"size":{size}}},"subtitle":{{"x":0,"y":0,"w":10}},"message":{{"x":0,"y":0,"w":10,"h":10}},"style":"ink"}}"#
+            );
+            Box::leak(j.into_bytes().into_boxed_slice())
+        };
+        let png: &'static [u8] = Box::leak(Image::new(OW, OH).to_png().into_boxed_slice());
+        let a = Assets::from_files(&[
+            ("t/scene.json", SCENE.as_bytes()),
+            ("t/stats.json", anchors(20)),
+            ("t/stats.png", png),
+            ("u/scene.json", SCENE.as_bytes()),
+            ("u/stats.json", anchors(30)),
+            ("u/stats.png", png),
+        ])
+        .unwrap();
+        let (small, big) = (Card::new(&a, a.scene("t").unwrap(), "stats", false).unwrap(), Card::new(&a, a.scene("u").unwrap(), "stats", false).unwrap());
+        assert!(std::ptr::eq(small.title_font(), &a.title_small) && std::ptr::eq(big.title_font(), &a.title_font));
+        assert!(a.title_small.length("Character") < a.title_font.length("Character"));
+        let tb = small.painting.anchors.title;
+        for title in ["x".repeat(200), "🐉🐉🐉 漢字漢字 ünïcödé".to_string(), "W".repeat(60), "Character Sheet of Doom".to_string()] {
+            let mut c = Card::new(&a, a.scene("t").unwrap(), "stats", false).unwrap();
+            c.title(&title);
+            assert!(drawn_right_edge(&c.layer) <= tb.x + tb.w + 3, "title {title:?} overflows");
+            let lines = wrap(&a.title_small, &title, tb.w, tb.lines);
+            assert!(lines.len() <= tb.lines && lines.iter().all(|l| a.title_small.length(l) <= tb.w), "{title:?}");
+        }
     }
 
     #[test]
