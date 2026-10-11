@@ -214,6 +214,39 @@
   outline-offset: 3px;
 }
 
+/* Customize panel: collapsed until opened */
+.custom {
+  display: grid;
+  gap: 1rem;
+}
+
+.custom summary {
+  cursor: pointer;
+}
+
+.customBody {
+  display: grid;
+  gap: 1.2rem;
+  margin-top: 1rem;
+}
+
+.color {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.color input[type="color"] {
+  flex: none;
+  width: 2.9rem;
+  height: 2.9rem;
+  padding: 0.2rem;
+  border: 1px solid rgba(242, 230, 201, 0.2);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
 /* Animate switch */
 .toggle {
   position: relative;

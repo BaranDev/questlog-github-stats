@@ -47,11 +47,27 @@ The gallery shows each scene's Character Sheet in the order of the table.
 | `user` | your GitHub login | required |
 | `scene` | any scene above | `forest` |
 | `time` | `day`, `night` | `day` |
-| `title` | any text | the scene's title |
-| `subtitle` | any text | `/stats`: a class from your top language |
-| `labels` | `key:Text,key:Text`, e.g. `commits:Deeds` | the scene's labels |
+| `title` | any text, up to 60 characters | the scene's title |
+| `subtitle` | any text, up to 60 characters | `/stats`: a class from your top language; none on the others |
+| `labels` | `key:Text,key:Text`, e.g. `commits:Deeds`; keys below | the scene's labels |
+| `values` | `key:Text,key:Text`, e.g. `level:Archmage`; keys below. Replaces the drawn value; bars, notches and the fire still follow your real numbers | your numbers |
+| `note` | up to 2 lines split by `\|`, e.g. `Open to work\|DMs open` | none |
+| `title_color` | hex `RRGGBB` or `RGB`, `#` optional (write it as `%23`), e.g. `FFD700` | the scene's ink |
+| `text_color` | hex, as above; colors every other text | the scene's ink |
+| `outline_color` | hex, as above; the dark edge around outlined text | the scene's ink |
 | `hide` | comma list, e.g. `prs,stars` or `html,css` on `/languages` | none |
 | `animate` | `true`, `false` | `true` |
+| `scale` | `1` to `5`, the output size (320×128 times this) | `5` |
+
+Keys are case-insensitive. At most 20 pairs in `labels` and in `values`, keys up to 20 characters, any text up to 60 characters; text that does not fit its place is trimmed with "...".
+
+| Card | `labels` keys | `values` keys |
+|---|---|---|
+| `/stats` | `level`, `commits`, `prs`, `repos`, `stars`, `issues`, `reviews`, `followers`, `contributions` | the same |
+| `/languages` | any language name, e.g. `typescript`, `c%23` (C#), `c%2B%2B` (C++), `jupyter notebook`; `percent` (the `%` after each share); `empty` (the text for an account with no languages) | any language name; replaces that row's percent |
+| `/streak` | `current`, `best`, `total`, `days` (the unit after current and best) | `current`, `best`, `total`; replaces the whole value, unit included |
+
+A note goes where the card has room: under the rows on `/stats`, across both columns when the whole note fits there and under the right column otherwise; under the language rows on `/languages`, where each note line takes the place of the last row, and beside the fire on `/streak`. Hiding rows with `hide` makes more room. A color that is not valid hex draws an error card, like any other bad option.
 
 Only public data is shown. Private contributions count if you've enabled "Include private contributions" in your GitHub profile settings.
 
