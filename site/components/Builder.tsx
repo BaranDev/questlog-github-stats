@@ -183,7 +183,7 @@ export default function Builder() {
     <section className="section" id="demo" aria-labelledby="demo-title">
       <div className="section-head">
         <h2 className="h2" id="demo-title">
-          Make your cards.
+          Make your cards
         </h2>
         <p className="lede">Type your GitHub login, choose a scene, then copy a snippet into your profile README.</p>
       </div>

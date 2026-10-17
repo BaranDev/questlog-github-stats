@@ -20,10 +20,11 @@ export default function Home() {
       <main id="top" style={{ overflowX: "clip" }}>
         <section className={s.hero}>
           <div className={s.heroCopy}>
-            <h1 className={s.h1}>
-              Your GitHub profile, painted like a <span className={s.realm}>realm.</span>
-            </h1>
-            <p className={s.heroLine}>Pixel-art cards for your README. No setup.</p>
+            <h1 className={s.h1}>Pixel-art cards for your GitHub profile</h1>
+            <p className={s.heroLine}>
+              Your stats, your top languages and your streak, drawn in one of 16 painted scenes. Add them to your README
+              with one line: no token, no setup.
+            </p>
             <div className={s.ctas}>
               <a className="btn btn-primary" href="#demo">
                 Make my cards
@@ -47,22 +48,6 @@ export default function Home() {
         <Marquee />
         <Gallery />
         <Builder />
-
-        <section className={s.cta}>
-          <h2 className={s.ctaTitle}>
-            Paste one line.
-            <br />
-            Your profile becomes a <span className={s.realm}>realm.</span>
-          </h2>
-          <div className={s.ctas}>
-            <a className="btn btn-primary" href="#demo">
-              Make my cards
-            </a>
-            <a className="btn btn-ghost" href="/wiki">
-              Read the wiki
-            </a>
-          </div>
-        </section>
       </main>
       <Footer />
     </>

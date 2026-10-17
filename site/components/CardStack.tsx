@@ -48,9 +48,9 @@ export default function CardStack() {
       <div className={s.inner}>
         <div className={s.copy}>
           <h2 className="h2" id="cards-title">
-            Three cards, one realm.
+            The three cards
           </h2>
-          <p className="lede">Use one, or set all three side by side in the same scene so your profile reads like one place.</p>
+          <p className="lede">Use one, or all three in the same scene.</p>
         </div>
         <div className={s.deck}>
           {CARDS.map((c) => (

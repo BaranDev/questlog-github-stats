@@ -7,7 +7,7 @@ export default function Nav() {
         questlog
       </a>
       <nav aria-label="Main">
-        <a href="/#demo">Demo</a>
+        <a href="/#demo">Make cards</a>
         <a href="/#scenes">Scenes</a>
         <a href="/wiki">Wiki</a>
         <a href={REPO}>GitHub</a>
