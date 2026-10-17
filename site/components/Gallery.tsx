@@ -43,11 +43,9 @@ export default function Gallery() {
     <section ref={root} className="section" aria-labelledby="gallery-title">
       <div className="section-head">
         <h2 className="h2" id="gallery-title">
-          Every scene,
-          <br />
-          by day and by night.
+          Day and night
         </h2>
-        <p className="lede">Light mode shows the day painting, dark mode brings the night. Same card, same numbers.</p>
+        <p className="lede">A light theme shows the day painting and a dark theme the night one. The numbers stay the same.</p>
       </div>
       <div className={s.grid}>
         {SHOTS.map(([w, scene, time, fire]) => (

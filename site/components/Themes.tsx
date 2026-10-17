@@ -1,17 +1,15 @@
 import { THEMES, card, isReady } from "./data";
 import s from "./Themes.module.css";
 
-function Pill({ scene }: { scene: string }) {
-  return <span className={`${s.pill} pix`} style={{ backgroundImage: `url(/art/${scene}/streak.png)` }} aria-hidden="true" />;
-}
-
 export default function Themes() {
   return (
     <section className="section" id="scenes" aria-labelledby="scenes-title">
-      <h2 className={s.heading} id="scenes-title">
-        Pick a realm, from <Pill scene="forest" /> deep forests to <Pill scene="castle" /> castle walls,{" "}
-        <Pill scene="witch-cottage" /> cozy cottages and <Pill scene="royal-library" /> quiet libraries.
-      </h2>
+      <div className="section-head">
+        <h2 className="h2" id="scenes-title">
+          Scenes
+        </h2>
+        <p className="lede">16 scenes in four themes, each painted by day and by night. Open one in the wiki to see all of its cards.</p>
+      </div>
 
       <div className={s.accordion}>
         {THEMES.map((t) => (

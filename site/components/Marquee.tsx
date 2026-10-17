@@ -21,11 +21,11 @@ export default function Marquee() {
       <div className={`section ${s.head}`}>
         <div className="section-head">
           <h2 className="h2" id="runes-title">
-            A rune for every language.
+            Language runes
           </h2>
           <p className="lede">
-            The Spellbook marks your top five languages with futhark runes, each in its language&apos;s own color.
-            Thirty runes in all, and othala for everything else.
+            The Spellbook marks each of your top five languages with a rune in that language&apos;s color. There are
+            30 runes, and othala for every other language.
           </p>
         </div>
       </div>

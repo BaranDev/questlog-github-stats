@@ -161,8 +161,9 @@ pre {
 }
 
 .nav-mark {
-  font-family: var(--display);
-  font-size: 1.7rem;
+  font-family: var(--font-mark), var(--display);
+  font-weight: 700;
+  font-size: 1.5rem;
   line-height: 1;
   color: var(--gold);
   text-decoration: none;
@@ -341,8 +342,9 @@ pre {
 }
 
 .footer-mark {
-  font-family: var(--display);
-  font-size: 2.6rem;
+  font-family: var(--font-mark), var(--display);
+  font-weight: 700;
+  font-size: 1.75rem;
   line-height: 1;
   color: var(--gold);
   text-decoration: none;
@@ -372,6 +374,75 @@ pre {
 
 .footer-fine a {
   color: var(--muted);
+}
+
+/* Attributions: a button at the foot of every page that opens the full list of credits in a modal. */
+.attributions-open {
+  min-height: 2.75rem;
+  margin-top: 1.75rem;
+  padding: 0 1.25rem;
+  font-size: 0.9375rem;
+}
+
+.attributions {
+  width: min(100% - 2rem, 52rem);
+  max-height: min(100% - 2rem, 44rem);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--night-2);
+  color: var(--parchment);
+  box-shadow: 0 40px 100px -30px #000;
+}
+
+.attributions::backdrop {
+  background: rgba(8, 7, 12, 0.72);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.attributions-body {
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.attributions header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.attributions h2 {
+  font-size: 1.75rem;
+}
+
+.attributions header .btn {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  font-size: 0.9375rem;
+}
+
+.attributions dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 1.25rem 2.5rem;
+  margin: 0;
+}
+
+.attributions dt {
+  color: var(--parchment);
+  font-weight: 600;
+}
+
+.attributions dd {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.attributions a {
+  color: var(--parchment);
 }
 
 @media (prefers-reduced-motion: reduce) {

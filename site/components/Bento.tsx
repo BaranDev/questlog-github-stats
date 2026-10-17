@@ -8,12 +8,11 @@ export default function Bento() {
     <section className="section" id="features" aria-labelledby="features-title">
       <div className="section-head">
         <h2 className="h2" id="features-title">
-          One line of HTML.
-          <br />A whole realm behind it.
+          How it works
         </h2>
         <p className="lede">
-          questlog paints your cards on its own server. Your README only links to an image, so there is nothing to
-          install, schedule or keep alive.
+          Your README links to an image. questlog draws it on its own server, so there is nothing to install or keep
+          running.
         </p>
       </div>
 
@@ -28,18 +27,16 @@ export default function Bento() {
             <p className={s.big}>16</p>
             <h3 className={s.title}>painted scenes</h3>
             <p className={s.text}>
-              Forests, castles, cozy corners and scholarly halls. Every scene has all three cards, painted to match.
+              Forests, castles, cozy places and old halls. Every scene has all three cards.
             </p>
           </div>
         </article>
 
         <article className={`${s.card} ${s.setup}`}>
           <h3 className={s.words}>
-            <span>No token.</span>
-            <span>No workflow.</span>
-            <span>No setup.</span>
+            <span>Nothing to set up</span>
           </h3>
-          <p className={s.text}>GitHub fetches a public image. Your profile needs nothing else.</p>
+          <p className={s.text}>GitHub loads a public image. No token, no workflow, no Action to schedule.</p>
         </article>
 
         <article className={`${s.card} ${s.daynight}`}>
@@ -48,9 +45,9 @@ export default function Bento() {
             <img className={s.night} src="/art/rose-garden/streak-night.png" width={320} height={128} alt="" loading="lazy" />
           </div>
           <div className={s.copy}>
-            <h3 className={s.title}>Night falls on its own</h3>
+            <h3 className={s.title}>Day and night</h3>
             <p className={s.text}>
-              Readers in dark mode get the night painting, through a plain <code>&lt;picture&gt;</code>.
+              Readers on a dark theme get the night painting, through a plain <code>&lt;picture&gt;</code> tag.
             </p>
           </div>
         </article>
@@ -58,7 +55,7 @@ export default function Bento() {
         <article className={`${s.card} ${s.three}`}>
           <div className={s.copy}>
             <h3 className={s.title}>Three cards</h3>
-            <p className={s.text}>A Character Sheet, a Spellbook of your languages and a fire that grows with your streak.</p>
+            <p className={s.text}>A Character Sheet of your stats, a Spellbook of your top languages and a fire that grows with your streak.</p>
           </div>
           <div className={`${s.fan} pix`} aria-hidden="true">
             {FAN.map((src) => (
@@ -67,18 +64,6 @@ export default function Bento() {
           </div>
         </article>
 
-        <article className={`${s.card} ${s.host}`}>
-          <div className={s.copy}>
-            <h3 className={s.title}>Or keep your own</h3>
-            <p className={s.text}>One Docker image and your own token. It can count your private contributions too.</p>
-          </div>
-          <pre className={s.term}>
-            <code>
-              <span>$</span> docker build -t questlog .{"\n"}
-              <span>$</span> docker run -p 8080:8080 --env-file .env questlog
-            </code>
-          </pre>
-        </article>
       </div>
     </section>
   );

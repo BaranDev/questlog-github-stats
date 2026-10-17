@@ -2,13 +2,13 @@
   Gapless bento, proven per breakpoint (grid-auto-flow: dense everywhere):
 
   6 columns, rows of 19rem:
-    scenes 4x2 = 8, setup 2x1 = 2, daynight 2x1 = 2, three 3x1 = 3, host 3x1 = 3   -> 18 cells = 6 x 3
-    row 1: scenes(1-4) setup(5-6) | row 2: scenes(1-4) daynight(5-6) | row 3: three(1-3) host(4-6)
+    scenes 4x2 = 8, setup 2x1 = 2, daynight 2x1 = 2, three 6x1 = 6   -> 18 cells = 6 x 3
+    row 1: scenes(1-4) setup(5-6) | row 2: scenes(1-4) daynight(5-6) | row 3: three(1-6)
 
   2 columns (<= 1080px):
-    scenes 2x1 = 2, setup, daynight, three, host 1x1 each = 4   -> 6 cells = 2 x 3
+    scenes 2x1 = 2, setup 1x1, daynight 1x1, three 2x1 = 2   -> 6 cells = 2 x 3
 
-  1 column (<= 680px): five cards, one per row.
+  1 column (<= 680px): four cards, one per row.
 */
 .grid {
   display: grid;
@@ -28,9 +28,8 @@
   grid-column: span 2;
 }
 
-.three,
-.host {
-  grid-column: span 3;
+.three {
+  grid-column: span 6;
 }
 
 .card {
@@ -223,32 +222,6 @@
   transform: translate(-30%, 4%) rotate(5deg);
 }
 
-/* Self-host */
-.host {
-  justify-content: space-between;
-  background:
-    radial-gradient(90% 90% at 100% 100%, rgba(193, 117, 48, 0.22), transparent 62%),
-    linear-gradient(160deg, rgba(255, 246, 225, 0.06), rgba(255, 246, 225, 0.015));
-}
-
-.term {
-  margin: 0;
-  padding: 1.1rem 1.25rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(8, 7, 12, 0.7);
-  color: var(--parchment);
-  font-size: 0.9rem;
-  line-height: 1.8;
-}
-
-.term span {
-  color: var(--ember);
-  user-select: none;
-}
-
 @media (max-width: 1080px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -262,13 +235,12 @@
   }
 
   .setup,
-  .daynight,
-  .three,
-  .host {
+  .daynight {
     grid-column: span 1;
   }
 
   .three {
+    grid-column: span 2;
     flex-direction: column-reverse;
     align-items: stretch;
   }
@@ -291,8 +263,7 @@
   .scenes,
   .setup,
   .daynight,
-  .three,
-  .host {
+  .three {
     grid-column: span 1;
   }
 
