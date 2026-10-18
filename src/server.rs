@@ -115,6 +115,10 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/demo/{widget}", get(demo_card::<F>))
         .route("/health", get(health::<F>))
         .route("/{widget}", get(card::<F>))
+        // the short form: /octocat/stats, /octocat/stats/forest-misty, /octocat/stats/forest-misty/night
+        .route("/{user}/{widget}", get(card_at::<F>))
+        .route("/{user}/{widget}/{scene}", get(card_at::<F>))
+        .route("/{user}/{widget}/{scene}/{time}", get(card_at::<F>))
         .with_state(app)
 }
 
@@ -183,10 +187,40 @@ fn client_ip(h: &HeaderMap) -> Option<String> {
     h.get("cf-connecting-ip").and_then(|v| v.to_str().ok()).map(str::to_string)
 }
 
+/// /<user>/<card>[/<scene>[/<time>]]: the same card as /<card>?user=..&scene=..&time=..; the path wins over the
+/// query, and every other option still goes in the query.
+async fn card_at<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(parts): Path<Vec<String>>,
+    Query(mut q): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Response {
+    let mut parts = parts.into_iter();
+    let (Some(user), Some(widget)) = (parts.next(), parts.next()) else {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    };
+    q.insert("user".into(), user);
+    for key in ["scene", "time"] {
+        if let Some(v) = parts.next() {
+            q.insert(key.into(), v);
+        }
+    }
+    serve_card(app, widget, q, headers).await
+}
+
 async fn card<F: Fetcher>(
     State(app): State<Arc<App<F>>>,
     Path(path): Path<String>,
     Query(q): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Response {
+    serve_card(app, path, q, headers).await
+}
+
+async fn serve_card<F: Fetcher>(
+    app: Arc<App<F>>,
+    path: String,
+    q: HashMap<String, String>,
     headers: HeaderMap,
 ) -> Response {
     let Some(w) = Widget::from_path(&path) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
@@ -672,6 +706,23 @@ mod tests {
         let (kind, _, _) = get(&url, &[]).await;
         assert_eq!(kind, "card");
         assert!(start.elapsed() < std::time::Duration::from_secs(1), "took {:?}", start.elapsed());
+    }
+
+    #[tokio::test]
+    async fn the_short_path_draws_the_same_card() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        app.store.put(derive(&RawUser { login: "octo".into(), ..Default::default() }, 0, now_secs())).unwrap();
+        for (short, long) in [
+            ("/octo/stats", "/stats?user=octo"),
+            ("/octo/streak/castle", "/streak?user=octo&scene=castle"),
+            ("/octo/languages/forest-misty/night?langs=3", "/languages?user=octo&scene=forest-misty&time=night&langs=3"),
+        ] {
+            let (a, b) = (get(&format!("{base}{short}"), &[]).await, get(&format!("{base}{long}"), &[]).await);
+            assert_eq!((a.0.as_str(), &a.2), ("card", &b.2), "{short}");
+        }
+        assert_eq!(get(&format!("{base}/octo/stats/castel"), &[]).await.0, "error", "a bad scene is the error card");
+        assert_eq!(reqwest::get(format!("{base}/octo/trophies")).await.unwrap().status(), 404);
+        assert_eq!(get(&format!("{base}/demo/stats"), &[]).await.0, "card", "/demo stays the demo");
     }
 
     #[tokio::test]

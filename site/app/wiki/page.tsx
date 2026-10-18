@@ -44,9 +44,10 @@ function Code({ children }: { children: string }) {
   );
 }
 
-const SNIPPET = `<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="${HOST}/stats?user=you&scene=forest&time=night">
-  <img alt="My Character Sheet" src="${HOST}/stats?user=you&scene=forest">
+const SNIPPET = `![My Character Sheet](${HOST}/you/stats/forest)`;
+const PICTURE = `<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="${HOST}/you/stats/forest/night">
+  <img alt="My Character Sheet" src="${HOST}/you/stats/forest">
 </picture>`;
 
 const STATS_ROWS = [
@@ -166,17 +167,23 @@ export default function Wiki() {
             <section id="getting-started" className={w.section}>
               <h2>Getting started</h2>
               <p>
-                Paste this into your profile README, the repository named after your login (<code>you/you</code>). Change{" "}
-                <code>you</code> to your login and <code>forest</code> to any scene. The{" "}
+                Paste this line into your profile README, the repository named after your login (<code>you/you</code>).
+                Change <code>you</code> to your login and <code>forest</code> to any scene. The{" "}
                 <a href="/#demo">builder</a> writes it for you.
               </p>
               <Code>{SNIPPET}</Code>
-              <h3>Night comes for free</h3>
               <p>
-                GitHub tells the browser whether the reader uses a light or a dark theme. The <code>&lt;source&gt;</code> line
-                applies in dark mode and shows the night painting; everyone else gets the <code>&lt;img&gt;</code>, the day.
-                No script, no setting.
+                The address reads <code>/login/card/scene/time</code>: <code>/you/streak/castle/night</code> is your
+                Campfire in the castle at night. Scene and time are optional. Every other option goes after a{" "}
+                <code>?</code>, like <code>/you/languages/forest?langs=3</code>.
               </p>
+              <h3>Night for dark mode readers</h3>
+              <p>
+                GitHub tells the browser whether the reader uses a light or a dark theme. Use the{" "}
+                <code>&lt;picture&gt;</code> tag below and readers in dark mode get the night painting; everyone else gets
+                the day. No script, no setting.
+              </p>
+              <Code>{PICTURE}</Code>
               <div className={w.pair}>
                 <figure>
                   <Shot src={card("stats", "forest", "&time=day")} alt="Character Sheet, forest, by day" />
