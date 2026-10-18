@@ -1,9 +1,10 @@
-//! In-memory guards for the renderer: finished PNGs kept by what they show, so a card asked for again (another
-//! Cloudflare data center, the old host, a junk query parameter, a refreshed edge cache) costs no render; and a
-//! per-IP budget of fresh renders, so one client can't keep the renderer busy for everyone.
+//! Guards for the renderer: finished PNGs kept by what they show, in memory and on disk, so a card asked for again
+//! (another Cloudflare data center, the old host, a junk query parameter, a refreshed edge cache, a restart) costs
+//! no render; and a per-IP budget of fresh renders, so one client can't keep the renderer busy for everyone.
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -16,10 +17,13 @@ pub fn key(parts: &[&str]) -> u64 {
     h.finish()
 }
 
-/// Least recently used PNGs up to a byte budget. Eviction drops the oldest tenth at once, so it runs rarely.
+/// Least recently used PNGs up to a byte budget in memory, and every card also saved as <disk>/<key>.png, so it
+/// is drawn once per build. Eviction drops the oldest tenth at once, so it runs rarely; the disk is trimmed by
+/// trim_disk().
 pub struct RenderCache {
     budget: usize,
     inner: Mutex<Lru>,
+    disk: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -28,33 +32,104 @@ struct Lru {
     bytes: usize,
     tick: u64,
     hits: u64,
+    disk_hits: u64,
     misses: u64,
 }
 
 impl RenderCache {
     pub fn new(budget: usize) -> RenderCache {
-        RenderCache { budget, inner: Mutex::new(Lru::default()) }
+        RenderCache { budget, inner: Mutex::new(Lru::default()), disk: None }
+    }
+
+    /// Also keep cards on disk under `root`/<version>/; folders of other versions are deleted (their cards were
+    /// drawn from other art or code).
+    pub fn with_disk(mut self, root: impl Into<PathBuf>, version: &str) -> RenderCache {
+        let root = root.into();
+        if let Ok(entries) = std::fs::read_dir(&root) {
+            for e in entries.flatten() {
+                if e.file_name().to_string_lossy() != version {
+                    let _ = std::fs::remove_dir_all(e.path());
+                }
+            }
+        }
+        let dir = root.join(version);
+        if std::fs::create_dir_all(&dir).is_ok() {
+            self.disk = Some(dir);
+        }
+        self
+    }
+
+    fn file(&self, key: u64) -> Option<PathBuf> {
+        self.disk.as_ref().map(|d| d.join(format!("{key:016x}.png")))
     }
 
     pub fn get(&self, key: u64) -> Option<Arc<Vec<u8>>> {
-        let mut l = self.inner.lock().unwrap();
-        l.tick += 1;
-        let tick = l.tick;
-        match l.map.get_mut(&key) {
-            Some((bytes, used)) => {
+        {
+            let mut l = self.inner.lock().unwrap();
+            l.tick += 1;
+            let tick = l.tick;
+            if let Some((bytes, used)) = l.map.get_mut(&key) {
                 *used = tick;
                 let bytes = bytes.clone();
                 l.hits += 1;
+                return Some(bytes);
+            }
+        }
+        // not in memory: a card saved on disk is read without holding the lock, then kept in memory
+        match self.file(key).and_then(|f| std::fs::read(f).ok()) {
+            Some(bytes) => {
+                let bytes = Arc::new(bytes);
+                self.remember(key, bytes.clone());
+                self.inner.lock().unwrap().disk_hits += 1;
                 Some(bytes)
             }
             None => {
-                l.misses += 1;
+                self.inner.lock().unwrap().misses += 1;
                 None
             }
         }
     }
 
+    /// A newly drawn card: kept in memory and saved on disk (written aside, then renamed in, so a reader never
+    /// sees half a file).
     pub fn put(&self, key: u64, bytes: Arc<Vec<u8>>) {
+        if let Some(f) = self.file(key) {
+            let tmp = f.with_extension("tmp");
+            if std::fs::write(&tmp, &*bytes).is_ok() {
+                let _ = std::fs::rename(&tmp, &f);
+            }
+        }
+        self.remember(key, bytes);
+    }
+
+    /// Deletes the least recently used saved cards (by modification time) until the disk holds at most `budget`
+    /// bytes. Returns how many it deleted.
+    pub fn trim_disk(&self, budget: u64) -> usize {
+        let Some(dir) = &self.disk else { return 0 };
+        let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
+        let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
+            .flatten()
+            .filter_map(|e| {
+                let m = e.metadata().ok()?;
+                Some((m.modified().ok()?, m.len(), e.path()))
+            })
+            .collect();
+        let mut total: u64 = files.iter().map(|f| f.1).sum();
+        files.sort();
+        let mut removed = 0;
+        for (_, len, path) in files {
+            if total <= budget {
+                break;
+            }
+            if std::fs::remove_file(&path).is_ok() {
+                total -= len;
+                removed += 1;
+            }
+        }
+        removed
+    }
+
+    fn remember(&self, key: u64, bytes: Arc<Vec<u8>>) {
         let mut l = self.inner.lock().unwrap();
         l.tick += 1;
         let tick = l.tick;
@@ -73,10 +148,10 @@ impl RenderCache {
         }
     }
 
-    /// (entries, bytes, hits, misses) for /health.
+    /// (entries, bytes, hits, misses) for /health; disk hits count as hits.
     pub fn stats(&self) -> (usize, usize, u64, u64) {
         let l = self.inner.lock().unwrap();
-        (l.map.len(), l.bytes, l.hits, l.misses)
+        (l.map.len(), l.bytes, l.hits + l.disk_hits, l.misses)
     }
 }
 
@@ -130,6 +205,21 @@ mod tests {
         assert!(c.get(0).is_some(), "the entry in use survives");
         assert!(c.get(1).is_none(), "an old one went");
         assert!(c.get(29).is_some(), "the newest stays");
+    }
+
+    #[test]
+    fn cards_on_disk_outlive_the_memory_and_other_versions_are_dropped() {
+        let root = crate::store::temp_dir("render-disk");
+        let c = RenderCache::new(1 << 20).with_disk(&root, "v1");
+        c.put(7, Arc::new(vec![1, 2, 3]));
+        let after_restart = RenderCache::new(1 << 20).with_disk(&root, "v1");
+        assert_eq!(after_restart.get(7).as_deref(), Some(&vec![1, 2, 3]), "read back from disk");
+        let next_build = RenderCache::new(1 << 20).with_disk(&root, "v2");
+        assert!(next_build.get(7).is_none(), "another build draws again");
+        assert!(!root.join("v1").exists(), "the old version's folder is gone");
+        next_build.put(1, Arc::new(vec![0; 100]));
+        next_build.put(2, Arc::new(vec![0; 100]));
+        assert_eq!(next_build.trim_disk(150), 1, "trimmed to the budget");
     }
 
     #[test]

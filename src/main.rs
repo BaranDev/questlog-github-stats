@@ -32,11 +32,36 @@ async fn main() -> Result<(), questlog::BoxError> {
         }
     });
 
-    let app = Arc::new(App::new(Arc::new(Assets::embedded()?), store, queue));
+    let cache = questlog::cache::RenderCache::new(questlog::server::CACHE_BYTES)
+        .with_disk(std::path::Path::new(&data).join("renders"), env!("RENDER_VERSION"));
+    let app = Arc::new(App::with_cache(Arc::new(Assets::embedded()?), store, queue, cache));
+    let trim = app.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            tick.tick().await;
+            let t = trim.clone();
+            let n = tokio::task::spawn_blocking(move || t.cache.trim_disk(questlog::server::DISK_BYTES)).await.unwrap_or(0);
+            if n > 0 {
+                eprintln!("renders: trimmed {n} saved cards");
+            }
+        }
+    });
     // HOST=127.0.0.1 keeps a local run off the network; the container needs the default.
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
     eprintln!("questlog listening on {host}:{port}");
+    // the site's own cards, drawn once now (or read back from disk), before its first visitor
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let urls = questlog::server::site_cards();
+        for url in &urls {
+            if let Ok(r) = client.get(format!("http://127.0.0.1:{port}{url}")).send().await {
+                let _ = r.bytes().await;
+            }
+        }
+        eprintln!("site cards ready: {}", urls.len());
+    });
     axum::serve(listener, router(app)).with_graceful_shutdown(shutdown()).await?;
     Ok(())
 }

@@ -30,10 +30,31 @@ pub const SHED: &str = "public, max-age=60";
 /// How long a request may wait for a render slot. GitHub's image proxy gives up after about 4 s (observed, not
 /// documented), and a card it gives up on is a broken image; a busy card is not.
 const SHED_AFTER: Duration = Duration::from_secs(2);
-/// Fresh renders one IP may ask for per minute (GitHub's image proxy and local requests are not limited).
-const RENDERS_PER_IP_MINUTE: usize = 60;
+/// Fresh renders one IP may ask for per minute (GitHub's image proxy and local requests are not limited). The wiki
+/// alone shows about 120 cards, so a visitor right after a deploy must fit.
+const RENDERS_PER_IP_MINUTE: usize = 240;
 /// Finished cards kept in memory (the container has 1 GB).
-const CACHE_BYTES: usize = 256 << 20;
+pub const CACHE_BYTES: usize = 256 << 20;
+/// Finished cards kept on disk, for this build.
+pub const DISK_BYTES: u64 = 2 << 30;
+
+/// Card URLs in the site's own pages (the home page and the wiki), to draw right after a start so their first
+/// visitor never waits or trips the per-IP budget.
+pub fn site_cards() -> Vec<String> {
+    let mut urls = Vec::new();
+    for page in ["index.html", "wiki.html"] {
+        let Some((_, html)) = embedded_static::STATIC_FILES.iter().find(|(n, _)| *n == page) else { continue };
+        let html = String::from_utf8_lossy(html);
+        for part in html.split("src=\"").skip(1) {
+            let url = part.split('"').next().unwrap_or("").replace("&amp;", "&");
+            let card = ["/stats?", "/languages?", "/streak?", "/demo/"].iter().any(|p| url.starts_with(p));
+            if card && !urls.contains(&url) {
+                urls.push(url);
+            }
+        }
+    }
+    urls
+}
 /// GitHub's image proxy is reported to keep images sent with a bare no-cache; this spelling it does not keep.
 pub const NO_CACHE: &str = "max-age=0, no-cache, no-store, must-revalidate";
 pub const PAGE: &str = "public, max-age=300";
@@ -61,6 +82,10 @@ pub struct App<F: Fetcher> {
 impl<F: Fetcher> App<F> {
     /// Two render slots; the busy cards for overload are drawn once here, so shedding costs no render.
     pub fn new(assets: Arc<Assets>, store: Arc<Store>, queue: Queue<F>) -> App<F> {
+        Self::with_cache(assets, store, queue, RenderCache::new(CACHE_BYTES))
+    }
+
+    pub fn with_cache(assets: Arc<Assets>, store: Arc<Store>, queue: Queue<F>, cache: RenderCache) -> App<F> {
         let shed = [Widget::Stats, Widget::Languages, Widget::Streak]
             .into_iter()
             .filter_map(|w| {
@@ -73,7 +98,7 @@ impl<F: Fetcher> App<F> {
             store,
             queue,
             renders: Arc::new(Semaphore::new(2)),
-            cache: RenderCache::new(CACHE_BYTES),
+            cache,
             ip_renders: IpBudget::new(RENDERS_PER_IP_MINUTE),
             shed,
         }
@@ -300,10 +325,12 @@ fn look_key(look: &Look) -> String {
     format!("{rest:?}{labels:?}{values:?}{hide:?}")
 }
 
-/// The busy card, drawn once at start, for a request the renderer can't take now.
-fn shed<F: Fetcher>(app: &App<F>, w: Widget) -> Response {
+/// The busy card, drawn once at start, for a request the renderer can't take now. `cache` is SHED for an overload
+/// (everyone's problem for a minute) and NO_CACHE for a used-up IP budget (that client's problem only: an edge
+/// cache must not hand it to everyone).
+fn shed<F: Fetcher>(app: &App<F>, w: Widget, cache: &'static str) -> Response {
     match app.shed.get(&w) {
-        Some(bytes) => png(bytes.clone(), SHED, "busy"),
+        Some(bytes) => png(bytes.clone(), cache, "busy"),
         None => failed(),
     }
 }
@@ -325,12 +352,12 @@ async fn render_png<F: Fetcher>(
         return png((*bytes).clone(), cache, kind);
     }
     if ip.is_some_and(|ip| !app.ip_renders.take(ip)) {
-        return shed(app, w);
+        return shed(app, w, NO_CACHE);
     }
     let permit = match tokio::time::timeout(SHED_AFTER, app.renders.clone().acquire_owned()).await {
         Ok(Ok(permit)) => permit,
         Ok(Err(_)) => return failed(),
-        Err(_) => return shed(app, w),
+        Err(_) => return shed(app, w, SHED),
     };
     let out = tokio::task::spawn_blocking(move || {
         let _permit = permit;
@@ -664,7 +691,7 @@ mod tests {
             assert_eq!(get(&format!("{base}/demo/stats?title=t{i}"), &ip).await.0, "card");
         }
         let (kind, cache, _) = get(&format!("{base}/demo/stats?title=over"), &ip).await;
-        assert_eq!((kind.as_str(), cache.as_str()), ("busy", SHED));
+        assert_eq!((kind.as_str(), cache.as_str()), ("busy", NO_CACHE), "one client's limit is never cached at the edge");
         let (kind, _, _) = get(&format!("{base}/demo/stats?title=t0"), &ip).await;
         assert_eq!(kind, "card", "a card already drawn costs nothing");
         let camo = [("cf-connecting-ip", "6.6.6.6"), ("user-agent", "github-camo (1)")];
