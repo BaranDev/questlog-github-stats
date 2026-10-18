@@ -45,6 +45,37 @@ mod tests {
     use crate::widgets::{Widget, assert_scene_colors, empty, render as draw, sample};
 
     #[test]
+    fn every_scene_has_room_for_the_longest_class() {
+        let a = Assets::embedded().unwrap();
+        let font = &a.text_font;
+        let longest = crate::stats::CLASSES.iter().map(|c| font.length(c)).max().unwrap();
+        let mut short = Vec::new();
+        for name in a.scene_names() {
+            let scene = a.scene(name).unwrap();
+            let mut c = Card::new(&a, scene, "stats", false).unwrap();
+            let title_width = c.title(&Look::default().title_or(scene, "stats"));
+            let tb = c.painting.anchors.subtitle;
+            let room = tb.x + tb.w - c.subtitle_x(title_width);
+            if room < longest {
+                short.push(format!("{name}: {room} of {longest}"));
+            }
+        }
+        assert!(short.is_empty(), "no room for the longest class: {short:?}");
+    }
+
+    #[test]
+    fn a_long_subtitle_is_trimmed_unless_truncate_is_off() {
+        let a = Assets::embedded().unwrap();
+        let long = Look { subtitle: Some("Senior Principal Staff Full Stack Developer".into()), ..Default::default() };
+        let whole = Look { truncate: false, ..long.clone() };
+        let trimmed = draw(&a, Widget::Stats, &long, &sample()).unwrap();
+        assert_ne!(trimmed, draw(&a, Widget::Stats, &whole, &sample()).unwrap(), "drawn whole");
+        let short = Look { subtitle: Some("Dev".into()), ..Default::default() };
+        let short_whole = Look { truncate: false, ..short.clone() };
+        assert_eq!(draw(&a, Widget::Stats, &short, &sample()), draw(&a, Widget::Stats, &short_whole, &sample()), "fits: the same");
+    }
+
+    #[test]
     fn draws_one_palette_frame_day_and_night() {
         let a = Assets::embedded().unwrap();
         for night in [false, true] {

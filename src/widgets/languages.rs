@@ -82,8 +82,8 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
         c.subtitle(sub);
     }
     let list = painting.anchors.boxes["list"];
-    // Five rows fill the page; each note line takes the place of the last language rows.
-    let rows = ((5 * ROW - look.note.len() as i64 * LINE) / ROW) as usize;
+    // langs rows (five fill the page); each note line takes the place of the last language rows.
+    let rows = ((look.langs as i64 * ROW - look.note.len() as i64 * LINE).max(0) / ROW) as usize;
     let langs: Vec<&(String, f64)> =
         s.languages.iter().filter(|(n, _)| !look.hide.contains(&n.to_lowercase())).take(rows).collect();
     if langs.is_empty() {

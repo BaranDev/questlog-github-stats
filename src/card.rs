@@ -18,6 +18,8 @@ pub struct Card<'a> {
     pub title_color: Option<Rgb>,
     pub text_color: Option<Rgb>,
     pub outline_color: Option<Rgb>,
+    /// truncate=false: a subtitle too long for its room is drawn whole instead of trimmed.
+    pub truncate: bool,
 }
 
 /// Where note lines may go: x, top y, width, and the y they must end above.
@@ -35,6 +37,7 @@ impl<'a> Card<'a> {
             title_color: None,
             text_color: None,
             outline_color: None,
+            truncate: true,
         })
     }
 
@@ -103,18 +106,25 @@ impl<'a> Card<'a> {
         lines.first().map_or(0, |l| font.length(l) + 3)
     }
 
-    /// The subtitle on the title's line, starting after the title's real width: the title always gets its room
-    /// and the subtitle takes what is left (trimmed).
+    /// Where the subtitle starts: after the title's real width on the title's line, or at its own x when the
+    /// scene puts it on a line of its own under the title (a page too narrow for both).
+    pub fn subtitle_x(&self, title_width: i64) -> i64 {
+        let (tb, title) = (self.painting.anchors.subtitle, self.painting.anchors.title);
+        if tb.y >= title.y + title.line_h { tb.x } else { tb.x.max(title.x + title_width + 6) }
+    }
+
+    /// The subtitle after the title: the title always gets its room and the subtitle takes what is left,
+    /// trimmed unless truncate=false.
     pub fn subtitle_after(&mut self, s: &str, title_width: i64) {
         let tb = self.painting.anchors.subtitle;
-        let x = tb.x.max(self.painting.anchors.title.x + title_width + 6);
-        let line = fit(&self.assets.text_font, s, tb.x + tb.w - x);
+        let x = self.subtitle_x(title_width);
+        let line = if self.truncate { fit(&self.assets.text_font, s, tb.x + tb.w - x) } else { s.to_string() };
         self.outlined(&self.assets.text_font, &line, x, tb.y, false, self.title_ink());
     }
 
     pub fn subtitle(&mut self, s: &str) {
         let tb = self.painting.anchors.subtitle;
-        let line = fit(&self.assets.text_font, s, tb.w);
+        let line = if self.truncate { fit(&self.assets.text_font, s, tb.w) } else { s.to_string() };
         self.outlined(&self.assets.text_font, &line, tb.x, tb.y, false, self.title_ink());
     }
 

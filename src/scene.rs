@@ -163,6 +163,11 @@ fn validate(scene: &Scene) -> Result<(), BoxError> {
             return Err(format!("{name}: title for {w:?} missing").into());
         }
     }
+    if let Some(p) = scene.paintings.get("languages-3") {
+        if !p.anchors.boxes.contains_key("list") {
+            return Err(format!("{name}: languages-3 box \"list\" missing").into());
+        }
+    }
     if let Some(sprite) = REQUIRED_SPRITES.iter().find(|s| !scene.sprites.contains_key(**s)) {
         return Err(format!("{name}: sprite {sprite:?} missing").into());
     }
