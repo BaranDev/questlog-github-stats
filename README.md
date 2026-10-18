@@ -12,16 +12,22 @@ Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellb
 
 ## Use it
 
-Open https://questlog.cc, type your login, pick a scene and copy the snippet. Or write it yourself:
+Open https://questlog.cc, type your login, pick a scene and copy the snippet. Or write it yourself, one line per card:
+
+```md
+![octocat's stats](https://questlog.cc/octocat/stats)
+```
+
+The address reads `/<login>/<card>/<scene>/<time>`, and the last two are optional: `https://questlog.cc/octocat/streak/forest-misty/night`. Every other option goes after a `?`, e.g. `https://questlog.cc/octocat/languages/castle?langs=3`. The longer form `https://questlog.cc/stats?user=octocat&scene=castle` works too.
+
+To switch to the night painting for readers in dark mode, use GitHub's `<picture>` tag instead:
 
 ```html
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://questlog.cc/stats?user=octocat&scene=forest&time=night">
-  <img alt="octocat's stats" src="https://questlog.cc/stats?user=octocat&scene=forest&time=day">
+  <source media="(prefers-color-scheme: dark)" srcset="https://questlog.cc/octocat/stats/forest/night">
+  <img alt="octocat's stats" src="https://questlog.cc/octocat/stats">
 </picture>
 ```
-
-With `<picture>`, readers in dark mode get the night version of the scene automatically.
 
 The first time a card is requested you'll see a "the scribe is inking your sheet" card for a few seconds while your stats are fetched. Refresh and it's there. Cards update every 12 hours. If GitHub's hourly limit is ever reached, the card says how many minutes the wait is.
 

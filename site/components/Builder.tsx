@@ -36,7 +36,7 @@ const DEFAULTS: Picks = {
   titleColor: "",
   textColor: "",
   fire: "themed",
-  time: "auto",
+  time: "day",
 };
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 const KEY = "questlog-builder";
@@ -80,14 +80,25 @@ function query(p: Picks, w: Widget) {
   return parts.join("&");
 }
 
+/** The short card URL: /user/card, then the scene and night as path parts when they differ from the defaults,
+ * then every other option as a query. */
+function cardUrl(origin: string, p: Picks, w: Widget, night: boolean) {
+  const path = night ? `/${p.scene}/night` : p.scene !== "forest" ? `/${p.scene}` : "";
+  const extra = query(p, w)
+    .split("&")
+    .filter((x) => !x.startsWith("user=") && !x.startsWith("scene="))
+    .join("&");
+  return `${origin}/${enc(p.user.trim())}/${w}${path}${extra ? `?${extra}` : ""}`;
+}
+
+/** One Markdown line by default; following the reader's theme needs GitHub's picture tag. */
 function snippet(origin: string, p: Picks, w: Widget) {
-  const url = `${origin}/${w}?${query(p, w)}`;
   const alt = `${p.user.trim()}'s ${cardName(w, p.scene)}`;
-  if (p.time !== "auto") return `<img alt="${alt}" src="${url}${p.time === "night" ? "&time=night" : ""}">`;
+  if (p.time !== "auto") return `![${alt}](${cardUrl(origin, p, w, p.time === "night")})`;
   return [
     "<picture>",
-    `  <source media="(prefers-color-scheme: dark)" srcset="${url}&time=night">`,
-    `  <img alt="${p.user.trim()}'s ${cardName(w, p.scene)}" src="${url}">`,
+    `  <source media="(prefers-color-scheme: dark)" srcset="${cardUrl(origin, p, w, true)}">`,
+    `  <img alt="${alt}" src="${cardUrl(origin, p, w, false)}">`,
     "</picture>",
   ].join("\n");
 }
@@ -115,7 +126,7 @@ function restore(): Picks {
       titleColor: str(v.titleColor, ""),
       textColor: str(v.textColor, ""),
       fire: v.fire === "classic" ? "classic" : "themed",
-      time: ["day", "night"].includes(v.time) ? v.time : "auto",
+      time: ["auto", "day", "night"].includes(v.time) ? v.time : "day",
     };
   } catch {
     return DEFAULTS;
@@ -328,10 +339,10 @@ export default function Builder() {
             <fieldset className={s.group}>
               <legend className={s.label}>Time</legend>
               <div className={s.chips}>
-                {(["auto", "day", "night"] as const).map((t) => (
+                {(["day", "night", "auto"] as const).map((t) => (
                   <label key={t} className={s.chip}>
                     <input type="radio" name="time" checked={picks.time === t} onChange={() => set({ time: t })} />
-                    <span>{t === "auto" ? "Follow the theme" : t === "day" ? "Day" : "Night"}</span>
+                    <span>{t === "auto" ? "Switch with dark mode" : t === "day" ? "Day" : "Night"}</span>
                   </label>
                 ))}
               </div>
