@@ -42,18 +42,29 @@ impl Store {
         self.dir.join("users").join(format!("{login}.json"))
     }
 
-    /// The cached stats and whether they are still fresh. Records the request time for eviction.
+    /// The cached stats and whether they are still fresh. Records the request time for eviction. A login not in
+    /// memory is read from disk without holding the lock, so one slow read never stalls every other card.
     pub fn get(&self, login: &str, now: u64) -> Option<(UserStats, bool)> {
         if !safe(login) {
             return None;
         }
-        let mut m = self.mem.lock().unwrap();
-        if !m.users.contains_key(login) {
-            let s: UserStats = serde_json::from_slice(&std::fs::read(self.path(login)).ok()?).ok()?;
-            m.users.insert(login.to_string(), s);
-        }
-        m.touched.insert(login.to_string(), now);
-        let s = m.users[login].clone();
+        let cached = {
+            let mut m = self.mem.lock().unwrap();
+            let s = m.users.get(login).cloned();
+            if s.is_some() {
+                m.touched.insert(login.to_string(), now);
+            }
+            s
+        };
+        let s = match cached {
+            Some(s) => s,
+            None => {
+                let s: UserStats = serde_json::from_slice(&std::fs::read(self.path(login)).ok()?).ok()?;
+                let mut m = self.mem.lock().unwrap();
+                m.touched.insert(login.to_string(), now);
+                m.users.entry(login.to_string()).or_insert(s).clone() // a put() meanwhile wins
+            }
+        };
         let fresh = now.saturating_sub(s.fetched_at) <= FRESH_SECS;
         Some((s, fresh))
     }
@@ -79,6 +90,7 @@ impl Store {
         }
         let mut m = self.mem.lock().unwrap();
         let _ = std::fs::remove_file(self.path(login));
+        let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // github.rs
         m.users.remove(login);
         m.touched.remove(login);
     }
@@ -93,16 +105,19 @@ impl Store {
 
     /// Deletes users nobody requested for 30 days (a user never requested since a restart counts from its fetch
     /// time), forgets expired unknowns and persists request times. Returns how many users were deleted.
+    /// The disk work (listing every user file, reading the untouched ones, deleting, saving the request times)
+    /// runs on a copy of the request times, outside the lock: with 100,000 users it takes seconds, and every card
+    /// request needs the lock.
     pub fn sweep(&self, now: u64) -> Result<usize, BoxError> {
-        let mut m = self.mem.lock().unwrap();
-        let mut removed = 0;
+        let touched = self.mem.lock().unwrap().touched.clone();
+        let mut gone = Vec::new();
         for entry in std::fs::read_dir(self.dir.join("users"))? {
             let path = entry?.path();
             if path.extension().is_none_or(|e| e != "json") {
                 continue;
             }
             let Some(login) = path.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
-            let last = match m.touched.get(&login) {
+            let last = match touched.get(&login) {
                 Some(&t) => t,
                 None => std::fs::read(&path)
                     .ok()
@@ -110,17 +125,34 @@ impl Store {
                     .map_or(0, |s| s.fetched_at),
             };
             if now.saturating_sub(last) > EVICT_SECS {
-                std::fs::remove_file(&path)?;
-                m.users.remove(&login);
-                m.touched.remove(&login);
-                removed += 1;
+                gone.push((login, path));
             }
         }
-        m.unknown.retain(|_, t| now.saturating_sub(*t) < UNKNOWN_SECS);
-        // Bound the memory mirror: disk stays the source of truth and get() reloads lazily.
-        let Mem { users, touched, .. } = &mut *m;
-        users.retain(|login, _| touched.get(login).is_some_and(|&t| now.saturating_sub(t) <= FRESH_SECS));
-        std::fs::write(self.dir.join("touched.json"), serde_json::to_vec(&m.touched)?)?;
+        let mut removed = 0;
+        let snapshot = {
+            let mut m = self.mem.lock().unwrap();
+            for (login, _) in &gone {
+                // requested since the copy was taken: keep it
+                if m.touched.get(login).is_none_or(|&t| now.saturating_sub(t) > EVICT_SECS) {
+                    m.users.remove(login);
+                    m.touched.remove(login);
+                    removed += 1;
+                }
+            }
+            m.unknown.retain(|_, t| now.saturating_sub(*t) < UNKNOWN_SECS);
+            // Bound the memory mirror: disk stays the source of truth and get() reloads lazily.
+            let Mem { users, touched, .. } = &mut *m;
+            users.retain(|login, _| touched.get(login).is_some_and(|&t| now.saturating_sub(t) <= FRESH_SECS));
+            serde_json::to_vec(&m.touched)?
+        };
+        let keep = self.mem.lock().unwrap().touched.clone();
+        for (login, path) in gone {
+            if !keep.contains_key(&login) {
+                std::fs::remove_file(&path)?;
+                let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // github.rs
+            }
+        }
+        std::fs::write(self.dir.join("touched.json"), snapshot)?;
         Ok(removed)
     }
 }

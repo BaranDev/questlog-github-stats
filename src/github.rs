@@ -1,11 +1,26 @@
 //! GitHub GraphQL client: a paged profile query and one aliased query for every contribution year, turned into
-//! derived stats for the queue.
+//! derived stats for the queue. Finished years are kept on disk per login, so a refresh asks only for the current
+//! year (a full read every 30 days catches late changes to old years).
 use crate::BoxError;
 use crate::dates::{civil_from_days, day_of, now_secs, parse_date, parse_utc};
 use crate::queue::{FetchError, Fetched, Fetcher, Quota};
 use crate::stats::{RawRepo, RawUser, RawYear, derive};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::future::Future;
+use std::path::PathBuf;
+
+/// Finished years are trusted this long before every year is read again.
+const YEARS_FOR_SECS: u64 = 30 * 86400;
+
+/// <dir>/<login>.json: the contribution years before the current one, as read when they were already over.
+#[derive(Serialize, Deserialize)]
+struct PastYears {
+    read_at: u64,  // when every year was last read in full
+    first: i64,    // the account's first year then (a changed createdAt reads everything again)
+    years: BTreeMap<i64, RawYear>,
+}
 
 pub trait Transport: Send + Sync + 'static {
     fn post(&self, body: Value) -> impl Future<Output = Result<Value, FetchError>> + Send;
@@ -42,11 +57,39 @@ fn years_query(first: i64, last: i64) -> String {
 
 pub struct GitHub<T> {
     t: T,
+    past: Option<PathBuf>,
 }
 
 impl<T: Transport> GitHub<T> {
     pub fn new(t: T) -> Self {
-        GitHub { t }
+        GitHub { t, past: None }
+    }
+
+    /// Keep finished years under `dir` (created if missing).
+    pub fn with_past_years(mut self, dir: impl Into<PathBuf>) -> Self {
+        let dir = dir.into();
+        let _ = std::fs::create_dir_all(&dir);
+        self.past = Some(dir);
+        self
+    }
+
+    fn past_file(&self, login: &str) -> Option<PathBuf> {
+        let safe = !login.is_empty() && login.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        self.past.as_ref().filter(|_| safe).map(|d| d.join(format!("{}.json", login.to_ascii_lowercase())))
+    }
+
+    fn load_past(&self, login: &str, first: i64, now: u64) -> Option<PastYears> {
+        let p: PastYears = serde_json::from_slice(&std::fs::read(self.past_file(login)?).ok()?).ok()?;
+        (p.first == first && now.saturating_sub(p.read_at) < YEARS_FOR_SECS).then_some(p)
+    }
+
+    fn save_past(&self, login: &str, p: &PastYears) {
+        if let (Some(path), Ok(bytes)) = (self.past_file(login), serde_json::to_vec(p)) {
+            let tmp = path.with_extension("json.tmp");
+            if std::fs::write(&tmp, bytes).is_ok() {
+                let _ = std::fs::rename(&tmp, &path);
+            }
+        }
     }
 
     async fn query(&self, query: &str, vars: Value) -> Result<(Value, Option<Quota>), FetchError> {
@@ -90,9 +133,13 @@ impl<T: Transport> GitHub<T> {
             .and_then(|s| s.get(..4))
             .and_then(|y| y.parse().ok())
             .ok_or_else(|| FetchError::Transient("profile without createdAt".into()))?;
-        let last = civil_from_days(day_of(now_secs())).0;
+        let now = now_secs();
+        let last = civil_from_days(day_of(now)).0;
+        let past = self.load_past(login, first, now);
+        // the years already kept run first..=k with no gaps; read from the one after
+        let kept = past.as_ref().map_or(first, |p| (first..last).find(|y| !p.years.contains_key(y)).unwrap_or(last));
         let (mut cal, mut quota) = (serde_json::Map::new(), None);
-        let mut from = first;
+        let mut from = kept;
         while from <= last {
             let to = (from + YEARS_PER_QUERY - 1).min(last);
             let (part, q) = self.query(&years_query(from, to), json!({"login": login})).await?;
@@ -100,6 +147,14 @@ impl<T: Transport> GitHub<T> {
             quota = q.or(quota);
             from = to + 1;
         }
+        let mut years: BTreeMap<i64, RawYear> = past.as_ref().map(|p| p.years.clone()).unwrap_or_default();
+        for y in kept..=last {
+            years.insert(y, year(cal.get(&format!("y{y}")).unwrap_or(&Value::Null)));
+        }
+        // keep every year that is over; a full read restarts the 30 days
+        let read_at = past.as_ref().map_or(now, |p| p.read_at);
+        let done = years.range(..last).map(|(&y, r)| (y, r.clone())).collect();
+        self.save_past(login, &PastYears { read_at, first, years: done });
         let raw = RawUser {
             login: user["login"].as_str().unwrap_or(login).to_string(),
             followers: count(&user["followers"]),
@@ -107,7 +162,7 @@ impl<T: Transport> GitHub<T> {
             issues: count(&user["issues"]),
             repo_count: count(&user["repositories"]),
             repos,
-            years: (first..=last).map(|y| year(cal.get(&format!("y{y}")).unwrap_or(&Value::Null))).collect(),
+            years: (first..=last).map(|y| years.remove(&y).unwrap_or_default()).collect(),
         };
         Ok((raw, quota))
     }
@@ -250,6 +305,27 @@ mod tests {
         assert_eq!(sent[1]["variables"]["after"], "c1", "second page asks after the cursor");
         let q = sent[2]["query"].as_str().unwrap();
         assert!(q.contains(&format!("y{}:", this_year() - 1)) && q.contains(&format!("y{}:", this_year())));
+    }
+
+    #[tokio::test]
+    async fn a_refresh_reads_only_the_current_year() {
+        let dir = crate::store::temp_dir("gh-past");
+        let s = std::sync::Arc::new(Script::default());
+        let g = GitHub::new(s.clone()).with_past_years(&dir);
+        let now_only = || {
+            let y = this_year();
+            let cal = json!({"totalCommitContributions": 9, "totalPullRequestReviewContributions": 0,
+                "contributionCalendar": {"weeks": [{"contributionDays": [{"date": format!("{y}-06-02"), "contributionCount": 9}]}]}});
+            json!({"data": {"rateLimit": {"remaining": 4980, "resetAt": "2026-10-11T12:00:00Z"}, "user": {format!("y{y}"): cal}}})
+        };
+        s.0.lock().unwrap().extend([profile(false, 1), years(), profile(false, 1), now_only()]);
+        let first = g.raw("octocat").await.unwrap().0;
+        let again = g.raw("octocat").await.unwrap().0;
+        let sent = s.1.lock().unwrap();
+        let q = sent[3]["query"].as_str().unwrap();
+        assert!(q.contains(&format!("y{}:", this_year())) && !q.contains(&format!("y{}:", this_year() - 1)), "{q}");
+        assert_eq!(again.years[0], first.years[0], "last year from disk");
+        assert_eq!(again.years[1].commits, 9, "this year read again");
     }
 
     #[tokio::test]

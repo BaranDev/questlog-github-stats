@@ -1,5 +1,6 @@
 //! HTTP: the card routes, the preview page and /health. Every card response is a 200 PNG, because a non-200
 //! shows as a broken image on GitHub. The X-Questlog header says which kind it is.
+use crate::cache::{self, IpBudget, RenderCache};
 use crate::canvas::Image;
 use crate::dates::now_secs;
 use crate::encode::encode;
@@ -16,12 +17,25 @@ use axum::routing::get;
 use axum::{Json, Router};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use tokio::sync::Semaphore;
 
-pub const READY: &str = "public, max-age=43200";
-/// Stale cards (a refresh is queued) must not sit in edge caches for hours.
-pub const STALE: &str = "public, max-age=600";
-pub const NO_CACHE: &str = "no-cache";
+/// stale-while-revalidate: past max-age an edge serves the old card at once and fetches the new one behind it.
+pub const READY: &str = "public, max-age=43200, stale-while-revalidate=86400";
+/// Stale cards (a refresh is queued): cached for hours too. Under load most cards are stale, and a short edge
+/// cache turns every README view into a render; the refreshed card replaces it within this time.
+pub const STALE: &str = "public, max-age=21600, stale-while-revalidate=86400";
+/// A busy card answered when the renderer is overloaded or the client used its render budget.
+pub const SHED: &str = "public, max-age=60";
+/// How long a request may wait for a render slot. GitHub's image proxy gives up after about 4 s (observed, not
+/// documented), and a card it gives up on is a broken image; a busy card is not.
+const SHED_AFTER: Duration = Duration::from_secs(2);
+/// Fresh renders one IP may ask for per minute (GitHub's image proxy and local requests are not limited).
+const RENDERS_PER_IP_MINUTE: usize = 60;
+/// Finished cards kept in memory (the container has 1 GB).
+const CACHE_BYTES: usize = 256 << 20;
+/// GitHub's image proxy is reported to keep images sent with a bare no-cache; this spelling it does not keep.
+pub const NO_CACHE: &str = "max-age=0, no-cache, no-store, must-revalidate";
 pub const PAGE: &str = "public, max-age=300";
 pub const DEMO: &str = "public, max-age=86400";
 const DEMO_USER: &str = "demo-adventurer";
@@ -39,6 +53,31 @@ pub struct App<F: Fetcher> {
     pub store: Arc<Store>,
     pub queue: Queue<F>,
     pub renders: Arc<Semaphore>,
+    pub cache: RenderCache,
+    pub ip_renders: IpBudget,
+    shed: HashMap<Widget, Vec<u8>>,
+}
+
+impl<F: Fetcher> App<F> {
+    /// Two render slots; the busy cards for overload are drawn once here, so shedding costs no render.
+    pub fn new(assets: Arc<Assets>, store: Arc<Store>, queue: Queue<F>) -> App<F> {
+        let shed = [Widget::Stats, Widget::Languages, Widget::Streak]
+            .into_iter()
+            .filter_map(|w| {
+                let look = Look::default();
+                Some((w, encode(&[widgets::message(&assets, w, &look, BUSY)?], look.scale).ok()?))
+            })
+            .collect();
+        App {
+            assets,
+            store,
+            queue,
+            renders: Arc::new(Semaphore::new(2)),
+            cache: RenderCache::new(CACHE_BYTES),
+            ip_renders: IpBudget::new(RENDERS_PER_IP_MINUTE),
+            shed,
+        }
+    }
 }
 
 pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
@@ -98,9 +137,12 @@ async fn art<F: Fetcher>(State(app): State<Arc<App<F>>>, Path((scene, file)): Pa
 }
 
 async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::Value> {
+    let (entries, bytes, hits, misses) = app.cache.stats();
     Json(serde_json::json!({
         "ok": true,
         "queue": app.queue.len(),
+        "refresh": app.queue.refresh_len(),
+        "cache": {"entries": entries, "bytes": bytes, "hits": hits, "misses": misses},
         "quota": app.queue.quota(),
         "scenes": app.assets.scene_names(),
     }))
@@ -123,26 +165,28 @@ async fn card<F: Fetcher>(
     headers: HeaderMap,
 ) -> Response {
     let Some(w) = Widget::from_path(&path) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
+    let ip = client_ip(&headers);
+    let ip = ip.as_deref();
     let req = match params::parse(w, &q, &app.assets.scene_names()) {
         Ok(r) => r,
-        Err(e) => return message(&app, w, e.look, e.message, "error").await,
+        Err(e) => return message_cached(&app, w, e.look, e.message, "error", DEMO, ip).await,
     };
     let now = now_secs();
     if let Some((stats, fresh)) = app.store.get(&req.user, now) {
         if !fresh {
-            app.queue.enqueue(&req.user, None); // a refresh of a known user never counts against an IP
+            app.queue.refresh(&req.user); // its own lane: never counts against an IP or the new-login cap
         }
-        return draw(&app, req, stats, fresh).await;
+        return draw(&app, req, stats, fresh, ip).await;
     }
     if app.store.is_unknown(&req.user, now) {
-        return message(&app, w, req.look, UNKNOWN.into(), "unknown").await;
+        return message(&app, w, req.look, UNKNOWN.into(), "unknown", ip).await;
     }
-    match app.queue.enqueue(&req.user, client_ip(&headers).as_deref()) {
+    match app.queue.enqueue(&req.user, ip) {
         Enqueued::Waiting { eta_secs, paused } => {
-            message(&app, w, req.look, placeholder_text(eta_secs, paused), "placeholder").await
+            message(&app, w, req.look, placeholder_text(eta_secs, paused), "placeholder", ip).await
         }
-        Enqueued::Full | Enqueued::IpLimited => message(&app, w, req.look, BUSY.into(), "busy").await,
-        Enqueued::Failed => message(&app, w, req.look, FAILED.into(), "failed").await,
+        Enqueued::Full | Enqueued::IpLimited => message(&app, w, req.look, BUSY.into(), "busy", ip).await,
+        Enqueued::Failed => message(&app, w, req.look, FAILED.into(), "failed", ip).await,
     }
 }
 
@@ -152,13 +196,16 @@ async fn demo_card<F: Fetcher>(
     State(app): State<Arc<App<F>>>,
     Path(path): Path<String>,
     Query(mut q): Query<HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Response {
     let Some(w) = Widget::from_path(&path) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
+    let ip = client_ip(&headers);
+    let ip = ip.as_deref();
     let streak = q.remove("streak");
     q.insert("user".into(), DEMO_USER.into());
     let req = match params::parse(w, &q, &app.assets.scene_names()) {
         Ok(r) => r,
-        Err(e) => return message(&app, w, e.look, e.message, "error").await,
+        Err(e) => return message_cached(&app, w, e.look, e.message, "error", DEMO, ip).await,
     };
     let mut stats: UserStats = serde_json::from_str(DEMO_STATS).expect("demo stats parse");
     if let Some(v) = streak {
@@ -169,16 +216,22 @@ async fn demo_card<F: Fetcher>(
             }
             _ => {
                 let msg = format!("Unknown streak '{}' (use 0 to 9999)", v.chars().take(20).collect::<String>());
-                return message(&app, w, req.look, msg, "error").await;
+                return message_cached(&app, w, req.look, msg, "error", DEMO, ip).await;
             }
         }
     }
     stats.login = DEMO_USER.into();
-    render_card(&app, req, stats, DEMO).await
+    render_card(&app, req, stats, DEMO, ip).await
 }
 
 /// A message card for the pages: the same texts the live service uses.
-async fn demo_message<F: Fetcher>(State(app): State<Arc<App<F>>>, Query(mut q): Query<HashMap<String, String>>) -> Response {
+async fn demo_message<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Query(mut q): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Response {
+    let ip = client_ip(&headers);
+    let ip = ip.as_deref();
     let kind = q.remove("kind").unwrap_or_default();
     let w = match q.remove("widget") {
         None => Widget::Stats,
@@ -199,9 +252,9 @@ async fn demo_message<F: Fetcher>(State(app): State<Arc<App<F>>>, Query(mut q): 
     q.insert("user".into(), DEMO_USER.into());
     let look = match params::parse(w, &q, &app.assets.scene_names()) {
         Ok(r) => r.look,
-        Err(e) => return message(&app, w, e.look, e.message, "error").await,
+        Err(e) => return message_cached(&app, w, e.look, e.message, "error", DEMO, ip).await,
     };
-    message_cached(&app, w, look, text, kind, DEMO).await
+    message_cached(&app, w, look, text, kind, DEMO, ip).await
 }
 
 /// The placeholder line: a quota pause says why and counts in minutes, a normal wait counts in seconds.
@@ -235,40 +288,94 @@ fn failed() -> Response {
     png(bytes.clone(), NO_CACHE, "error")
 }
 
-/// Runs a render on the blocking pool. The permit moves into the closure, so the 2-render cap holds until the
-/// render really ends, even when the client has already gone away.
+/// A look as a cache key part: its maps sorted, so equal looks give equal keys.
+fn look_key(look: &Look) -> String {
+    let mut rest = look.clone();
+    let mut labels: Vec<_> = std::mem::take(&mut rest.labels).into_iter().collect();
+    let mut values: Vec<_> = std::mem::take(&mut rest.values).into_iter().collect();
+    let mut hide: Vec<_> = std::mem::take(&mut rest.hide).into_iter().collect();
+    labels.sort();
+    values.sort();
+    hide.sort();
+    format!("{rest:?}{labels:?}{values:?}{hide:?}")
+}
+
+/// The busy card, drawn once at start, for a request the renderer can't take now.
+fn shed<F: Fetcher>(app: &App<F>, w: Widget) -> Response {
+    match app.shed.get(&w) {
+        Some(bytes) => png(bytes.clone(), SHED, "busy"),
+        None => failed(),
+    }
+}
+
+/// A card from the render cache, or rendered on the blocking pool and kept. A fresh render first takes one from
+/// the client's per-IP budget and waits at most SHED_AFTER for a slot; either failing answers the busy card. The
+/// permit moves into the closure, so the 2-render cap holds until the render really ends, even when the client
+/// has already gone away.
 async fn render_png<F: Fetcher>(
     app: &Arc<App<F>>,
+    key: u64,
+    w: Widget,
+    ip: Option<&str>,
     cache: &'static str,
     kind: &'static str,
     job: impl FnOnce() -> Option<Vec<u8>> + Send + 'static,
 ) -> Response {
-    let Ok(permit) = app.renders.clone().acquire_owned().await else { return failed() };
+    if let Some(bytes) = app.cache.get(key) {
+        return png((*bytes).clone(), cache, kind);
+    }
+    if ip.is_some_and(|ip| !app.ip_renders.take(ip)) {
+        return shed(app, w);
+    }
+    let permit = match tokio::time::timeout(SHED_AFTER, app.renders.clone().acquire_owned()).await {
+        Ok(Ok(permit)) => permit,
+        Ok(Err(_)) => return failed(),
+        Err(_) => return shed(app, w),
+    };
     let out = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         job()
     });
     match out.await.ok().flatten() {
-        Some(bytes) => png(bytes, cache, kind),
+        Some(bytes) => {
+            let bytes = Arc::new(bytes);
+            app.cache.put(key, bytes.clone());
+            png((*bytes).clone(), cache, kind)
+        }
         None => failed(),
     }
 }
 
-async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, fresh: bool) -> Response {
-    render_card(app, req, stats, if fresh { READY } else { STALE }).await
+async fn draw<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, fresh: bool, ip: Option<&str>) -> Response {
+    render_card(app, req, stats, if fresh { READY } else { STALE }, ip).await
 }
 
-async fn render_card<F: Fetcher>(app: &Arc<App<F>>, req: Request, stats: UserStats, cache: &'static str) -> Response {
+async fn render_card<F: Fetcher>(
+    app: &Arc<App<F>>,
+    req: Request,
+    stats: UserStats,
+    cache: &'static str,
+    ip: Option<&str>,
+) -> Response {
+    let key = cache::key(&["card", req.widget.key(), &look_key(&req.look), &format!("{stats:?}")]);
     let assets = app.assets.clone();
-    render_png(app, cache, "card", move || {
+    let w = req.widget;
+    render_png(app, key, w, ip, cache, "card", move || {
         let frames = widgets::render(&assets, req.widget, &req.look, &stats)?;
         encode(&frames, req.look.scale).ok()
     })
     .await
 }
 
-async fn message<F: Fetcher>(app: &Arc<App<F>>, w: Widget, look: Look, msg: String, kind: &'static str) -> Response {
-    message_cached(app, w, look, msg, kind, NO_CACHE).await
+async fn message<F: Fetcher>(
+    app: &Arc<App<F>>,
+    w: Widget,
+    look: Look,
+    msg: String,
+    kind: &'static str,
+    ip: Option<&str>,
+) -> Response {
+    message_cached(app, w, look, msg, kind, NO_CACHE, ip).await
 }
 
 async fn message_cached<F: Fetcher>(
@@ -278,9 +385,14 @@ async fn message_cached<F: Fetcher>(
     msg: String,
     kind: &'static str,
     cache: &'static str,
+    ip: Option<&str>,
 ) -> Response {
+    let key = cache::key(&["message", w.key(), &look_key(&look), &msg]);
     let assets = app.assets.clone();
-    render_png(app, cache, kind, move || encode(&[widgets::message(&assets, w, &look, &msg)?], look.scale).ok()).await
+    render_png(app, key, w, ip, cache, kind, move || {
+        encode(&[widgets::message(&assets, w, &look, &msg)?], look.scale).ok()
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -308,7 +420,7 @@ mod tests {
         let store = Arc::new(Store::open(temp_dir("srv")).unwrap());
         let queue = Queue::new(Fixed, store.clone(), cfg);
         queue.start();
-        let app = Arc::new(App { assets: Arc::new(Assets::embedded().unwrap()), store, queue, renders: Arc::new(Semaphore::new(2)) });
+        let app = Arc::new(App::new(Arc::new(Assets::embedded().unwrap()), store, queue));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
         let r = router(app.clone());
@@ -367,7 +479,7 @@ mod tests {
         let (_, _, body) = get(&format!("{base}/stats?user=sized&animate=false"), &[]).await;
         assert_eq!(dims(&body), (1600, 640), "default scale is 5");
         let (kind, cache, body) = get(&format!("{base}/stats?user=sized&scale=9"), &[]).await;
-        assert_eq!((kind.as_str(), cache.as_str(), dims(&body)), ("error", NO_CACHE, (1600, 640)));
+        assert_eq!((kind.as_str(), cache.as_str(), dims(&body)), ("error", DEMO, (1600, 640)), "a bad option never changes");
     }
 
     #[test]
@@ -391,7 +503,7 @@ mod tests {
         let (base, _) = serve(QueueConfig::default()).await;
         for (url, want) in [("/stats", "error"), ("/stats?user=a--b", "error"), ("/languages?user=a&scene=castel", "error")] {
             let (kind, cache, _) = get(&format!("{base}{url}"), &[]).await;
-            assert_eq!((kind.as_str(), cache.as_str()), (want, NO_CACHE), "{url}");
+            assert_eq!((kind.as_str(), cache.as_str()), (want, DEMO), "{url}: a bad URL never changes, cached a day");
         }
         assert_eq!(reqwest::get(format!("{base}/trophies?user=a")).await.unwrap().status(), 404);
         let (kind, _, _) = settled(&format!("{base}/stats?user=ghost")).await;
@@ -404,7 +516,7 @@ mod tests {
         app.store.put(derive(&RawUser { login: "old".into(), ..Default::default() }, 0, 1)).unwrap();
         let (kind, cache, _) = get(&format!("{base}/stats?user=old"), &[]).await;
         assert_eq!((kind.as_str(), cache.as_str()), ("card", STALE));
-        assert_eq!(app.queue.len(), 1, "refresh queued");
+        assert_eq!(app.queue.refresh_len(), 1, "refresh queued in its own lane");
     }
 
     #[tokio::test]
@@ -481,7 +593,7 @@ mod tests {
         let b = get(&format!("{base}/demo/streak?animate=false&streak=45"), &[]).await.2;
         assert_ne!(a, b, "streak=N changes the card");
         let (kind, cache, _) = get(&format!("{base}/demo/streak?streak=10000"), &[]).await;
-        assert_eq!((kind.as_str(), cache.as_str()), ("error", NO_CACHE));
+        assert_eq!((kind.as_str(), cache.as_str()), ("error", DEMO));
         let (kind, _, _) = get(&format!("{base}/demo/stats?scale=9"), &[]).await;
         assert_eq!(kind, "error");
         assert_eq!(reqwest::get(format!("{base}/demo/trophies")).await.unwrap().status(), 404);
@@ -536,13 +648,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_card_asked_again_is_not_rendered_again() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        get(&format!("{base}/demo/stats?scene=castle"), &[]).await;
+        get(&format!("{base}/demo/stats?scene=castle&v=2&junk=1"), &[]).await; // junk parameters: the same card
+        let (entries, _, hits, misses) = app.cache.stats();
+        assert_eq!((entries, hits, misses), (1, 1, 1));
+    }
+
+    #[tokio::test]
+    async fn one_ip_cant_keep_the_renderer_busy() {
+        let (base, _) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        let ip = [("cf-connecting-ip", "6.6.6.6")];
+        for i in 0..RENDERS_PER_IP_MINUTE {
+            assert_eq!(get(&format!("{base}/demo/stats?title=t{i}"), &ip).await.0, "card");
+        }
+        let (kind, cache, _) = get(&format!("{base}/demo/stats?title=over"), &ip).await;
+        assert_eq!((kind.as_str(), cache.as_str()), ("busy", SHED));
+        let (kind, _, _) = get(&format!("{base}/demo/stats?title=t0"), &ip).await;
+        assert_eq!(kind, "card", "a card already drawn costs nothing");
+        let camo = [("cf-connecting-ip", "6.6.6.6"), ("user-agent", "github-camo (1)")];
+        assert_eq!(get(&format!("{base}/demo/stats?title=proxy"), &camo).await.0, "card", "GitHub's proxy is not limited");
+    }
+
+    #[tokio::test]
+    async fn an_overloaded_renderer_answers_busy_instead_of_timing_out() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        let _all = app.renders.clone().acquire_many_owned(2).await.unwrap(); // both slots taken
+        let start = std::time::Instant::now();
+        let (kind, cache, _) = get(&format!("{base}/demo/stats?scene=forest-misty"), &[]).await;
+        assert_eq!((kind.as_str(), cache.as_str()), ("busy", SHED));
+        assert!(start.elapsed() < SHED_AFTER + Duration::from_secs(2), "took {:?}", start.elapsed());
+    }
+
+    #[tokio::test]
     async fn permit_is_held_until_the_render_ends() {
         let (_, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
         let held = app.renders.clone().acquire_owned().await.unwrap();
         let (tx, rx) = std::sync::mpsc::channel::<()>();
         let a = app.clone();
         let handle = tokio::spawn(async move {
-            render_png(&a, READY, "card", move || {
+            render_png(&a, 1, Widget::Stats, None, READY, "card", move || {
                 rx.recv().ok();
                 None
             })
