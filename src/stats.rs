@@ -19,7 +19,7 @@ pub struct RawRepo {
     pub languages: Vec<(String, u64)>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RawYear {
     pub commits: u64,
     pub reviews: u64,
@@ -92,6 +92,10 @@ pub fn languages(repos: &[RawRepo], top: usize) -> Vec<(String, f64)> {
     v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
     v.into_iter().take(top).map(|(n, s)| (n.to_string(), (s as f64 / total * 10000.0).round() / 10000.0)).collect()
 }
+
+/// Every class a top language can give, for the layout check that the stats card has room for the longest.
+pub const CLASSES: [&str; 10] =
+    ["Artificer", "Alchemist", "Blacksmith", "Ranger", "Paladin", "Knight", "Warlock", "Bard", "Rogue", "Adventurer"];
 
 pub fn class_for(top: Option<&str>) -> &'static str {
     match top.unwrap_or("") {

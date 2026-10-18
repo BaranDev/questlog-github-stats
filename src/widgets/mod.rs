@@ -39,6 +39,11 @@ pub struct Look {
     pub night: bool,
     /// fire=themed: the scene's own fire colors (sprites-themed/), where the scene has them; else the classic fire.
     pub themed: bool,
+    /// langs=3|5: how many languages the languages card lists. A scene may paint a smaller board for 3
+    /// (<scene>/languages-3.png), used then instead of its usual one.
+    pub langs: u8,
+    /// truncate=false: draw a subtitle whole even when it runs past its room (trimmed by default).
+    pub truncate: bool,
     pub title: Option<String>,
     pub subtitle: Option<String>,
     pub labels: HashMap<String, String>,
@@ -61,6 +66,8 @@ impl Default for Look {
             scene: "forest".into(),
             night: false,
             themed: false,
+            langs: 5,
+            truncate: true,
             title: None,
             subtitle: None,
             labels: HashMap::new(),
@@ -96,8 +103,14 @@ impl Look {
 }
 
 fn card<'a>(assets: &'a Assets, w: Widget, look: &Look) -> Option<Card<'a>> {
-    let mut card = Card::new(assets, assets.scene(&look.scene)?, w.key(), look.night)?;
+    let scene = assets.scene(&look.scene)?;
+    let short = (w == Widget::Languages && look.langs == 3).then(|| Card::new(assets, scene, "languages-3", look.night));
+    let mut card = match short.flatten() {
+        Some(c) => c,
+        None => Card::new(assets, scene, w.key(), look.night)?,
+    };
     (card.title_color, card.text_color, card.outline_color) = (look.title_color, look.text_color, look.outline_color);
+    card.truncate = look.truncate;
     Some(card)
 }
 
@@ -265,6 +278,24 @@ mod tests {
                     assert!(note_px.iter().all(|&(x, y)| x > 0 && y > 0 && x < OW - 1 && y < OH - 1), "{scene} {w:?}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn langs_3_lists_three_rows_and_uses_a_scene_s_short_board() {
+        let a = Assets::embedded().unwrap();
+        // on one painting, three rows are the five with the last two gone
+        let rows = |langs, hide: &[&str]| {
+            let look = Look { langs, hide: hide.iter().map(|h| h.to_string()).collect(), ..Default::default() };
+            languages::render(Card::new(&a, a.scene("forest").unwrap(), "languages", false).unwrap(), &look, &sample())
+        };
+        assert_ne!(rows(5, &[]), rows(3, &[]), "rows four and five are gone");
+        assert_eq!(rows(5, &["javascript", "html"]), rows(3, &[]));
+        // every scene has a languages-3 placement (centred for three rows, or a smaller board as war-room)
+        let board = |l: &Look| card(&a, Widget::Languages, l).unwrap().painting as *const _;
+        for scene in a.scene_names() {
+            let l = |langs| Look { scene: scene.into(), langs, ..Default::default() };
+            assert_ne!(board(&l(3)), board(&l(5)), "{scene}: its own placement for three");
         }
     }
 

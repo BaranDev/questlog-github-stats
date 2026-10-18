@@ -89,6 +89,16 @@ pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Re
         Some("themed") => look.themed = true,
         Some(f) => fail(format!("Unknown fire '{}' (use classic or themed)", clip(f))),
     }
+    match q.get("langs").map(String::as_str) {
+        None | Some("5") => {}
+        Some("3") => look.langs = 3,
+        Some(v) => fail(format!("Unknown langs '{}' (use 3 or 5)", clip(v))),
+    }
+    match q.get("truncate").map(String::as_str) {
+        None | Some("true") | Some("1") => {}
+        Some("false") | Some("0") => look.truncate = false,
+        Some(v) => fail(format!("Unknown truncate '{}' (use true or false)", clip(v))),
+    }
     match q.get("animate").map(String::as_str) {
         None | Some("true") | Some("1") => {}
         Some("false") | Some("0") => look.animate = false,
@@ -167,6 +177,25 @@ mod tests {
         assert!(err(&[("user", "a"), ("fire", "lava")]).message.starts_with("Unknown fire 'lava'"));
         let upper = err(&[("user", "a"), ("fire", "Themed")]);
         assert!(upper.message.starts_with("Unknown fire 'Themed'"), "lowercase only");
+    }
+
+    #[test]
+    fn truncate_switch() {
+        assert!(ok(&[("user", "a")]).look.truncate, "trimmed by default");
+        assert!(ok(&[("user", "a"), ("truncate", "true")]).look.truncate);
+        assert!(!ok(&[("user", "a"), ("truncate", "false")]).look.truncate);
+        assert!(!ok(&[("user", "a"), ("truncate", "0")]).look.truncate);
+        assert!(err(&[("user", "a"), ("truncate", "no")]).message.starts_with("Unknown truncate 'no'"));
+    }
+
+    #[test]
+    fn langs_count() {
+        assert_eq!(ok(&[("user", "a")]).look.langs, 5, "five by default");
+        assert_eq!(ok(&[("user", "a"), ("langs", "5")]).look.langs, 5);
+        assert_eq!(ok(&[("user", "a"), ("langs", "3")]).look.langs, 3);
+        for bad in ["4", "0", "three", " 3"] {
+            assert!(err(&[("user", "a"), ("langs", bad)]).message.starts_with(&format!("Unknown langs '{bad}'")), "{bad}");
+        }
     }
 
     #[test]
