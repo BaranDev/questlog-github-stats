@@ -1,5 +1,7 @@
 //! The fetch queue: logins waiting for GitHub, de-duplicated and bounded, drained by a few workers that respect
-//! GitHub's quota, retry with backoff and hand results to the store.
+//! GitHub's quota, retry with backoff and hand results to the store. Two lanes: new logins (first come, first
+//! served, capped per IP and per hour) always go first; refreshes of known logins wait in their own lane, the most
+//! requested first, and only spend quota above a reserve kept for new logins.
 use crate::dates::now_secs;
 use crate::stats::UserStats;
 use crate::store::Store;
@@ -38,6 +40,8 @@ pub struct QueueConfig {
     pub per_ip_per_hour: usize,
     pub new_per_hour: usize, // global cap on new logins per sliding hour, for all clients
     pub min_quota: u64,
+    pub refresh_capacity: usize, // logins waiting for a refresh; past this, a stale card just stays stale longer
+    pub refresh_min_quota: u64,  // refreshes stop below this much quota, the rest is kept for new logins
     pub backoff: [Duration; 2], // waits before the 2nd and 3rd attempt; the 3rd failure holds the login
     pub fail_hold: Duration,
 }
@@ -50,6 +54,8 @@ impl Default for QueueConfig {
             per_ip_per_hour: 30,
             new_per_hour: 600,
             min_quota: 200,
+            refresh_capacity: 20_000,
+            refresh_min_quota: 1500,
             backoff: [Duration::from_secs(5), Duration::from_secs(30)],
             fail_hold: Duration::from_secs(600),
         }
@@ -80,6 +86,8 @@ struct State {
     paused_until: Option<Instant>,
     next_sweep: Instant,
     quota: Option<u64>,
+    quota_reset: u64,              // unix seconds when the quota last seen refills
+    refresh: HashMap<String, u64>, // the refresh lane: login -> requests while it waited
 }
 
 struct Inner<F> {
@@ -113,6 +121,8 @@ impl<F: Fetcher> Queue<F> {
             paused_until: None,
             next_sweep: Instant::now(),
             quota: None,
+            quota_reset: 0,
+            refresh: HashMap::new(),
         };
         Queue { inner: Arc::new(Inner { fetcher, store, cfg, state: Mutex::new(state), notify: Notify::new() }) }
     }
@@ -126,6 +136,28 @@ impl<F: Fetcher> Queue<F> {
 
     pub fn len(&self) -> usize {
         self.inner.state.lock().unwrap().pending.len()
+    }
+
+    pub fn refresh_len(&self) -> usize {
+        self.inner.state.lock().unwrap().refresh.len()
+    }
+
+    /// A known login's stats went stale: queue a refresh in the refresh lane. Never counts against an IP or the
+    /// hourly cap for new logins; each request while it waits moves it up.
+    pub fn refresh(&self, login: &str) {
+        let mut s = self.inner.state.lock().unwrap();
+        if s.active.contains(login) || s.failed.get(login).is_some_and(|&until| Instant::now() < until) {
+            return;
+        }
+        if let Some(hits) = s.refresh.get_mut(login) {
+            *hits += 1;
+            return;
+        }
+        if s.refresh.len() < self.inner.cfg.refresh_capacity {
+            s.refresh.insert(login.to_string(), 1);
+            drop(s);
+            self.inner.notify.notify_one();
+        }
     }
 
     /// Test hook: starts a quota pause as if GitHub's quota had run low.
@@ -209,17 +241,36 @@ impl<F: Fetcher> Queue<F> {
                     _ => {
                         s.paused_until = None;
                         if let Some(login) = s.pending.pop_front() {
-                            if !s.pending.is_empty() {
+                            if !s.pending.is_empty() || !s.refresh.is_empty() {
                                 self.inner.notify.notify_one(); // cascade: a sleeping worker takes the next one
                             }
                             return login;
                         }
-                        None
+                        let cfg = &self.inner.cfg;
+                        let spare = s.quota.is_none_or(|q| q >= cfg.refresh_min_quota) || now_secs() >= s.quota_reset;
+                        let top = spare.then(|| s.refresh.iter().max_by_key(|&(_, h)| *h).map(|(l, _)| l.clone())).flatten();
+                        if let Some(login) = top {
+                            s.refresh.remove(&login);
+                            s.active.insert(login.clone());
+                            if !s.refresh.is_empty() {
+                                self.inner.notify.notify_one();
+                            }
+                            return login;
+                        }
+                        // refreshes waiting for quota: look again when it refills (at most a minute from now)
+                        (!s.refresh.is_empty()).then(|| {
+                            Instant::now() + Duration::from_secs(s.quota_reset.saturating_sub(now_secs()).clamp(1, 60))
+                        })
                     }
                 }
             };
             match pause {
-                Some(until) => tokio::time::sleep_until(until).await,
+                Some(until) => {
+                    tokio::select! {
+                        _ = tokio::time::sleep_until(until) => {}
+                        _ = self.inner.notify.notified() => {}
+                    }
+                }
                 None => self.inner.notify.notified().await,
             }
         }
@@ -250,6 +301,7 @@ impl<F: Fetcher> Queue<F> {
                 s.avg_secs = 0.8 * s.avg_secs + 0.2 * took.as_secs_f64();
                 if let Some(q) = f.quota {
                     s.quota = Some(q.remaining);
+                    s.quota_reset = q.reset_at;
                     if q.remaining < cfg.min_quota {
                         pause(&mut s, now + Duration::from_secs(q.reset_at.saturating_sub(now_secs())));
                     }
@@ -370,6 +422,40 @@ mod tests {
         assert_eq!(q.enqueue("d", None), Enqueued::Full);
         tokio::time::sleep(Duration::from_secs(3601)).await;
         assert_eq!(q.enqueue("a", Some("ip1")), Enqueued::Waiting { eta_secs: 10, paused: false }, "already queued: no new slot used");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn refreshes_never_use_the_new_login_cap_and_go_after_new_logins() {
+        let cfg = QueueConfig { new_per_hour: 1, ..Default::default() };
+        let script = vec![("new", ok("new", None)), ("hot", ok("hot", None)), ("cold", ok("cold", None))];
+        let (q, mock, _) = setup("q-lanes", cfg, script);
+        for _ in 0..50 {
+            q.refresh("cold");
+        }
+        q.refresh("cold");
+        for _ in 0..3 {
+            q.refresh("hot");
+        }
+        assert_eq!(q.refresh_len(), 2);
+        assert!(matches!(q.enqueue("new", Some("ip")), Enqueued::Waiting { .. }), "refreshes left the cap alone");
+        q.start();
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        let calls = mock.calls.lock().unwrap().clone();
+        assert_eq!(calls[0], "new", "a new login goes first");
+        assert_eq!(calls[1], "cold", "then the most requested refresh");
+        assert!(calls.contains(&"hot".to_string()));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn refreshes_keep_a_quota_reserve_for_new_logins() {
+        let low = Some(Quota { remaining: 1000, reset_at: now_secs() + 3600 });
+        let (q, mock, _) = setup("q-reserve", QueueConfig::default(), vec![("a", ok("a", low)), ("b", ok("b", None))]);
+        q.enqueue("a", Some("ip"));
+        q.start();
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        q.refresh("b");
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        assert_eq!(*mock.calls.lock().unwrap(), vec!["a"], "1000 left is under the reserve: no refresh");
     }
 
     #[tokio::test(start_paused = true)]

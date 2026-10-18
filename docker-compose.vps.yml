@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     expose: ["8080"]
     networks: [edge]
-    mem_limit: 256m
+    mem_limit: 1g        # the render cache holds up to 256 MB of finished cards
     cpus: "1.0"          # a render storm can't starve the other apps on the box
     pids_limit: 64
     read_only: true      # only the /data volume is writable

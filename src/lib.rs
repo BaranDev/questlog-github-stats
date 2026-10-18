@@ -1,4 +1,5 @@
 //! questlog: pixel-art GitHub profile cards.
+pub mod cache;
 pub mod canvas;
 pub mod card;
 pub mod params;

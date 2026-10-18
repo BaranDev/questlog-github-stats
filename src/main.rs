@@ -8,7 +8,6 @@ use questlog::server::{App, router};
 use questlog::store::Store;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
 
 #[tokio::main]
 async fn main() -> Result<(), questlog::BoxError> {
@@ -17,7 +16,8 @@ async fn main() -> Result<(), questlog::BoxError> {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080);
 
     let store = Arc::new(Store::open(&data)?);
-    let queue = Queue::new(GitHub::new(Http::new(token)?), store.clone(), QueueConfig::default());
+    let github = GitHub::new(Http::new(token)?).with_past_years(std::path::Path::new(&data).join("years"));
+    let queue = Queue::new(github, store.clone(), QueueConfig::default());
     queue.start();
     let sweeper = store.clone();
     tokio::spawn(async move {
@@ -32,7 +32,7 @@ async fn main() -> Result<(), questlog::BoxError> {
         }
     });
 
-    let app = Arc::new(App { assets: Arc::new(Assets::embedded()?), store, queue, renders: Arc::new(Semaphore::new(2)) });
+    let app = Arc::new(App::new(Arc::new(Assets::embedded()?), store, queue));
     // HOST=127.0.0.1 keeps a local run off the network; the container needs the default.
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
