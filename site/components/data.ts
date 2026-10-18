@@ -37,7 +37,8 @@ export const THEMES = [
 export const SCENES = THEMES.flatMap((t) => t.scenes);
 
 /** Scenes whose fire has been redrawn for the scene (fire=themed). The others are being reworked. */
-export const READY = ["fairy-garden", "cloud-kingdom", "castle", "castle-aurora", "castle-sky", "castle-storm", "royal-library", "war-room", "guild-hall", "observatory", "forest-moonlit"];
+export const READY = ["forest", "forest-autumn", "forest-misty", "forest-moonlit", "castle", "castle-aurora", "castle-sky", "castle-storm",
+  "fairy-garden", "witch-cottage", "cloud-kingdom", "rose-garden", "royal-library", "war-room", "guild-hall", "observatory"];
 export const isReady = (scene: string) => READY.includes(scene);
 
 const FIRE: Record<string, string> = {

@@ -95,8 +95,10 @@ const OPTIONS = [
   ["title_color", "hex RRGGBB or RGB, # optional (as %23)", "the scene's ink"],
   ["text_color", "hex, as above: every other text", "the scene's ink"],
   ["outline_color", "hex, as above: the dark edge around outlined text", "the scene's ink"],
-  ["fire", "classic, themed: on /streak, themed draws the scene's own fire where it has one (scenes not marked WIP)", "classic"],
+  ["fire", "classic, themed: on /streak, themed draws the scene's own fire colors", "classic"],
+  ["langs", "3, 5: how many languages /languages lists", "5"],
   ["hide", "a comma list of keys, or of languages on /languages", "nothing hidden"],
+  ["truncate", "true, false: false draws a long subtitle whole instead of trimming it (it may run past the page)", "true"],
   ["animate", "true, false", "true"],
   ["scale", "1 to 5: the image is 320 x 128 times this", "5"],
 ];

@@ -55,8 +55,10 @@ The gallery shows each scene's Character Sheet in the order of the table.
 | `title_color` | hex `RRGGBB` or `RGB`, `#` optional (write it as `%23`), e.g. `FFD700` | the scene's ink |
 | `text_color` | hex, as above; colors every other text | the scene's ink |
 | `outline_color` | hex, as above; the dark edge around outlined text | the scene's ink |
-| `fire` | `classic`, `themed`: on `/streak`, `themed` draws the scene's own fire in fairy-garden, cloud-kingdom, castle-sky, royal-library, war-room, guild-hall, observatory and forest-moonlit; the other scenes draw the classic fire while theirs is reworked | `classic` |
+| `fire` | `classic`, `themed`: on `/streak`, `themed` draws the scene's own fire colors | `classic` |
+| `langs` | `3`, `5`: how many languages `/languages` lists | `5` |
 | `hide` | comma list, e.g. `prs,stars` or `html,css` on `/languages` | none |
+| `truncate` | `true`, `false`: `false` draws a long `subtitle` whole instead of trimming it with "..." (it may then run past the page) | `true` |
 | `animate` | `true`, `false` | `true` |
 | `scale` | `1` to `5`, the output size (320×128 times this) | `5` |
 

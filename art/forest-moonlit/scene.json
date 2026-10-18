@@ -288,14 +288,14 @@
   "#F3E6C2": "#828CB1",
   "#F3E8CE": "#828CB1",
   "#F5DEA0": "#F5DEA0",
-  "#B03A1C": "#B03A1C",
-  "#FFF0B4": "#FFF0B4",
-  "#F6C040": "#F6C040",
-  "#E27222": "#E27222",
-  "#E6FFFF": "#E6FFFF",
-  "#86ECF4": "#86ECF4",
   "#16628A": "#16628A",
-  "#26AED2": "#26AED2"
+  "#86ECF4": "#86ECF4",
+  "#26AED2": "#26AED2",
+  "#E6FFFF": "#E6FFFF",
+  "#E27222": "#E27222",
+  "#B03A1C": "#B03A1C",
+  "#F6C040": "#F6C040",
+  "#FFF0B4": "#FFF0B4"
  },
  "titles": {
   "stats": "Character Sheet",
