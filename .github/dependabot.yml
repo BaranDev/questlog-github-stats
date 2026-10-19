@@ -12,6 +12,12 @@ updates:
     directory: /site
     schedule:
       interval: weekly
+    # moved on purpose, together with Docker and CI, not one by one
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       npm:
         update-types: [minor, patch]
@@ -25,3 +31,6 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
