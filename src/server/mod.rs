@@ -1,4 +1,4 @@
-//! HTTP: the card routes, the preview page and /health. Every card response is a 200 PNG, because a non-200
+//! HTTP: the card routes, the preview page and /health. Every card response is a 200 image, because a non-200
 //! shows as a broken image on GitHub. The X-Questlog header says which kind it is.
 mod cards;
 mod pages;
@@ -174,7 +174,7 @@ mod tests {
         assert_eq!(res.status(), 200, "{url}");
         let h = |n: &str| res.headers().get(n).map(|v| v.to_str().unwrap().to_string()).unwrap_or_default();
         let (kind, cache) = (h("x-questlog"), h("cache-control"));
-        assert_eq!(h("content-type"), "image/png");
+        assert_eq!(h("content-type"), crate::encode::CONTENT_TYPE);
         (kind, cache, res.bytes().await.unwrap().to_vec())
     }
 
@@ -195,15 +195,24 @@ mod tests {
         let (base, _) = serve(QueueConfig::default()).await;
         let (kind, cache, body) = get(&format!("{base}/stats?user=OctoCat"), &[]).await;
         assert_eq!((kind.as_str(), cache.as_str()), ("placeholder", NO_CACHE));
-        assert!(body.starts_with(b"\x89PNG"));
+        assert!(is_webp(&body));
         let (kind, cache, _) = settled(&format!("{base}/stats?user=octocat&time=night")).await;
         assert_eq!((kind.as_str(), cache.as_str()), ("card", READY));
         let (kind, _, _) = get(&format!("{base}/streak?user=octocat&animate=false"), &[]).await;
         assert_eq!(kind, "card", "one fetch serves every widget");
     }
 
-    fn dims(png_bytes: &[u8]) -> (u32, u32) {
-        let r = png::Decoder::new(std::io::Cursor::new(png_bytes)).read_info().unwrap();
+    fn is_webp(b: &[u8]) -> bool {
+        b.len() > 12 && &b[..4] == b"RIFF" && &b[8..12] == b"WEBP"
+    }
+
+    /// Width and height of a card (WebP) or a painting (PNG).
+    fn dims(bytes: &[u8]) -> (u32, u32) {
+        if is_webp(bytes) {
+            let f = webp::BitstreamFeatures::new(bytes).unwrap();
+            return (f.width(), f.height());
+        }
+        let r = png::Decoder::new(std::io::Cursor::new(bytes)).read_info().unwrap();
         (r.info().width, r.info().height)
     }
 
@@ -232,7 +241,7 @@ mod tests {
         app.queue.pause_for(std::time::Duration::from_secs(600));
         let (kind, cache, body) = get(&format!("{base}/stats?user=paused"), &[]).await;
         assert_eq!((kind.as_str(), cache.as_str()), ("placeholder", NO_CACHE));
-        assert!(body.starts_with(b"\x89PNG"));
+        assert!(is_webp(&body));
     }
 
     #[tokio::test]
@@ -272,11 +281,11 @@ mod tests {
         let res = failed();
         assert_eq!(res.status(), 200);
         let h = |n: &str| res.headers().get(n).unwrap().to_str().unwrap().to_string();
-        assert_eq!(h("content-type"), "image/png");
+        assert_eq!(h("content-type"), crate::encode::CONTENT_TYPE);
         assert_eq!(h("cache-control"), NO_CACHE);
         assert_eq!(h("x-questlog"), "error");
         let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
-        assert!(body.starts_with(b"\x89PNG"));
+        assert!(is_webp(&body));
     }
 
     async fn raw(url: &str) -> (u16, String, String, Vec<u8>) {
@@ -388,9 +397,9 @@ mod tests {
     #[tokio::test]
     async fn decorations_take_only_their_own_options() {
         let (base, _) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
-        let (kind, cache, png) = get(&format!("{base}/decorations/workbench?title=Technical%20Skills"), &[]).await;
+        let (kind, cache, body) = get(&format!("{base}/decorations/workbench?title=Technical%20Skills"), &[]).await;
         assert_eq!((kind.as_str(), cache.as_str()), ("card", DEMO));
-        assert!(png.len() > 1000);
+        assert!(body.len() > 1000);
         assert_eq!(get(&format!("{base}/decorations/forest-divider"), &[]).await.0, "card", "no title needed");
         assert_eq!(get(&format!("{base}/decorations/workbench?user=octo"), &[]).await.0, "error", "a card option");
         assert_eq!(get(&format!("{base}/decorations/nope"), &[]).await.0, "error", "an unknown decoration");
@@ -454,7 +463,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel::<()>();
         let a = app.clone();
         let handle = tokio::spawn(async move {
-            render_png(&a, 1, Widget::Stats, None, READY, "card", move || {
+            render_image(&a, 1, Widget::Stats, None, READY, "card", move || {
                 rx.recv().ok();
                 None
             })

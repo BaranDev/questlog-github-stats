@@ -1,5 +1,5 @@
 //! Pixel goldens: every widget × scene × time, plus a still, custom words, an empty account and a message card,
-//! rendered from fixed stats and compared with tests/goldens/<name>.png (frames stacked vertically, each at ×2 with
+//! rendered from fixed stats and compared with tests/goldens/<name>.webp (lossless; frames stacked vertically, each at ×2 with
 //! its title, 640×256).
 //! Regenerate deliberately after an art change: UPDATE_GOLDENS=1 cargo test --test goldens
 use questlog::canvas::Image;
@@ -59,12 +59,12 @@ fn goldens() {
         let budget = if drawn.frames.len() > 1 { 1_000_000 } else { 150_000 }; // spec: still < 150 KB, animated < 1 MB
         assert!(bytes < budget, "{name}: {bytes} bytes is over the {budget} byte budget");
         let got = stack(&drawn);
-        let path = dir.join(format!("{name}.png"));
+        let path = dir.join(format!("{name}.webp"));
         if update {
-            std::fs::write(&path, got.to_png()).unwrap();
+            std::fs::write(&path, questlog::encode::still(&got).unwrap()).unwrap();
             continue;
         }
-        let want = std::fs::read(&path).ok().and_then(|b| Image::decode(&b).ok());
+        let want = std::fs::read(&path).ok().and_then(|b| questlog::encode::decode(&b).ok()).map(|mut f| f.remove(0).0);
         if want.as_ref() != Some(&got) {
             std::fs::create_dir_all(&out).unwrap();
             std::fs::write(out.join(format!("{name}.png")), got.to_png()).unwrap();
