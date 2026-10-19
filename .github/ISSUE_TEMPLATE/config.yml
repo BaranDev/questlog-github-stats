@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How do I use the cards?
+    url: https://questlog.cc/wiki
+    about: The wiki explains every card, scene and option.
+  - name: Make your profile
+    url: https://questlog.cc/builder
+    about: The profile builder writes your README for you.
+  - name: Report a security problem
+    url: https://github.com/BaranDev/questlog-github-stats/security/advisories/new
+    about: Please report it privately, not as an issue.

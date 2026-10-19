@@ -1,0 +1,16 @@
+name: An idea
+description: A new scene, card, option or builder feature you would like.
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What you would like, and how you would use it on your profile.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: An example
+      description: A sketch, a reference picture, or the address you imagine (for example `/octocat/stats/desert`).

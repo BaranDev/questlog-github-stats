@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Rune from "./Rune";
-import { RUNES } from "./data";
+import Rune from "../Rune";
+import { RUNES } from "../data";
 import s from "./Marquee.module.css";
 
 function Row({ hidden }: { hidden?: boolean }) {

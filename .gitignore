@@ -10,3 +10,10 @@ site/.next/
 site/out/
 site/next-env.d.ts
 site/tsconfig.tsbuildinfo
+
+# local tools and scratch, never part of the repo
+__pycache__/
+PRODUCT.md
+.impeccable/
+tmp-data/
+tmp-snap/

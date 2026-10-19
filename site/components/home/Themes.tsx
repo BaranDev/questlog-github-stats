@@ -1,4 +1,4 @@
-import { THEMES, card, isReady, sceneName, snap } from "./data";
+import { THEMES, card, sceneName, snap } from "../data";
 import s from "./Themes.module.css";
 
 export default function Themes() {
@@ -33,14 +33,7 @@ export default function Themes() {
                         loading="lazy"
                         alt={`Character Sheet in the ${sceneName(scene)} scene`}
                       />
-                      <span>
-                        {sceneName(scene)}
-                        {!isReady(scene) && (
-                          <small className={s.wip} title="Fire being reworked">
-                            WIP
-                          </small>
-                        )}
-                      </span>
+                      <span>{sceneName(scene)}</span>
                     </a>
                   </li>
                 ))}

@@ -4,7 +4,7 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { card, snap } from "./data";
+import { card, snap } from "../data";
 import s from "./CardStack.module.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
