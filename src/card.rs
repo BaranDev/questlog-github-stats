@@ -197,7 +197,7 @@ fn stamp(img: &mut Image, m: &TextMask, x: i64, y: i64, c: Rgb) {
 
 /// Text in `ink.1` over an edge in `ink.0` `unit` pixels wide (and a drop shadow as wide again), stamped as offsets
 /// like the Pillow cards, with the ink's top left at (x, y).
-fn outline(img: &mut Image, m: &TextMask, x: i64, y: i64, unit: i64, shadow: bool, ink: (Rgb, Rgb)) {
+pub(crate) fn outline(img: &mut Image, m: &TextMask, x: i64, y: i64, unit: i64, shadow: bool, ink: (Rgb, Rgb)) {
     let (x, y) = (x - m.x_offset, y - m.y_offset);
     let reach = if shadow { 2 * unit } else { unit };
     for dx in -unit..=reach {

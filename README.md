@@ -48,6 +48,24 @@ Sixteen scenes in four themes. Every scene has all three cards, by day and by ni
 
 The gallery shows each scene's Character Sheet in the order of the table.
 
+## Decorations
+
+Painted banners to head a section of your README or divide two, with an optional title in the card title style. They show no stats, so they need no login.
+
+```md
+![About Me](https://questlog.cc/decorations/reading-nook?title=About%20Me)
+```
+
+| Decoration | Painting |
+|---|---|
+| `reading-nook` | a candlelit lectern in the forest; title on the right |
+| `workbench` | a table under a great tree's roots; title in the middle |
+| `raven-moon` | a raven before the moon; title on the left |
+| `enchanted-clearing` | a glowing gate between old trees; title at the top |
+| `forest-divider` | a mossy log, lower than the others; no title unless you give one |
+
+Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate` and `scale`; any other option draws an error card.
+
 ## Options
 
 | Parameter | Values | Default |

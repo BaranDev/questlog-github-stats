@@ -4,6 +4,7 @@ pub mod canvas;
 pub mod card;
 pub mod params;
 pub mod dates;
+pub mod decorations;
 pub mod encode;
 pub mod fmt;
 pub mod github;
