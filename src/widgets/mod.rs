@@ -252,7 +252,6 @@ mod tests {
         assert!(f.length(&l) <= 79 && l.ends_with("..."), "{l}");
     }
 
-    /// Pixels where two frames differ.
     fn changed(a: &Image, b: &Image) -> Vec<(usize, usize)> {
         (0..a.px.len()).filter(|&i| a.px[i] != b.px[i]).map(|i| (i % a.w, i / a.w)).collect()
     }

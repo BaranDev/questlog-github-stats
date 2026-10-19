@@ -1,4 +1,3 @@
-/* Horizontal accordion: four slices, the hovered or focused one opens. */
 .accordion {
   display: flex;
   gap: 12px;
@@ -166,7 +165,6 @@
   }
 }
 
-/* Scenes whose fire is being reworked */
 .wip {
   margin-left: 0.4rem;
   padding: 0.05rem 0.35rem;

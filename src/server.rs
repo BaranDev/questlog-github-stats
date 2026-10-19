@@ -753,7 +753,7 @@ mod tests {
     #[tokio::test]
     async fn an_overloaded_renderer_answers_busy_instead_of_timing_out() {
         let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
-        let _all = app.renders.clone().acquire_many_owned(2).await.unwrap(); // both slots taken
+        let _all = app.renders.clone().acquire_many_owned(2).await.unwrap();
         let start = std::time::Instant::now();
         let (kind, cache, _) = get(&format!("{base}/demo/stats?scene=forest-misty"), &[]).await;
         assert_eq!((kind.as_str(), cache.as_str()), ("busy", SHED));

@@ -1,5 +1,3 @@
-// Shared content: scenes, card names and the language runes.
-
 export const REPO = "https://github.com/BaranDev/questlog-github-stats";
 export const DEMO_USER = "BaranDev";
 /** The primary host; questlog.cevdetbaran.com still answers too. */
