@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Rune from "@/components/Rune";
-import { RUNES, THEMES, REPO, HOST, card, cardName, isReady, type Widget } from "@/components/data";
+import { RUNES, THEMES, REPO, HOST, card, cardName, isReady, sceneName, snap, type Widget } from "@/components/data";
 import w from "./wiki.module.css";
 
 export const metadata: Metadata = {
@@ -30,7 +30,7 @@ const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 function Shot({ src, alt, scale = 2 }: { src: string; alt: string; scale?: number }) {
   return (
     <a className={w.shot} href={src}>
-      <img className="pix" src={`${src}&scale=${scale}`} width={320 * scale} height={128 * scale} alt={alt} loading="lazy" />
+      <img className="pix" src={snap(`${src}&scale=${scale}`)} width={320 * scale} height={128 * scale} alt={alt} loading="lazy" />
     </a>
   );
 }
@@ -257,7 +257,7 @@ export default function Wiki() {
               </table>
 
               <h3>Spellbook, /languages</h3>
-              <Shot src={card("languages", "fairy-garden")} alt="BaranDev's Spellbook in the fairy-garden scene" />
+              <Shot src={card("languages", "fairy-garden")} alt="BaranDev's Spellbook in the Fairy garden scene" />
               <p>
                 Your top five languages by amount of code across the public repositories you own (forks left out). Each row
                 shows the language&apos;s rune, its share of all your code and a bar measured against your top language.
@@ -344,7 +344,7 @@ export default function Wiki() {
                             <Shot
                               key={wd + time}
                               src={card(wd, scene, `&time=${time}${wd === "streak" && isReady(scene) ? "&fire=themed" : ""}`)}
-                              alt={`${cardName(wd, scene)}, ${scene}, ${time}`}
+                              alt={`${cardName(wd, scene)}, ${sceneName(scene)}, ${time}`}
                             />
                           )),
                         )}

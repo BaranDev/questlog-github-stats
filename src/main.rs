@@ -51,17 +51,6 @@ async fn main() -> Result<(), questlog::BoxError> {
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
     eprintln!("questlog listening on {host}:{port}");
-    // the site's own cards, drawn once now (or read back from disk), before its first visitor
-    tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        let urls = questlog::server::site_cards();
-        for url in &urls {
-            if let Ok(r) = client.get(format!("http://127.0.0.1:{port}{url}")).send().await {
-                let _ = r.bytes().await;
-            }
-        }
-        eprintln!("site cards ready: {}", urls.len());
-    });
     axum::serve(listener, router(app)).with_graceful_shutdown(shutdown()).await?;
     Ok(())
 }

@@ -2,16 +2,12 @@
 
 import { Check, ChevronLeft, ChevronRight, Moon, Sun, SunMoon, Trash2 } from "lucide-react";
 import { THEMES, cardName, type Widget } from "../data";
-import { WIDGETS, getParam, readPairs, sceneLabel, setParam, themeOf, writePairs, type Card, type Spot } from "./cards";
+import { WIDGETS, getParam, readPairs, sceneLabel, setParam, themeOf, thumb, writePairs, type Card, type Spot } from "./cards";
 import { CloseButton, ColorField, Field, Segmented, SelectField, Toggle } from "./ui";
 import s from "./builder.module.css";
 
 export type Mode = "single" | "auto";
 type Time = "day" | "night" | "auto";
-
-export function thumb(w: Widget, scene: string, night = false, fire = "") {
-  return `/demo/${w}?scene=${scene}&scale=2&animate=false${night ? "&time=night" : ""}${fire === "themed" && w === "streak" ? "&fire=themed" : ""}`;
-}
 
 const STATS_ROWS = [
   ["level", "Level"],

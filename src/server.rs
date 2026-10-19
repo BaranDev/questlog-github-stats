@@ -38,23 +38,6 @@ pub const CACHE_BYTES: usize = 256 << 20;
 /// Finished cards kept on disk, for this build.
 pub const DISK_BYTES: u64 = 2 << 30;
 
-/// Card URLs in the site's own pages (the home page and the wiki), to draw right after a start so their first
-/// visitor never waits or trips the per-IP budget.
-pub fn site_cards() -> Vec<String> {
-    let mut urls = Vec::new();
-    for page in ["index.html", "wiki.html"] {
-        let Some((_, html)) = embedded_static::STATIC_FILES.iter().find(|(n, _)| *n == page) else { continue };
-        let html = String::from_utf8_lossy(html);
-        for part in html.split("src=\"").skip(1) {
-            let url = part.split('"').next().unwrap_or("").replace("&amp;", "&");
-            let card = ["/stats?", "/languages?", "/streak?", "/demo/"].iter().any(|p| url.starts_with(p));
-            if card && !urls.contains(&url) {
-                urls.push(url);
-            }
-        }
-    }
-    urls
-}
 /// GitHub's image proxy is reported to keep images sent with a bare no-cache; this spelling it does not keep.
 pub const NO_CACHE: &str = "max-age=0, no-cache, no-store, must-revalidate";
 pub const PAGE: &str = "public, max-age=300";
@@ -132,6 +115,7 @@ fn content_type(path: &str) -> &'static str {
         "json" => "application/json",
         "txt" => "text/plain; charset=utf-8",
         "png" => "image/png",
+        "webp" => "image/webp",
         "svg" => "image/svg+xml",
         "ttf" => "font/ttf",
         "otf" => "font/otf",
@@ -616,6 +600,7 @@ mod tests {
     #[tokio::test]
     async fn pages_and_static_files() {
         let (base, _) = serve(QueueConfig::default()).await;
+        assert_eq!(content_type("cards/demo_stats.scale=2.webp"), "image/webp", "the site's own card copies");
         for (path, html) in [("/", true), ("/wiki", true), ("/builder", true), ("/static/index.html", true)] {
             let (st, ct, cc, body) = raw(&format!("{base}{path}")).await;
             assert_eq!((st, ct.as_str()), (200, "text/html; charset=utf-8"), "{path}");

@@ -469,6 +469,7 @@ pre {
 }
 
 /* a card still being drawn holds its place in the glass color, so the page never shows an empty hole */
+img[src*="/static/cards/"],
 img[src*="/stats"],
 img[src*="/languages"],
 img[src*="/streak"] {

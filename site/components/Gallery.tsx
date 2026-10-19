@@ -4,7 +4,7 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { card, cardName, sceneName, type Widget } from "./data";
+import { card, cardName, sceneName, snap, type Widget } from "./data";
 import s from "./Gallery.module.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -53,7 +53,7 @@ export default function Gallery() {
             <div className={s.frame}>
               <img
                 className="pix"
-                src={card(w, scene, `&time=${time}${fire ? `&fire=${fire}` : ""}&scale=2`)}
+                src={snap(card(w, scene, `&time=${time}${fire ? `&fire=${fire}` : ""}&scale=2`))}
                 width={640}
                 height={256}
                 loading="lazy"

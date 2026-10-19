@@ -1,4 +1,6 @@
 export const REPO = "https://github.com/BaranDev/questlog-github-stats";
+import snapped from "./snapped.json";
+
 export const DEMO_USER = "BaranDev";
 /** The primary host; questlog.cevdetbaran.com still answers too. */
 export const HOST = "https://questlog.cc";
@@ -64,6 +66,18 @@ export function sceneName(scene: string): string {
 /** A live card of the demo profile on this host. */
 export function card(w: Widget, scene: string, extra = ""): string {
   return `/${w}?user=${DEMO_USER}&scene=${scene}${extra}`;
+}
+
+/** The site's own copy of a card: drawn once by scripts/snap_cards.py and shipped as a WebP file, so showing the
+ * site never asks the card server for a drawing. "/stats?user=x&scene=y" is cards/stats.user=x,scene=y.webp, and a
+ * character a file name can't hold becomes ~ and its hex bytes (":" is ~3A). The version changes whenever the copies
+ * are drawn again, so browsers and Cloudflare fetch the new ones. */
+export function snap(url: string): string {
+  const [path, query = ""] = url.slice(1).split(/\?(.*)/s);
+  const safe = (part: string) =>
+    part.replace(/[^A-Za-z0-9=._-]/g, (c) => Array.from(new TextEncoder().encode(c), (b) => `~${b.toString(16).toUpperCase().padStart(2, "0")}`).join(""));
+  const name = path.replace("/", "_") + (query ? `.${query.split("&").map(safe).join(",")}` : "");
+  return `/static/cards/${name}.webp?v=${snapped.version}`;
 }
 
 /** Each language's rune, in its readable color, drawn as 1x1 cells on the 5x9 rune grid. */

@@ -1,6 +1,6 @@
 // Reading and writing questlog card addresses inside a README.
 
-import { THEMES, SCENES, cardName, sceneName, type Widget } from "../data";
+import { THEMES, SCENES, cardName, sceneName, snap, type Widget } from "../data";
 
 export const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 export const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -44,6 +44,19 @@ export function themeOf(scene: string) {
 }
 
 export const sceneLabel = sceneName;
+
+/** The demo card a picker shows as a small picture: the site's own copy, at scale 2. */
+export function thumb(w: Widget, scene: string, night = false, fire = "") {
+  return snap(thumbUrl(w, scene, night, fire));
+}
+
+const thumbUrl = (w: Widget, scene: string, night: boolean, fire: string) =>
+  `/demo/${w}?scene=${scene}&scale=2&animate=false${night ? "&time=night" : ""}${fire === "themed" && w === "streak" ? "&fire=themed" : ""}`;
+
+/** Every thumbnail the builder can show; scripts/snap_cards.py draws them all. */
+export const THUMBS = WIDGETS.flatMap((w) =>
+  SCENES.flatMap((sc) => [false, true].flatMap((night) => (w === "streak" ? ["themed", ""] : [""]).map((f) => thumbUrl(w, sc, night, f)))),
+);
 
 /** A card address, or null for anything that is not one. Reads the short form /user/card/scene/time and the long
  * form /card?user=..&scene=..&time=.. */
