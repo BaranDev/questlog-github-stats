@@ -18,6 +18,7 @@ const TOC = [
   ["fire", "Fire tiers"],
   ["runes", "Runes"],
   ["scenes", "Every scene"],
+  ["decorations", "Decorations"],
   ["options", "Options"],
   ["messages", "What the messages mean"],
   ["limits", "Caching and limits"],
@@ -27,10 +28,19 @@ const TOC = [
 
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 
-function Shot({ src, alt, scale = 2 }: { src: string; alt: string; scale?: number }) {
+/** Each decoration with an example title; the divider has none by default. */
+const DECORATIONS: [string, string, number][] = [
+  ["reading-nook", "About Me", 128],
+  ["workbench", "Technical Skills", 128],
+  ["raven-moon", "Projects", 128],
+  ["enchanted-clearing", "Get In Touch", 128],
+  ["forest-divider", "", 80],
+];
+
+function Shot({ src, alt, scale = 2, h = 128 }: { src: string; alt: string; scale?: number; h?: number }) {
   return (
     <a className={w.shot} href={src}>
-      <img className="pix" src={snap(`${src}&scale=${scale}`)} width={320 * scale} height={128 * scale} alt={alt} loading="lazy" />
+      <img className="pix" src={snap(`${src}&scale=${scale}`)} width={320 * scale} height={h * scale} alt={alt} loading="lazy" />
     </a>
   );
 }
@@ -352,6 +362,34 @@ export default function Wiki() {
                   ))}
                 </div>
               ))}
+            </section>
+
+            <section id="decorations" className={w.section}>
+              <h2>Decorations</h2>
+              <p>
+                Painted banners to head a section of your README, or to divide two. They show no stats, so they need
+                no login: give them a <code>title</code>, or leave it out for the painting alone.
+              </p>
+              <Code>{`![About Me](${HOST}/decorations/reading-nook?title=About%20Me)`}</Code>
+              <p>
+                Decorations take only <code>title</code>, <code>title_color</code>, <code>outline_color</code>,{" "}
+                <code>truncate</code>, <code>animate</code> and <code>scale</code>. A title too long for its place is
+                trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.
+              </p>
+              <div className={w.grid2}>
+                {DECORATIONS.map(([name, title, h]) => (
+                  <figure key={name}>
+                    <Shot
+                      src={`/decorations/${name}?title=${encodeURIComponent(title)}`}
+                      alt={title ? `The ${name} decoration titled ${title}` : `The ${name} decoration`}
+                      h={h}
+                    />
+                    <figcaption>
+                      <code>/decorations/{name}</code> {title ? `with title=${title}` : "with no title"}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
             </section>
 
             <section id="options" className={w.section}>

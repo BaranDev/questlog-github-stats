@@ -1,0 +1,13 @@
+{
+ "title": {
+  "x": 12,
+  "y": 6,
+  "w": 160,
+  "align": "left"
+ },
+ "frame_ms": 200,
+ "ink": {
+  "title": "#F5DEA0",
+  "title_edge": "#1C120A"
+ }
+}

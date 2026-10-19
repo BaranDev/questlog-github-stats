@@ -270,3 +270,31 @@ pub(super) async fn message_cached<F: Fetcher>(
     })
     .await
 }
+
+/// A decoration: a painted banner for a README section, with an optional title.
+pub(super) async fn decoration<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(name): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Response {
+    let ip = client_ip(&headers);
+    let ip = ip.as_deref();
+    let error = |msg: String| message_cached(&app, Widget::Stats, Look::default(), msg, "error", DEMO, ip);
+    let opts = match crate::decorations::parse(&q) {
+        Ok(o) => o,
+        Err(msg) => return error(msg).await,
+    };
+    if !app.assets.decorations.contains_key(&name) {
+        let mut names: Vec<&str> = app.assets.decorations.keys().map(String::as_str).collect();
+        names.sort();
+        return error(format!("Unknown decoration '{}' (use {})", params::clip(&name), names.join(", "))).await;
+    }
+    let key = cache::key(&["decoration", &name, &format!("{opts:?}")]);
+    let assets = app.assets.clone();
+    render_png(&app, key, Widget::Stats, ip, DEMO, "card", move || {
+        let (drawn, ms) = crate::decorations::render(&assets, &name, &opts)?;
+        crate::encode::encode_at(&drawn.frames, drawn.title.as_ref(), opts.scale, ms).ok()
+    })
+    .await
+}

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Decorations** at `/decorations/<name>`: painted banners for README sections, with an optional title (`reading-nook`, `workbench`, `raven-moon`, `enchanted-clearing`, `forest-divider`).
+
 ## 1.0.0
 
 The first release.
