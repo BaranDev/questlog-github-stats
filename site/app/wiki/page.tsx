@@ -27,7 +27,6 @@ const TOC = [
 
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 
-/** A live card that links to its full-size version. */
 function Shot({ src, alt, scale = 2 }: { src: string; alt: string; scale?: number }) {
   return (
     <a className={w.shot} href={src}>

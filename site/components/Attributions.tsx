@@ -5,7 +5,6 @@ import { REPO } from "./data";
 
 const OFL = "https://openfontlicense.org";
 
-/** Everything questlog uses that someone else made, or that needs credit. */
 const ATTRIBUTIONS: [string, ReactNode][] = [
   [
     "Paintings and sprites",

@@ -1,4 +1,3 @@
-/* Two staggered columns; the right one starts lower. */
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
