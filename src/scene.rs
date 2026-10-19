@@ -178,6 +178,9 @@ pub struct Assets {
     pub scenes: HashMap<String, Scene>,
     pub title_font: Font,
     pub title_small: Font,
+    /// The title fonts at twice the size, for titles drawn on the card's finer title layer.
+    pub title_fine: Font,
+    pub title_small_fine: Font,
     pub text_font: Font,
 }
 
@@ -268,6 +271,8 @@ impl Assets {
             scenes,
             title_font: Font::from_bytes(TITLE_FONT, TITLE_SIZE)?,
             title_small: Font::from_bytes(TITLE_FONT, TITLE_SMALL_SIZE)?,
+            title_fine: Font::from_bytes(TITLE_FONT, 2 * TITLE_SIZE)?,
+            title_small_fine: Font::from_bytes(TITLE_FONT, 2 * TITLE_SMALL_SIZE)?,
             text_font: Font::from_bytes(TEXT_FONT, 8)?,
         })
     }

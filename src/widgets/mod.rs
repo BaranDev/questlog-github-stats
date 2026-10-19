@@ -5,7 +5,7 @@ pub mod streak;
 
 use crate::canvas::{Image, Rgb};
 use crate::card::Card;
-use crate::scene::{Assets, Scene};
+use crate::scene::{Assets, OH, OW, Scene};
 use crate::stats::UserStats;
 use std::collections::{HashMap, HashSet};
 
@@ -111,27 +111,37 @@ fn card<'a>(assets: &'a Assets, w: Widget, look: &Look) -> Option<Card<'a>> {
     };
     (card.title_color, card.text_color, card.outline_color) = (look.title_color, look.text_color, look.outline_color);
     card.truncate = look.truncate;
+    if look.scale >= 2 {
+        card.title_layer = Some(Image::new(2 * OW, 2 * OH));
+    }
     Some(card)
 }
 
-pub fn render(assets: &Assets, w: Widget, look: &Look, s: &UserStats) -> Option<Vec<Image>> {
-    let card = card(assets, w, look)?;
+/// A drawn card: its frames, and the title layer that encode() lays over each of them (see Card::title_layer).
+#[derive(Debug, PartialEq)]
+pub struct Drawn {
+    pub frames: Vec<Image>,
+    pub title: Option<Image>,
+}
+
+pub fn render(assets: &Assets, w: Widget, look: &Look, s: &UserStats) -> Option<Drawn> {
+    let mut card = card(assets, w, look)?;
     let mut frames = match w {
-        Widget::Stats => stats::render(card, look, s),
-        Widget::Languages => languages::render(card, look, s),
-        Widget::Streak => streak::render(card, look, s),
+        Widget::Stats => stats::render(&mut card, look, s),
+        Widget::Languages => languages::render(&mut card, look, s),
+        Widget::Streak => streak::render(&mut card, look, s),
     };
     if !look.animate {
         frames.truncate(1);
     }
-    Some(frames)
+    Some(Drawn { frames, title: card.title_layer })
 }
 
-pub fn message(assets: &Assets, w: Widget, look: &Look, msg: &str) -> Option<Image> {
+pub fn message(assets: &Assets, w: Widget, look: &Look, msg: &str) -> Option<Drawn> {
     let mut card = card(assets, w, look)?;
     card.title(&look.title_or(card.scene, w.key()));
     card.message(msg);
-    Some(card.frame())
+    Some(Drawn { frames: vec![card.frame()], title: card.title_layer })
 }
 
 #[cfg(test)]
@@ -168,12 +178,16 @@ pub fn empty() -> UserStats {
 }
 
 #[cfg(test)]
-pub fn assert_scene_colors(a: &Assets, look: &Look, frames: &[Image]) {
+pub fn assert_scene_colors(a: &Assets, look: &Look, drawn: &Drawn) {
     let mut allowed = a.scene(&look.scene).unwrap().allowed();
     allowed.extend([look.title_color, look.text_color, look.outline_color].into_iter().flatten());
-    for f in frames {
-        assert_eq!((f.w, f.h), (crate::scene::OW, crate::scene::OH));
+    for f in &drawn.frames {
+        assert_eq!((f.w, f.h), (OW, OH));
         assert!(f.px.iter().all(|p| allowed.contains(&[p[0], p[1], p[2]])), "off-palette pixel");
+    }
+    if let Some(t) = &drawn.title {
+        assert_eq!((t.w, t.h), (2 * OW, 2 * OH));
+        assert!(t.px.iter().all(|p| p[3] == 0 || allowed.contains(&[p[0], p[1], p[2]])), "off-palette title pixel");
     }
 }
 
@@ -225,8 +239,8 @@ mod tests {
         let a = Assets::embedded().unwrap();
         let mut look = Look::default();
         look.values.insert("current".into(), "Forever".into());
-        let base = render(&a, Widget::Streak, &Look::default(), &sample()).unwrap();
-        let custom = render(&a, Widget::Streak, &look, &sample()).unwrap();
+        let base = render(&a, Widget::Streak, &Look::default(), &sample()).unwrap().frames;
+        let custom = render(&a, Widget::Streak, &look, &sample()).unwrap().frames;
         let fire = Card::new(&a, a.scene("forest").unwrap(), "streak", false).unwrap().painting.anchors.boxes["fire"];
         for (b, c) in base.iter().zip(&custom) {
             assert_ne!(b, c);
@@ -252,6 +266,16 @@ mod tests {
         assert!(f.length(&l) <= 79 && l.ends_with("..."), "{l}");
     }
 
+    #[test]
+    fn the_title_has_finer_pixels_from_scale_2() {
+        let a = Assets::embedded().unwrap();
+        let fine = render(&a, Widget::Stats, &Look::default(), &sample()).unwrap();
+        let coarse = render(&a, Widget::Stats, &Look { scale: 1, ..Default::default() }, &sample()).unwrap();
+        assert!(coarse.title.is_none(), "scale 1 has no room for half pixels: the title is in the frames");
+        assert!(fine.title.expect("a title layer").px.iter().any(|p| p[3] != 0), "the title is drawn on its layer");
+        assert_ne!(fine.frames, coarse.frames, "and not in the frames");
+    }
+
     fn changed(a: &Image, b: &Image) -> Vec<(usize, usize)> {
         (0..a.px.len()).filter(|&i| a.px[i] != b.px[i]).map(|i| (i % a.w, i / a.w)).collect()
     }
@@ -270,8 +294,8 @@ mod tests {
                     let base = render(&a, w, &look, &few).unwrap();
                     let with = render(&a, w, &noted, &few).unwrap();
                     assert_scene_colors(&a, &noted, &with);
-                    let drawn: HashSet<_> = changed(&paint, &base[0]).into_iter().collect();
-                    let note_px = changed(&base[0], &with[0]);
+                    let drawn: HashSet<_> = changed(&paint, &base.frames[0]).into_iter().collect();
+                    let note_px = changed(&base.frames[0], &with.frames[0]);
                     assert!(!note_px.is_empty(), "{scene} {w:?} night={night}: the note found no room");
                     assert!(note_px.iter().all(|p| !drawn.contains(p)), "{scene} {w:?} night={night}: the note covers text");
                     assert!(note_px.iter().all(|&(x, y)| x > 0 && y > 0 && x < OW - 1 && y < OH - 1), "{scene} {w:?}");
@@ -286,7 +310,7 @@ mod tests {
         // on one painting, three rows are the five with the last two gone
         let rows = |langs, hide: &[&str]| {
             let look = Look { langs, hide: hide.iter().map(|h| h.to_string()).collect(), ..Default::default() };
-            languages::render(Card::new(&a, a.scene("forest").unwrap(), "languages", false).unwrap(), &look, &sample())
+            languages::render(&mut Card::new(&a, a.scene("forest").unwrap(), "languages", false).unwrap(), &look, &sample())
         };
         assert_ne!(rows(5, &[]), rows(3, &[]), "rows four and five are gone");
         assert_eq!(rows(5, &["javascript", "html"]), rows(3, &[]));
@@ -308,8 +332,8 @@ mod tests {
         }
         let hidden = Look { hide: ["typescript".to_string()].into(), ..Default::default() };
         let noted = Look { note: vec!["Hello".into()], ..hidden.clone() };
-        let without = render(&a, Widget::Languages, &hidden, &sample()).unwrap();
-        let with = render(&a, Widget::Languages, &noted, &sample()).unwrap();
+        let without = render(&a, Widget::Languages, &hidden, &sample()).unwrap().frames;
+        let with = render(&a, Widget::Languages, &noted, &sample()).unwrap().frames;
         let list = Card::new(&a, a.scene("forest").unwrap(), "languages", false).unwrap().painting.anchors.boxes["list"];
         let rows_end = (list.y + 4 * 11) as usize;
         assert!(changed(&without[0], &with[0]).iter().all(|&(_, y)| y >= rows_end), "hide made room: four rows stay");
@@ -330,10 +354,12 @@ mod tests {
                         outline_color: Some(outline),
                         ..Default::default()
                     };
-                    for f in [render(&a, w, &look, &sample()).unwrap().remove(0), message(&a, w, &look, "Busy").unwrap()] {
-                        assert_scene_colors(&a, &look, std::slice::from_ref(&f));
+                    for f in [render(&a, w, &look, &sample()).unwrap(), message(&a, w, &look, "Busy").unwrap()] {
+                        assert_scene_colors(&a, &look, &f);
                         for c in [title, text, outline] {
-                            assert!(f.px.iter().any(|p| [p[0], p[1], p[2]] == c), "{scene} {w:?} night={night}: {c:?} unused");
+                            let title = f.title.iter().flat_map(|t| t.px.iter().filter(|p| p[3] != 0));
+                            let mut px = f.frames[0].px.iter().chain(title);
+                            assert!(px.any(|p| [p[0], p[1], p[2]] == c), "{scene} {w:?} night={night}: {c:?} unused");
                         }
                     }
                 }
@@ -356,10 +382,10 @@ mod tests {
                 for night in [false, true] {
                     let look = Look { scene: scene.into(), night, ..Default::default() };
                     let frames = render(&a, w, &look, &sample()).unwrap_or_else(|| panic!("{scene} {w:?}"));
-                    assert!(!frames.is_empty());
+                    assert!(!frames.frames.is_empty());
                     assert_scene_colors(&a, &look, &frames);
                     let msg = message(&a, w, &look, "No adventurer by that name").unwrap();
-                    assert_scene_colors(&a, &look, &[msg]);
+                    assert_scene_colors(&a, &look, &msg);
                 }
             }
         }
@@ -372,7 +398,7 @@ mod tests {
             for night in [false, true] {
                 let look = Look { night, ..Default::default() };
                 let img = message(&a, w, &look, "No adventurer by that name").unwrap();
-                assert_scene_colors(&a, &look, &[img]);
+                assert_scene_colors(&a, &look, &img);
             }
         }
         let bad = Look { scene: "nowhere".into(), ..Default::default() };

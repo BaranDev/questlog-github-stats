@@ -16,7 +16,7 @@ pub fn tier(current: u32) -> &'static str {
     }
 }
 
-pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
+pub fn render(c: &mut Card, look: &Look, s: &UserStats) -> Vec<Image> {
     let (assets, scene, painting) = (c.assets, c.scene, c.painting);
     c.title(&look.title_or(scene, "streak"));
     if let Some(sub) = &look.subtitle {
@@ -103,10 +103,11 @@ mod tests {
             for current in [0, 4, 12, 45] {
                 let look = Look { night, ..Default::default() };
                 let s = UserStats { current_streak: current, ..sample() };
-                let frames = draw(&a, Widget::Streak, &look, &s).unwrap();
+                let drawn = draw(&a, Widget::Streak, &look, &s).unwrap();
+                let frames = &drawn.frames;
                 assert_eq!(frames.len(), FRAMES);
                 assert_ne!(frames[0], frames[1], "streak {current} animates");
-                assert_scene_colors(&a, &look, &frames);
+                assert_scene_colors(&a, &look, &drawn);
             }
         }
     }

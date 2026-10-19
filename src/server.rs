@@ -90,7 +90,8 @@ impl<F: Fetcher> App<F> {
             .into_iter()
             .filter_map(|w| {
                 let look = Look::default();
-                Some((w, encode(&[widgets::message(&assets, w, &look, BUSY)?], look.scale).ok()?))
+                let d = widgets::message(&assets, w, &look, BUSY)?;
+                Some((w, encode(&d.frames, d.title.as_ref(), look.scale).ok()?))
             })
             .collect();
         App {
@@ -343,7 +344,7 @@ fn failed() -> Response {
     let bytes = FALLBACK.get_or_init(|| {
         let mut img = Image::new(320, 128);
         img.px.fill([0x1C, 0x12, 0x0A, 0xFF]);
-        encode(&[img], 5).unwrap_or_default()
+        encode(&[img], None, 5).unwrap_or_default()
     });
     png(bytes.clone(), NO_CACHE, "error")
 }
@@ -423,8 +424,8 @@ async fn render_card<F: Fetcher>(
     let assets = app.assets.clone();
     let w = req.widget;
     render_png(app, key, w, ip, cache, "card", move || {
-        let frames = widgets::render(&assets, req.widget, &req.look, &stats)?;
-        encode(&frames, req.look.scale).ok()
+        let d = widgets::render(&assets, req.widget, &req.look, &stats)?;
+        encode(&d.frames, d.title.as_ref(), req.look.scale).ok()
     })
     .await
 }
@@ -452,7 +453,8 @@ async fn message_cached<F: Fetcher>(
     let key = cache::key(&["message", w.key(), &look_key(&look), &msg]);
     let assets = app.assets.clone();
     render_png(app, key, w, ip, cache, kind, move || {
-        encode(&[widgets::message(&assets, w, &look, &msg)?], look.scale).ok()
+        let d = widgets::message(&assets, w, &look, &msg)?;
+        encode(&d.frames, d.title.as_ref(), look.scale).ok()
     })
     .await
 }

@@ -29,7 +29,8 @@ fn preview_every_scene() {
             for (row, w) in [Widget::Stats, Widget::Languages, Widget::Streak].into_iter().enumerate() {
                 for (col, night) in [false, true].into_iter().enumerate() {
                     let look = Look { scene: scene.into(), night, ..base.clone() };
-                    let frames = widgets::render(&a, w, &look, &stats).unwrap();
+                    let look = Look { scale: 1, ..look };
+                    let frames = widgets::render(&a, w, &look, &stats).unwrap().frames;
                     sheet.alpha_composite(&frames[0], col as i64 * 320, row as i64 * 128);
                 }
             }
