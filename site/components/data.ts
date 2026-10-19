@@ -67,6 +67,7 @@ export const DECORATIONS = [
   { name: "raven-moon", label: "Raven and moon", title: "Projects", h: 128 },
   { name: "enchanted-clearing", label: "Enchanted clearing", title: "Get In Touch", h: 128 },
   { name: "forest-divider", label: "Forest divider", title: "", h: 80 },
+  { name: "forest-footer", label: "Forest footer", title: "", h: 80 },
 ] as const;
 
 export const decorationLabel = (name: string) => DECORATIONS.find((d) => d.name === name)?.label ?? name;

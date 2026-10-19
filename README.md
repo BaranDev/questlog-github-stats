@@ -63,6 +63,7 @@ Painted banners to head a section of your README or divide two, with an optional
 | `raven-moon` | a raven before the moon; title on the left |
 | `enchanted-clearing` | a glowing gate between old trees; title at the top |
 | `forest-divider` | a mossy log, lower than the others; no title unless you give one |
+| `forest-footer` | glowing mushrooms and ferns, as low as the divider; for the end of a README |
 
 Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate` and `scale`; any other option draws an error card.
 
