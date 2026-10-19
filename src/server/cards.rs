@@ -140,16 +140,16 @@ pub(super) fn placeholder_text(eta_secs: u64, paused: bool) -> String {
     }
 }
 
-pub(super) fn png(bytes: Vec<u8>, cache: &'static str, kind: &'static str) -> Response {
+pub(super) fn image(bytes: Vec<u8>, cache: &'static str, kind: &'static str) -> Response {
     let headers = [
-        (header::CONTENT_TYPE, "image/png"),
+        (header::CONTENT_TYPE, crate::encode::CONTENT_TYPE),
         (header::CACHE_CONTROL, cache),
         (HeaderName::from_static("x-questlog"), kind),
     ];
     (headers, bytes).into_response()
 }
 
-/// A render or encode failure still answers 200 with a PNG, because anything else is a broken image on GitHub.
+/// A render or encode failure still answers 200 with an image, because anything else is a broken image on GitHub.
 /// The body is a plain dark panel that does not depend on the renderer.
 pub(super) fn failed() -> Response {
     static FALLBACK: OnceLock<Vec<u8>> = OnceLock::new();
@@ -158,7 +158,7 @@ pub(super) fn failed() -> Response {
         img.px.fill([0x1C, 0x12, 0x0A, 0xFF]);
         encode(&[img], None, 5).unwrap_or_default()
     });
-    png(bytes.clone(), NO_CACHE, "error")
+    image(bytes.clone(), NO_CACHE, "error")
 }
 
 /// A look as a cache key part: its maps sorted, so equal looks give equal keys.
@@ -178,7 +178,7 @@ pub(super) fn look_key(look: &Look) -> String {
 /// cache must not hand it to everyone).
 pub(super) fn shed<F: Fetcher>(app: &App<F>, w: Widget, cache: &'static str) -> Response {
     match app.shed.get(&w) {
-        Some(bytes) => png(bytes.clone(), cache, "busy"),
+        Some(bytes) => image(bytes.clone(), cache, "busy"),
         None => failed(),
     }
 }
@@ -187,7 +187,7 @@ pub(super) fn shed<F: Fetcher>(app: &App<F>, w: Widget, cache: &'static str) -> 
 /// the client's per-IP budget and waits at most SHED_AFTER for a slot; either failing answers the busy card. The
 /// permit moves into the closure, so the 2-render cap holds until the render really ends, even when the client
 /// has already gone away.
-pub(super) async fn render_png<F: Fetcher>(
+pub(super) async fn render_image<F: Fetcher>(
     app: &Arc<App<F>>,
     key: u64,
     w: Widget,
@@ -197,7 +197,7 @@ pub(super) async fn render_png<F: Fetcher>(
     job: impl FnOnce() -> Option<Vec<u8>> + Send + 'static,
 ) -> Response {
     if let Some(bytes) = app.cache.get(key) {
-        return png((*bytes).clone(), cache, kind);
+        return image((*bytes).clone(), cache, kind);
     }
     if ip.is_some_and(|ip| !app.ip_renders.take(ip)) {
         return shed(app, w, NO_CACHE);
@@ -215,7 +215,7 @@ pub(super) async fn render_png<F: Fetcher>(
         Some(bytes) => {
             let bytes = Arc::new(bytes);
             app.cache.put(key, bytes.clone());
-            png((*bytes).clone(), cache, kind)
+            image((*bytes).clone(), cache, kind)
         }
         None => failed(),
     }
@@ -235,7 +235,7 @@ pub(super) async fn render_card<F: Fetcher>(
     let key = cache::key(&["card", req.widget.key(), &look_key(&req.look), &format!("{stats:?}")]);
     let assets = app.assets.clone();
     let w = req.widget;
-    render_png(app, key, w, ip, cache, "card", move || {
+    render_image(app, key, w, ip, cache, "card", move || {
         let d = widgets::render(&assets, req.widget, &req.look, &stats)?;
         encode(&d.frames, d.title.as_ref(), req.look.scale).ok()
     })
@@ -264,7 +264,7 @@ pub(super) async fn message_cached<F: Fetcher>(
 ) -> Response {
     let key = cache::key(&["message", w.key(), &look_key(&look), &msg]);
     let assets = app.assets.clone();
-    render_png(app, key, w, ip, cache, kind, move || {
+    render_image(app, key, w, ip, cache, kind, move || {
         let d = widgets::message(&assets, w, &look, &msg)?;
         encode(&d.frames, d.title.as_ref(), look.scale).ok()
     })
@@ -292,7 +292,7 @@ pub(super) async fn decoration<F: Fetcher>(
     }
     let key = cache::key(&["decoration", &name, &format!("{opts:?}")]);
     let assets = app.assets.clone();
-    render_png(&app, key, Widget::Stats, ip, DEMO, "card", move || {
+    render_image(&app, key, Widget::Stats, ip, DEMO, "card", move || {
         let (drawn, ms) = crate::decorations::render(&assets, &name, &opts)?;
         crate::encode::encode_at(&drawn.frames, drawn.title.as_ref(), opts.scale, ms).ok()
     })
