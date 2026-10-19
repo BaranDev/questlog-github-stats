@@ -108,7 +108,7 @@ docker build -t questlog .
 docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog
 ```
 
-`.env` holds `GITHUB_TOKEN=` with a fine-grained token that can read public repositories (see `.env.example`). The server listens on `PORT` (8080) and keeps its cache in `DATA_DIR` (`/data`). With your own token, your own instance can count your private contributions too.
+`.env` holds `GITHUB_TOKEN=` with a fine-grained token that can read public repositories (see `.env.example`). `NEW_LOGINS_PER_HOUR` (600 by default) caps how many logins are fetched for the first time each hour; raise it for a busy day, GitHub's own limit still pauses fetching when it runs low. The server listens on `PORT` (8080) and keeps its cache in `DATA_DIR` (`/data`). With your own token, your own instance can count your private contributions too.
 
 ## Development
 
