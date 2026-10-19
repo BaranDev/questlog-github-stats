@@ -9,7 +9,7 @@ export default function Footer() {
           questlog
         </a>
         <nav aria-label="Footer">
-          <a href="/#demo">Make my cards</a>
+          <a href="/builder">Make my cards</a>
           <a href="/#scenes">Scenes</a>
           <a href="/wiki">Wiki</a>
           <a href={REPO}>GitHub</a>

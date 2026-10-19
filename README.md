@@ -12,7 +12,7 @@ Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellb
 
 ## Use it
 
-Open https://questlog.cc, type your login, pick a scene and copy the snippet. Or write it yourself, one line per card:
+Open the [profile builder](https://questlog.cc/builder), type your login, add cards and copy your README. Or write it yourself, one line per card:
 
 ```md
 ![octocat's stats](https://questlog.cc/octocat/stats)
@@ -91,7 +91,7 @@ docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog
 
 ## Development
 
-The pages at `/` and `/wiki` come from `site/`, a Next.js static export that the binary embeds. Build it before `cargo build`: `cd site && npm ci && npm run build` (it writes `static/`).
+The pages at `/`, `/builder` and `/wiki` come from `site/`, a Next.js static export that the binary embeds. Build it before `cargo build`: `cd site && npm ci && npm run build` (it writes `static/`).
 
 ## License
 

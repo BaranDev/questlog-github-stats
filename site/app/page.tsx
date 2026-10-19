@@ -5,7 +5,6 @@ import Themes from "@/components/Themes";
 import CardStack from "@/components/CardStack";
 import Marquee from "@/components/Marquee";
 import Gallery from "@/components/Gallery";
-import Builder from "@/components/Builder";
 import s from "./page.module.css";
 
 const HERO = "/stats?user=BaranDev&scene=castle&scale=3";
@@ -13,6 +12,8 @@ const HERO = "/stats?user=BaranDev&scene=castle&scale=3";
 export default function Home() {
   return (
     <>
+      {/* the card maker that lived at /#demo is now the profile builder */}
+      <script dangerouslySetInnerHTML={{ __html: `if(location.hash==="#demo")location.replace("/builder")` }} />
       <a className="skip" href="#top">
         Skip to content
       </a>
@@ -26,7 +27,7 @@ export default function Home() {
               with one line: no token, no setup.
             </p>
             <div className={s.ctas}>
-              <a className="btn btn-primary" href="#demo">
+              <a className="btn btn-primary" href="/builder">
                 Make my cards
               </a>
               <a className="btn btn-ghost" href="/wiki">
@@ -47,7 +48,6 @@ export default function Home() {
         <CardStack />
         <Marquee />
         <Gallery />
-        <Builder />
       </main>
       <Footer />
     </>
