@@ -1,16 +1,19 @@
 // Reading and writing questlog card addresses inside a README.
 
-import { THEMES, SCENES, cardName, sceneName, snap, type Widget } from "../data";
+import { DECORATIONS, THEMES, SCENES, cardName, decorationLabel, sceneName, snap, type Widget } from "../data";
 
 export const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 export const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 /** Hosts that serve questlog cards; the page's own host counts too. */
 export const HOSTS = ["questlog.cc", "questlog.cevdetbaran.com", "www.questlog.cc"];
 
+/** A card, or a decoration: a banner with no login, whose `scene` is the decoration's name. */
+export type Kind = Widget | "decorations";
+
 export type Card = {
   origin: string;
   user: string;
-  widget: Widget;
+  widget: Kind;
   scene: string;
   night: boolean;
   /** Every other option, in the order it was written, decoded. */
@@ -45,6 +48,13 @@ export function themeOf(scene: string) {
 
 export const sceneLabel = sceneName;
 
+/** What a card is called: "Spellbook", "Campfire" in its scene, or the decoration's name. */
+export const kindName = (c: Card) => (c.widget === "decorations" ? decorationLabel(c.scene) : cardName(c.widget, c.scene));
+
+/** A decoration's small picture, without a title. */
+export const decorationThumb = (name: string) => snap(decorationThumbUrl(name));
+const decorationThumbUrl = (name: string) => `/decorations/${name}?scale=2&animate=false`;
+
 /** The demo card a picker shows as a small picture: the site's own copy, at scale 2. */
 export function thumb(w: Widget, scene: string, night = false, fire = "") {
   return snap(thumbUrl(w, scene, night, fire));
@@ -54,9 +64,12 @@ const thumbUrl = (w: Widget, scene: string, night: boolean, fire: string) =>
   `/demo/${w}?scene=${scene}&scale=2&animate=false${night ? "&time=night" : ""}${fire === "themed" && w === "streak" ? "&fire=themed" : ""}`;
 
 /** Every thumbnail the builder can show; scripts/snap_cards.py draws them all. */
-export const THUMBS = WIDGETS.flatMap((w) =>
-  SCENES.flatMap((sc) => [false, true].flatMap((night) => (w === "streak" ? ["themed", ""] : [""]).map((f) => thumbUrl(w, sc, night, f)))),
-);
+export const THUMBS = [
+  ...WIDGETS.flatMap((w) =>
+    SCENES.flatMap((sc) => [false, true].flatMap((night) => (w === "streak" ? ["themed", ""] : [""]).map((f) => thumbUrl(w, sc, night, f)))),
+  ),
+  ...DECORATIONS.map((d) => decorationThumbUrl(d.name)),
+];
 
 /** A card address, or null for anything that is not one. Reads the short form /user/card/scene/time and the long
  * form /card?user=..&scene=..&time=.. */
@@ -75,6 +88,9 @@ export function parseCard(src: string, ownHost = ""): Card | null {
     return null;
   }
   const q = u.searchParams;
+  if (parts.length === 2 && parts[0] === "decorations") {
+    return { origin: u.origin, user: "", widget: "decorations", scene: parts[1], night: false, params: [...q.entries()], hash: u.hash };
+  }
   let user: string | null;
   let widget: string;
   let scene: string | null;
@@ -108,6 +124,10 @@ export function enc(v: string) {
 
 /** The short address: the scene and night as path parts when they differ from the defaults, the rest as a query. */
 export function writeCard(c: Card, night = c.night): string {
+  if (c.widget === "decorations") {
+    const query = c.params.map(([k, v]) => `${k}=${enc(v)}`).join("&");
+    return `${c.origin}/decorations/${enc(c.scene)}${query ? `?${query}` : ""}${c.hash}`;
+  }
   const path = night ? `/${c.scene}/night` : c.scene !== "forest" ? `/${c.scene}` : "";
   const query = c.params.map(([k, v]) => `${k}=${enc(v)}`).join("&");
   return `${c.origin}/${enc(c.user)}/${c.widget}${path}${query ? `?${query}` : ""}${c.hash}`;
@@ -156,12 +176,15 @@ export function writePairs(m: Map<string, string>) {
 
 /** The alt text a card gets when it is added; also what counts as "not written by hand" when the card changes. */
 export function autoAlt(c: Card) {
+  if (c.widget === "decorations") return getParam(c, "title") || decorationLabel(c.scene);
   return `${c.user}'s ${cardName(c.widget, c.scene)}`;
 }
 
 function isAutoAlt(alt: string, c: Card) {
   const a = alt.trim().toLowerCase();
-  const names = [c.widget, cardName(c.widget, c.scene), ...SCENES.map((s) => cardName(c.widget, s))];
+  if (c.widget === "decorations") return a === "" || a === autoAlt(c).toLowerCase() || DECORATIONS.some((d) => a === d.label.toLowerCase());
+  const w = c.widget;
+  const names = [w, cardName(w, c.scene), ...SCENES.map((s) => cardName(w, s))];
   return a === "" || names.some((n) => a === `${c.user}'s ${n}`.toLowerCase());
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { Check, ChevronLeft, ChevronRight, Moon, Sun, SunMoon, Trash2 } from "lucide-react";
-import { THEMES, cardName, type Widget } from "../data";
-import { WIDGETS, getParam, readPairs, sceneLabel, setParam, themeOf, thumb, writePairs, type Card, type Spot } from "./cards";
+import { DECORATIONS, THEMES, cardName, decorationLabel, type Widget } from "../data";
+import { WIDGETS, decorationThumb, getParam, readPairs, sceneLabel, setParam, themeOf, thumb, writePairs, type Card, type Spot } from "./cards";
 import { CloseButton, ColorField, Field, Segmented, SelectField, Toggle } from "./ui";
 import s from "./builder.module.css";
 
@@ -43,15 +43,7 @@ export const describe = (w: Widget) => DESCRIBE[w];
 
 export const sceneGroups = THEMES.map((t) => ({ label: t.name, options: t.scenes.map((sc) => ({ value: sc, label: sceneLabel(sc) })) }));
 
-export default function CardOptions({
-  spot,
-  index,
-  count,
-  onChange,
-  onRemove,
-  onClose,
-  onStep,
-}: {
+type Props = {
   spot: Spot;
   index: number;
   count: number;
@@ -59,8 +51,109 @@ export default function CardOptions({
   onRemove: () => void;
   onClose: () => void;
   onStep: (d: -1 | 1) => void;
-}) {
+};
+
+export default function CardOptions(props: Props) {
+  return props.spot.card.widget === "decorations" ? <DecorationOptions {...props} /> : <WidgetOptions {...props} />;
+}
+
+/** The panel's top: what is being changed, and stepping through the cards of the README. */
+function Head({ name, sub, index, count, onStep, onClose }: { name: string; sub: string } & Pick<Props, "index" | "count" | "onStep" | "onClose">) {
+  return (
+    <>
+      <div className={s.optsHead}>
+        <div>
+          <h3 className={`display ${s.optsName}`}>{name}</h3>
+          <p className={s.optsSub}>{sub}</p>
+        </div>
+        <div className={s.optsNav}>
+          {count > 1 && (
+            <>
+              <button type="button" className={s.navBtn} onClick={() => onStep(-1)} aria-label="Previous card">
+                <ChevronLeft aria-hidden="true" />
+              </button>
+              <span className={s.label}>
+                Card {index + 1} of {count}
+              </span>
+              <button type="button" className={s.navBtn} onClick={() => onStep(1)} aria-label="Next card">
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </>
+          )}
+          <CloseButton onClick={onClose} label="Close the card options" />
+        </div>
+      </div>
+      <p className={s.optsHint}>Every change goes straight into your README.</p>
+    </>
+  );
+}
+
+function Foot({ onRemove, onClose }: Pick<Props, "onRemove" | "onClose">) {
+  return (
+    <div className={s.optsFoot}>
+      <button type="button" className={`btn ${s.remove}`} onClick={onRemove}>
+        <Trash2 aria-hidden="true" />
+        Remove this card
+      </button>
+      <button type="button" className="btn btn-primary" onClick={onClose}>
+        <Check aria-hidden="true" />
+        Done
+      </button>
+    </div>
+  );
+}
+
+/** A decoration has no stats and no night: the painting, its title and the title's colors. */
+function DecorationOptions({ spot, index, count, onChange, onRemove, onClose, onStep }: Props) {
   const c = spot.card;
+  const set = (key: string, value: string, typing = true) => onChange(setParam(c, key, value), "single", typing);
+  const title = getParam(c, "title");
+  return (
+    <div className={s.opts}>
+      <Head name="Decoration" sub={decorationLabel(c.scene)} index={index} count={count} onStep={onStep} onClose={onClose} />
+      <fieldset className={s.group}>
+        <legend className={s.label}>Painting</legend>
+        <div className={`${s.thumbs} ${s.c3}`}>
+          {DECORATIONS.map((d) => (
+            <label key={d.name} className={s.thumb}>
+              <input type="radio" name={`deco-${index}`} checked={c.scene === d.name} onChange={() => onChange({ ...c, scene: d.name }, "single")} />
+              <img className="pix" src={decorationThumb(d.name)} width={640} height={d.h * 2} alt="" loading="lazy" />
+              <span className={s.thumbScene}>{d.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <Field label="Title" value={title} onChange={(v) => set("title", v)} help="Empty: the painting alone. Example: About Me" />
+      <details className={s.more}>
+        <summary>
+          More options: colors, animation
+          <ChevronRight className={s.moreChev} aria-hidden="true" />
+        </summary>
+        <div className={s.moreBody}>
+          <fieldset className={s.group}>
+            <legend className={s.label}>Colors</legend>
+            <div className={s.colors}>
+              <ColorField label="Title color" value={getParam(c, "title_color")} onChange={(v) => set("title_color", v)} />
+              <ColorField label="Outline color" value={getParam(c, "outline_color")} onChange={(v) => set("outline_color", v)} />
+            </div>
+          </fieldset>
+          <Toggle checked={getParam(c, "animate") !== "false"} onChange={(on) => set("animate", on ? "" : "false", false)}>
+            Animate the candles and lights
+          </Toggle>
+          {title && (
+            <Toggle checked={getParam(c, "truncate") === "false"} onChange={(on) => set("truncate", on ? "false" : "", false)}>
+              Show a long title whole (it may run past its place)
+            </Toggle>
+          )}
+        </div>
+      </details>
+      <Foot onRemove={onRemove} onClose={onClose} />
+    </div>
+  );
+}
+
+function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep }: Props) {
+  const c = spot.card as Card & { widget: Widget };
   const mode: Mode = spot.kind === "picture" && spot.dark ? "auto" : "single";
   const time: Time = mode === "auto" ? "auto" : c.night ? "night" : "day";
   const night = time === "night";
@@ -92,31 +185,14 @@ export default function CardOptions({
 
   return (
     <div className={s.opts}>
-      <div className={s.optsHead}>
-        <div>
-          <h3 className={`display ${s.optsName}`}>{name}</h3>
-          <p className={s.optsSub}>
-            {sceneLabel(c.scene)}, {time === "auto" ? "switches with dark mode" : night ? "by night" : "by day"}
-          </p>
-        </div>
-        <div className={s.optsNav}>
-          {count > 1 && (
-            <>
-              <button type="button" className={s.navBtn} onClick={() => onStep(-1)} aria-label="Previous card">
-                <ChevronLeft aria-hidden="true" />
-              </button>
-              <span className={s.label}>
-                Card {index + 1} of {count}
-              </span>
-              <button type="button" className={s.navBtn} onClick={() => onStep(1)} aria-label="Next card">
-                <ChevronRight aria-hidden="true" />
-              </button>
-            </>
-          )}
-          <CloseButton onClick={onClose} label="Close the card options" />
-        </div>
-      </div>
-      <p className={s.optsHint}>Every change goes straight into your README.</p>
+      <Head
+        name={name}
+        sub={`${sceneLabel(c.scene)}, ${time === "auto" ? "switches with dark mode" : night ? "by night" : "by day"}`}
+        index={index}
+        count={count}
+        onStep={onStep}
+        onClose={onClose}
+      />
 
       <fieldset className={s.group}>
         <legend className={s.label}>Card</legend>
@@ -288,16 +364,7 @@ export default function CardOptions({
         </div>
       </details>
 
-      <div className={s.optsFoot}>
-        <button type="button" className={`btn ${s.remove}`} onClick={onRemove}>
-          <Trash2 aria-hidden="true" />
-          Remove this card
-        </button>
-        <button type="button" className="btn btn-primary" onClick={onClose}>
-          <Check aria-hidden="true" />
-          Done
-        </button>
-      </div>
+      <Foot onRemove={onRemove} onClose={onClose} />
     </div>
   );
 }

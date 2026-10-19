@@ -16,8 +16,8 @@ import {
   TriangleAlert,
   Undo2,
 } from "lucide-react";
-import { HOST, cardName, type Widget } from "../data";
-import { HOSTS, autoAlt, findSpots, insertAt, removeSpot, renameUser, replaceSpot, writeSpot, type Card } from "./cards";
+import { DECORATIONS, HOST, cardName, type Widget } from "../data";
+import { HOSTS, autoAlt, findSpots, insertAt, kindName, removeSpot, renameUser, replaceSpot, writeSpot, type Card } from "./cards";
 import CardOptions, { type Mode } from "./CardOptions";
 import AddCard from "./AddCard";
 import CopyHelp from "./CopyHelp";
@@ -373,7 +373,7 @@ export default function ProfileBuilder() {
 
   const remove = () => {
     if (!spot) return;
-    const name = cardName(spot.card.widget, spot.card.scene);
+    const name = kindName(spot.card);
     edit(removeSpot(text, spot), { now: true });
     setSel(null);
     say(`Removed the ${name}.`, { undo: true });
@@ -404,6 +404,18 @@ export default function ProfileBuilder() {
     setAdding(false);
     if (narrow) setTab("preview");
     say(`Added the ${cardName(w, scene)}. ${narrow ? "Tap" : "Click"} it in the preview to change it.`);
+  };
+
+  const addDecoration = (name: string) => {
+    const d = DECORATIONS.find((x) => x.name === name);
+    const card: Card = { origin: env.origin, user: "", widget: "decorations", scene: name, night: false, params: d?.title ? [["title", d.title]] : [], hash: "" };
+    const r = insertAt(text, cursor.current ?? text.length, writeSpot(card, autoAlt(card), "single"));
+    edit(r.text, { now: true });
+    cursor.current = r.end;
+    setFlash(findSpots(r.text, env.host).findIndex((x) => x.start === r.start));
+    setAdding(false);
+    if (narrow) setTab("preview");
+    say(`Added the ${d?.label ?? name} decoration. ${narrow ? "Tap" : "Click"} it in the preview to change its title.`);
   };
 
   const copy = async () => {
@@ -782,7 +794,7 @@ export default function ProfileBuilder() {
       )}
 
       <Sheet open={adding} onClose={() => setAdding(false)} label="Add a card">
-        <AddCard scene={lastScene} night={lastNight} where={where} onAdd={add} onClose={() => setAdding(false)} />
+        <AddCard scene={lastScene} night={lastNight} where={where} onAdd={add} onAddDecoration={addDecoration} onClose={() => setAdding(false)} />
       </Sheet>
       <Sheet open={narrow && !!options} onClose={() => setSel(null)} label="Card options">
         {options}
