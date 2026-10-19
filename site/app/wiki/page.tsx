@@ -142,7 +142,7 @@ const FAQ = [
   ["Does questlog need my token or access to my account?", "No. It reads public profile data with its own token. You only paste an image link."],
   ["Why do my numbers differ from my profile page?", "Cards show public data, refreshed every 12 hours. Private work counts only when your profile shares private contributions."],
   ["My language has no rune.", "The thirty most common languages each have a rune. Every other language gets othala, in gold."],
-  ["Can I use the cards outside GitHub?", "Yes. They are plain PNG images, so any page or README that shows images can show them."],
+  ["Can I use the cards outside GitHub?", "Yes. They are plain WebP images, so any page or README that shows images can show them."],
   ["Can I use a different scene on each card?", "Yes, every card takes its own parameters. One scene for all three makes the profile read like one place."],
   ["Is it free?", "Yes, for noncommercial use such as your own profile. The code is MIT. The paintings are © Cevdet Baran Oral under CC BY-NC 4.0, so commercial use needs written permission: contact@cevdetbaran.com."],
 ];

@@ -56,7 +56,7 @@ pub struct Look {
     pub outline_color: Option<Rgb>,
     pub hide: HashSet<String>,
     pub animate: bool,
-    /// Output upscale, 1..=5. Only the final PNG changes, not the drawing.
+    /// Output upscale, 1..=5. Only the final image changes, not the drawing.
     pub scale: u8,
 }
 
