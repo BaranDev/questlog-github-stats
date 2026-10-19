@@ -5,6 +5,7 @@ import Themes from "@/components/home/Themes";
 import CardStack from "@/components/home/CardStack";
 import Marquee from "@/components/home/Marquee";
 import Gallery from "@/components/home/Gallery";
+import Decorations from "@/components/home/Decorations";
 import { snap } from "@/components/data";
 import s from "./page.module.css";
 
@@ -47,6 +48,7 @@ export default function Home() {
         <Bento />
         <Themes />
         <CardStack />
+        <Decorations />
         <Marquee />
         <Gallery />
       </main>
