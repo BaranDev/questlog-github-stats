@@ -5,7 +5,7 @@ use crate::fmt::{line, number};
 use crate::stats::UserStats;
 use crate::widgets::Look;
 
-pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
+pub fn render(c: &mut Card, look: &Look, s: &UserStats) -> Vec<Image> {
     let (assets, scene, painting) = (c.assets, c.scene, c.painting);
     let font = &assets.text_font;
     let title_width = c.title(&look.title_or(scene, "stats"));
@@ -80,9 +80,9 @@ mod tests {
         let a = Assets::embedded().unwrap();
         for night in [false, true] {
             let look = Look { night, ..Default::default() };
-            let frames = draw(&a, Widget::Stats, &look, &sample()).unwrap();
-            assert_eq!(frames.len(), 1);
-            assert_scene_colors(&a, &look, &frames);
+            let drawn = draw(&a, Widget::Stats, &look, &sample()).unwrap();
+            assert_eq!(drawn.frames.len(), 1);
+            assert_scene_colors(&a, &look, &drawn);
         }
         draw(&a, Widget::Stats, &Look::default(), &empty()).unwrap();
     }

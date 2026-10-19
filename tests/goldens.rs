@@ -1,13 +1,15 @@
 //! Pixel goldens: every widget × scene × time, plus a still, custom words, an empty account and a message card,
-//! rendered from fixed stats and compared with tests/goldens/<name>.png (frames stacked vertically, 320×128 each).
+//! rendered from fixed stats and compared with tests/goldens/<name>.png (frames stacked vertically, each at ×2 with
+//! its title, 640×256).
 //! Regenerate deliberately after an art change: UPDATE_GOLDENS=1 cargo test --test goldens
 use questlog::canvas::Image;
 use questlog::scene::Assets;
 use questlog::stats::{RawUser, UserStats, derive};
-use questlog::widgets::{self, Look, Widget};
+use questlog::widgets::{self, Drawn, Look, Widget};
 use std::path::Path;
 
-fn stack(frames: &[Image]) -> Image {
+fn stack(d: &Drawn) -> Image {
+    let frames: Vec<Image> = d.frames.iter().map(|f| questlog::encode::scaled(f, d.title.as_ref(), 2)).collect();
     Image { w: frames[0].w, h: frames[0].h * frames.len(), px: frames.iter().flat_map(|f| f.px.clone()).collect() }
 }
 
@@ -16,7 +18,7 @@ fn goldens() {
     let a = Assets::embedded().unwrap();
     let sample: UserStats = serde_json::from_str(include_str!("fixtures/sample.json")).unwrap();
     let empty = derive(&RawUser { login: "newbie".into(), ..Default::default() }, 0, 0);
-    let mut cases: Vec<(String, Vec<Image>)> = Vec::new();
+    let mut cases: Vec<(String, Drawn)> = Vec::new();
     for scene in a.scene_names() {
         for w in [Widget::Stats, Widget::Languages, Widget::Streak] {
             for night in [false, true] {
@@ -36,7 +38,7 @@ fn goldens() {
         cases.push((format!("forest-{}-empty", w.key()), widgets::render(&a, w, &Look::default(), &empty).unwrap()));
     }
     let msg = widgets::message(&a, Widget::Stats, &Look::default(), "The scribe is inking your sheet... ready in ~10 s");
-    cases.push(("forest-stats-placeholder".into(), vec![msg.unwrap()]));
+    cases.push(("forest-stats-placeholder".into(), msg.unwrap()));
     for (name, text) in [
         ("forest-stats-unknown", "No adventurer by that name"),
         ("forest-stats-busy", "The scriptorium is busy, try again soon"),
@@ -44,7 +46,7 @@ fn goldens() {
         ("forest-stats-bad-scene", "Unknown scene 'castel'"),
     ] {
         let card = widgets::message(&a, Widget::Stats, &Look::default(), text);
-        cases.push((name.into(), vec![card.unwrap()]));
+        cases.push((name.into(), card.unwrap()));
     }
 
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens");
@@ -52,11 +54,11 @@ fn goldens() {
     let update = std::env::var("UPDATE_GOLDENS").as_deref() == Ok("1");
     std::fs::create_dir_all(&dir).unwrap();
     let mut failed = Vec::new();
-    for (name, frames) in cases {
-        let bytes = questlog::encode::encode(&frames, 5).unwrap().len();
-        let budget = if frames.len() > 1 { 1_000_000 } else { 150_000 }; // spec: still < 150 KB, animated < 1 MB
+    for (name, drawn) in cases {
+        let bytes = questlog::encode::encode(&drawn.frames, drawn.title.as_ref(), 5).unwrap().len();
+        let budget = if drawn.frames.len() > 1 { 1_000_000 } else { 150_000 }; // spec: still < 150 KB, animated < 1 MB
         assert!(bytes < budget, "{name}: {bytes} bytes is over the {budget} byte budget");
-        let got = stack(&frames);
+        let got = stack(&drawn);
         let path = dir.join(format!("{name}.png"));
         if update {
             std::fs::write(&path, got.to_png()).unwrap();

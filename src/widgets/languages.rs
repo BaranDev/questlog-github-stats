@@ -75,7 +75,7 @@ fn rune(c: &mut Card, mask: &Image, x: i64, y: i64, color: Rgb) {
     c.layer.alpha_composite(&mask.map_colors(|_| color), x, y);
 }
 
-pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
+pub fn render(c: &mut Card, look: &Look, s: &UserStats) -> Vec<Image> {
     let (scene, painting) = (c.scene, c.painting);
     c.title(&look.title_or(scene, "languages"));
     if let Some(sub) = &look.subtitle {
@@ -96,7 +96,7 @@ pub fn render(mut c: Card, look: &Look, s: &UserStats) -> Vec<Image> {
         let y = list.y + i as i64 * ROW;
         let (color, rune_name) = rune_of(name);
         let mask = scene.sprites.get(&format!("rune-{rune_name}")).unwrap_or(&scene.sprites["rune-othala"]);
-        rune(&mut c, mask, list.x + 1, y, color);
+        rune(c, mask, list.x + 1, y, color);
         runes.push((list.x + 3, y - 1));
         let key = name.to_lowercase();
         let pct = look.value(&key, format!("{}{}", (share * 100.0).round() as u64, look.word("percent", "%")));
@@ -130,13 +130,14 @@ mod tests {
         let a = Assets::embedded().unwrap();
         for night in [false, true] {
             let look = Look { night, ..Default::default() };
-            let frames = draw(&a, Widget::Languages, &look, &sample()).unwrap();
+            let drawn = draw(&a, Widget::Languages, &look, &sample()).unwrap();
+            let frames = &drawn.frames;
             assert_eq!(frames.len(), FRAMES);
             assert_ne!(frames[0], frames[1], "sparkles move");
-            assert_scene_colors(&a, &look, &frames);
+            assert_scene_colors(&a, &look, &drawn);
         }
         let still = Look { animate: false, ..Default::default() };
-        assert_eq!(draw(&a, Widget::Languages, &still, &sample()).unwrap().len(), 1);
+        assert_eq!(draw(&a, Widget::Languages, &still, &sample()).unwrap().frames.len(), 1);
     }
 
     #[test]
@@ -173,7 +174,7 @@ mod tests {
         let a = Assets::embedded().unwrap();
         let s = a.scene("forest").unwrap();
         let look = Look { night: true, ..Default::default() };
-        let frames = draw(&a, Widget::Languages, &look, &sample()).unwrap();
+        let frames = draw(&a, Widget::Languages, &look, &sample()).unwrap().frames;
         let ts = rune_of("TypeScript").0;
         assert!(frames[0].px.iter().any(|p| [p[0], p[1], p[2]] == ts), "lit rune and bar at night");
         assert!(rune_colors().iter().all(|c| s.allowed().contains(c)));

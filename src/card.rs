@@ -20,6 +20,9 @@ pub struct Card<'a> {
     pub outline_color: Option<Rgb>,
     /// truncate=false: a subtitle too long for its room is drawn whole instead of trimmed.
     pub truncate: bool,
+    /// The title at twice the card's resolution, laid over every frame when the card is encoded at scale 2 or more:
+    /// the painting's hard pixels made the big letters hard to read. None at scale 1, where the title is in `layer`.
+    pub title_layer: Option<Image>,
 }
 
 /// Where note lines may go: x, top y, width, and the y they must end above.
@@ -38,6 +41,7 @@ impl<'a> Card<'a> {
             text_color: None,
             outline_color: None,
             truncate: true,
+            title_layer: None,
         })
     }
 
@@ -45,20 +49,9 @@ impl<'a> Card<'a> {
         self.scene.ink(name, self.night)
     }
 
-    /// Pillow's `ImageDraw.text` with fontmode "1": every mask pixel becomes exactly `c`.
-    fn stamp(&mut self, m: &TextMask, x: i64, y: i64, c: Rgb) {
-        for row in 0..m.height {
-            for col in 0..m.width {
-                if m.on[(row * m.width + col) as usize] {
-                    self.layer.set(x + m.x_offset + col, y + m.y_offset + row, c);
-                }
-            }
-        }
-    }
-
     pub fn text(&mut self, s: &str, x: i64, y: i64, c: Rgb) {
         let m = self.assets.text_font.render(s);
-        self.stamp(&m, x, y, c);
+        stamp(&mut self.layer, &m, x, y, c);
     }
 
     fn title_ink(&self) -> Rgb {
@@ -67,16 +60,8 @@ impl<'a> Card<'a> {
 
     /// Text in `fill` with a 1 px dark edge (and a drop shadow), stamped as offsets like the Pillow cards.
     pub fn outlined(&mut self, font: &Font, s: &str, x: i64, y: i64, shadow: bool, fill: Rgb) {
-        let m = font.render(s);
-        let (x, y) = (x - m.x_offset + 1, y - m.y_offset + 1);
-        let span: &[i64] = if shadow { &[-1, 0, 1, 2] } else { &[-1, 0, 1] };
         let edge = self.outline_color.unwrap_or(self.ink("title_edge"));
-        for &dx in span {
-            for &dy in span {
-                self.stamp(&m, x + dx, y + dy, edge);
-            }
-        }
-        self.stamp(&m, x, y, fill);
+        outline(&mut self.layer, &font.render(s), x + 1, y + 1, 1, shadow, (edge, fill));
     }
 
     /// Body text in the painting's style: plain ink on paper, outlined on busy art.
@@ -99,9 +84,18 @@ impl<'a> Card<'a> {
     /// Draws the title; returns the width of its first line, so a subtitle can follow it on the same line.
     pub fn title(&mut self, s: &str) -> i64 {
         let (tb, font) = (self.painting.anchors.title, self.title_font());
+        let assets = self.assets;
         let lines = wrap(font, s, tb.w, tb.lines);
+        let fine = if tb.size == TITLE_SMALL_SIZE { &assets.title_small_fine } else { &assets.title_fine };
+        let ink = (self.outline_color.unwrap_or(self.ink("title_edge")), self.title_ink());
         for (i, line) in lines.iter().enumerate() {
-            self.outlined(font, line, tb.x, tb.y + i as i64 * tb.line_h, true, self.title_ink());
+            let y = tb.y + i as i64 * tb.line_h;
+            if let Some(layer) = &mut self.title_layer {
+                // the same letters at twice the size on a grid twice as fine, outlined 1 card pixel as before
+                outline(layer, &fine.render(line), 2 * (tb.x + 1), 2 * (y + 1), 2, true, ink);
+            } else {
+                self.outlined(font, line, tb.x, y, true, ink.1);
+            }
         }
         lines.first().map_or(0, |l| font.length(l) + 3)
     }
@@ -188,6 +182,30 @@ impl<'a> Card<'a> {
         out.alpha_composite(&self.layer, 0, 0);
         out
     }
+}
+
+/// Pillow's `ImageDraw.text` with fontmode "1": every mask pixel becomes exactly `c`.
+fn stamp(img: &mut Image, m: &TextMask, x: i64, y: i64, c: Rgb) {
+    for row in 0..m.height {
+        for col in 0..m.width {
+            if m.on[(row * m.width + col) as usize] {
+                img.set(x + m.x_offset + col, y + m.y_offset + row, c);
+            }
+        }
+    }
+}
+
+/// Text in `ink.1` over an edge in `ink.0` `unit` pixels wide (and a drop shadow as wide again), stamped as offsets
+/// like the Pillow cards, with the ink's top left at (x, y).
+fn outline(img: &mut Image, m: &TextMask, x: i64, y: i64, unit: i64, shadow: bool, ink: (Rgb, Rgb)) {
+    let (x, y) = (x - m.x_offset, y - m.y_offset);
+    let reach = if shadow { 2 * unit } else { unit };
+    for dx in -unit..=reach {
+        for dy in -unit..=reach {
+            stamp(img, m, x + dx, y + dy, ink.0);
+        }
+    }
+    stamp(img, m, x, y, ink.1);
 }
 
 #[cfg(test)]
