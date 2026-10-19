@@ -72,6 +72,40 @@ pub struct Anchors {
     pub boxes: HashMap<String, Rect>,
 }
 
+/// Where a decoration's title sits in its box.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Align {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct DecorationTitle {
+    pub x: i64,
+    pub y: i64,
+    pub w: i64,
+    pub align: Align,
+}
+
+#[derive(Deserialize)]
+struct DecorationFile {
+    title: DecorationTitle,
+    frame_ms: u16,
+    ink: HashMap<String, String>,
+}
+
+/// A banner for a README section: its animation frames (320 wide, as tall as it is painted), where its title goes
+/// and in which inks.
+pub struct Decoration {
+    pub frames: Vec<Image>,
+    pub frame_ms: u16,
+    pub title: DecorationTitle,
+    pub title_ink: Rgb,
+    pub title_edge: Rgb,
+}
+
 pub struct Painting {
     pub image: Image,
     /// `<widget>-night.png`, when the scene paints its own night version; otherwise the night table tints `image`.
@@ -176,6 +210,7 @@ fn validate(scene: &Scene) -> Result<(), BoxError> {
 
 pub struct Assets {
     pub scenes: HashMap<String, Scene>,
+    pub decorations: HashMap<String, Decoration>,
     pub title_font: Font,
     pub title_small: Font,
     /// The title fonts at twice the size, for titles drawn on the card's finer title layer.
@@ -201,6 +236,30 @@ fn painting_image(path: &str, png: &[u8]) -> Result<Image, BoxError> {
         (OW, OH) => Ok(img),
         (w, h) => Err(format!("{path}: painting must be {PAINT_W}×{PAINT_H} or {OW}×{OH}, got {w}×{h}").into()),
     }
+}
+
+/// decorations/<name>/decoration.json with its frames decorations/<name>/0.png, 1.png and so on.
+fn decorations(files: &[(&str, &'static [u8])]) -> Result<HashMap<String, Decoration>, BoxError> {
+    let mut out = HashMap::new();
+    for (path, bytes) in files {
+        let Some(name) = path.strip_prefix("decorations/").and_then(|p| p.strip_suffix("/decoration.json")) else { continue };
+        let df: DecorationFile = serde_json::from_slice(bytes)?;
+        let ink = |k: &str| df.ink.get(k).ok_or(format!("{path}: ink {k:?} missing")).map(|v| hex(v));
+        let mut frames = Vec::new();
+        while let Some((_, b)) = files.iter().find(|(p, _)| *p == format!("decorations/{name}/{}.png", frames.len())) {
+            let img = Image::decode(b)?;
+            if img.w != OW || frames.first().is_some_and(|f: &Image| f.h != img.h) {
+                return Err(format!("{path}: frames must be {OW} wide and all the same height").into());
+            }
+            frames.push(img);
+        }
+        if frames.is_empty() {
+            return Err(format!("{path}: no frames (0.png)").into());
+        }
+        let (title_ink, title_edge) = (ink("title")??, ink("title_edge")??);
+        out.insert(name.to_string(), Decoration { frames, frame_ms: df.frame_ms, title: df.title, title_ink, title_edge });
+    }
+    Ok(out)
 }
 
 impl Assets {
@@ -269,6 +328,7 @@ impl Assets {
         }
         Ok(Assets {
             scenes,
+            decorations: decorations(files)?,
             title_font: Font::from_bytes(TITLE_FONT, TITLE_SIZE)?,
             title_small: Font::from_bytes(TITLE_FONT, TITLE_SMALL_SIZE)?,
             title_fine: Font::from_bytes(TITLE_FONT, 2 * TITLE_SIZE)?,

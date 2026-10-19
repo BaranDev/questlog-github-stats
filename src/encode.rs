@@ -7,6 +7,11 @@ use crate::canvas::Image;
 pub const FRAME_MS: u16 = 180;
 
 pub fn encode(frames: &[Image], title: Option<&Image>, scale: u8) -> Result<Vec<u8>, BoxError> {
+    encode_at(frames, title, scale, FRAME_MS)
+}
+
+/// encode() with each frame shown for `frame_ms`: decorations keep the pace they were animated at.
+pub fn encode_at(frames: &[Image], title: Option<&Image>, scale: u8, frame_ms: u16) -> Result<Vec<u8>, BoxError> {
     let first = frames.first().ok_or("no frames")?;
     let sc = scale as usize;
     let (w, h) = (first.w * sc, first.h * sc);
@@ -17,7 +22,7 @@ pub fn encode(frames: &[Image], title: Option<&Image>, scale: u8) -> Result<Vec<
     enc.set_compression(png::Compression::High);
     if frames.len() > 1 {
         enc.set_animated(frames.len() as u32, 0)?;
-        enc.set_frame_delay(FRAME_MS, 1000)?;
+        enc.set_frame_delay(frame_ms, 1000)?;
     }
     let mut wr = enc.write_header()?;
     wr.write_image_data(&rgb_scaled(first, title, (0, 0, first.w, first.h), sc))?;

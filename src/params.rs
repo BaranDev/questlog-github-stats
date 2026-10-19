@@ -32,11 +32,11 @@ pub fn valid_login(s: &str) -> bool {
         && !s.contains("--")
 }
 
-fn clip(s: &str) -> String {
+pub(crate) fn clip(s: &str) -> String {
     s.chars().take(20).collect()
 }
 
-fn text(s: &str) -> String {
+pub(crate) fn text(s: &str) -> String {
     s.trim().chars().take(MAX_TEXT).collect()
 }
 
@@ -54,7 +54,7 @@ fn pairs(s: &str) -> Option<HashMap<String, String>> {
 }
 
 /// `RRGGBB` or `RGB` hex digits, with an optional leading `#`; nothing else.
-fn color(s: &str) -> Option<Rgb> {
+pub(crate) fn color(s: &str) -> Option<Rgb> {
     let h = s.strip_prefix('#').unwrap_or(s);
     let d = h.chars().take(7).map(|c| c.to_digit(16).map(|d| d as u8)).collect::<Option<Vec<u8>>>()?;
     match d[..] {

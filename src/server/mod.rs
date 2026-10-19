@@ -99,6 +99,7 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/static/{*path}", get(|Path(p): Path<String>| async move { static_file(&p, ASSET) }))
         .route("/art/{scene}/{file}", get(art::<F>))
         .route("/demo/message", get(demo_message::<F>))
+        .route("/decorations/{name}", get(decoration::<F>))
         .route("/demo/{widget}", get(demo_card::<F>))
         .route("/health", get(health::<F>))
         .route("/{widget}", get(card::<F>))
@@ -382,6 +383,17 @@ mod tests {
         let (kind, _, _) = get(&url, &[]).await;
         assert_eq!(kind, "card");
         assert!(start.elapsed() < std::time::Duration::from_secs(1), "took {:?}", start.elapsed());
+    }
+
+    #[tokio::test]
+    async fn decorations_take_only_their_own_options() {
+        let (base, _) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        let (kind, cache, png) = get(&format!("{base}/decorations/workbench?title=Technical%20Skills"), &[]).await;
+        assert_eq!((kind.as_str(), cache.as_str()), ("card", DEMO));
+        assert!(png.len() > 1000);
+        assert_eq!(get(&format!("{base}/decorations/forest-divider"), &[]).await.0, "card", "no title needed");
+        assert_eq!(get(&format!("{base}/decorations/workbench?user=octo"), &[]).await.0, "error", "a card option");
+        assert_eq!(get(&format!("{base}/decorations/nope"), &[]).await.0, "error", "an unknown decoration");
     }
 
     #[tokio::test]
