@@ -1212,8 +1212,13 @@
   cursor: pointer;
 }
 
-.color input[type="color"][data-empty] {
-  opacity: 0.45;
+/* empty: the scene's own color, drawn as a crossed-out swatch instead of black */
+.color input[type="color"][data-empty]::-webkit-color-swatch {
+  background: linear-gradient(to top right, transparent calc(50% - 1px), rgba(242, 230, 201, 0.45) 50%, transparent calc(50% + 1px)) !important;
+}
+
+.color input[type="color"][data-empty]::-moz-color-swatch {
+  background: linear-gradient(to top right, transparent calc(50% - 1px), rgba(242, 230, 201, 0.45) 50%, transparent calc(50% + 1px)) !important;
 }
 
 .optsFoot {

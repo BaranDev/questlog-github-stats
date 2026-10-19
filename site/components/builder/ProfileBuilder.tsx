@@ -17,7 +17,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { HOST, cardName, type Widget } from "../data";
-import { autoAlt, findSpots, insertAt, removeSpot, renameUser, replaceSpot, writeSpot, type Card } from "./cards";
+import { HOSTS, autoAlt, findSpots, insertAt, removeSpot, renameUser, replaceSpot, writeSpot, type Card } from "./cards";
 import CardOptions, { type Mode } from "./CardOptions";
 import AddCard from "./AddCard";
 import CopyHelp from "./CopyHelp";
@@ -72,9 +72,11 @@ async function probe(login: string): Promise<Status> {
   }
 }
 
-async function toClipboard(text: string) {
+/** Whether the text reached the clipboard. */
+async function toClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
+    return true;
   } catch {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -83,8 +85,14 @@ async function toClipboard(text: string) {
     ta.style.opacity = "0";
     document.body.append(ta);
     ta.select();
-    document.execCommand("copy");
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      // no clipboard at all
+    }
     ta.remove();
+    return ok;
   }
 }
 
@@ -172,19 +180,24 @@ export default function ProfileBuilder() {
     setTour(r.tour ?? true);
     setChanged(r.changed ?? false);
     setCopied(r.copied ?? false);
-    // cards name this host, except on the old domain, which now points people to the new one
-    setEnv({ origin: location.hostname.endsWith("cevdetbaran.com") ? HOST : location.origin, host: location.host });
+    // cards name questlog.cc; only a self-hosted copy on its own domain names itself
+    const ours = HOSTS.includes(location.host) || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+    setEnv({ origin: ours ? HOST : location.origin, host: location.host });
     setReady(true);
   }, []);
 
+  // saved a moment after the last change, not on every key
   useEffect(() => {
     if (!ready) return;
-    try {
-      const saved: Saved = { profile, text, theme, tour, changed, copied };
-      localStorage.setItem(KEY, JSON.stringify(saved));
-    } catch {
-      // storage can be unavailable (private mode); the work then lasts for this visit
-    }
+    const t = window.setTimeout(() => {
+      try {
+        const saved: Saved = { profile, text, theme, tour, changed, copied };
+        localStorage.setItem(KEY, JSON.stringify(saved));
+      } catch {
+        // storage can be unavailable (private mode); the work then lasts for this visit
+      }
+    }, 400);
+    return () => window.clearTimeout(t);
   }, [ready, profile, text, theme, tour, changed, copied]);
 
   // typing settles for a moment before the preview redraws, so cards are not asked for on every key
@@ -193,7 +206,6 @@ export default function ProfileBuilder() {
     return () => window.clearTimeout(t);
   }, [text]);
 
-  // what the server says about this login: drawn, being fetched, unknown or busy
   useEffect(() => {
     if (!profile) return;
     let live = true;
@@ -298,7 +310,9 @@ export default function ProfileBuilder() {
 
   const change = (card: Card, mode: Mode, typing = false) => {
     if (!spot) return;
-    edit(replaceSpot(text, spot, card, mode), { now: !typing, typing });
+    // a changed card on an older questlog address moves to the current one
+    const moved = HOSTS.includes(new URL(card.origin).host) ? { ...card, origin: env.origin } : card;
+    edit(replaceSpot(text, spot, moved, mode), { now: !typing, typing });
     setChanged(true);
   };
 
@@ -326,6 +340,7 @@ export default function ProfileBuilder() {
       scene,
       night: mode === "single" && !!last?.card.night,
       params: w === "streak" ? [["fire", "themed"]] : [],
+      hash: "",
     };
     const r = insertAt(text, cursor.current ?? text.length, writeSpot(card, autoAlt(card), mode));
     edit(r.text, { now: true });
@@ -337,15 +352,26 @@ export default function ProfileBuilder() {
   };
 
   const copy = async () => {
-    await toClipboard(text);
+    if (!(await toClipboard(text))) {
+      setTab("write");
+      say("Your browser didn't let us copy. Select all of your README text and copy it yourself.");
+      return;
+    }
     setCopied(true);
     setJustCopied(true);
     setHelpOpen(true);
   };
 
+  /** `i` counts the cards of the preview, which can lag the text by a moment of typing: the same card is found in the
+   * text by what it says, the nearest one when it is there twice. */
   const pick = (i: number) => {
     setAdding(false);
-    setSel(i);
+    if (shown === text) return setSel(i);
+    const was = shownSpots[i];
+    if (!was) return;
+    const said = shown.slice(was.start, was.end);
+    const same = spots.flatMap((x, j) => (text.slice(x.start, x.end) === said ? [j] : []));
+    if (same.length) setSel(same.reduce((a, b) => (Math.abs(b - i) < Math.abs(a - i) ? b : a)));
   };
   const step = (d: -1 | 1) => setSel((i) => (i === null ? i : (i + d + spots.length) % spots.length));
 
@@ -581,7 +607,7 @@ export default function ProfileBuilder() {
               </div>
               <Editor
                 value={text}
-                onChange={(t) => setText(t)}
+                onChange={(t) => edit(t, { typing: true })}
                 onCursor={(at) => (cursor.current = at)}
                 mark={spot ? [spot.start, spot.end] : null}
                 placeholder={`# Hi, I'm ${profile.login}\n\nType your README here, or click Add a card.`}

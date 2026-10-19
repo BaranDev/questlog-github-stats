@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, FileText, LoaderCircle, Sparkles } from "lucide-react";
 import { LOGIN } from "./cards";
 import { CloseButton, Field } from "./ui";
@@ -9,7 +9,6 @@ import s from "./builder.module.css";
 export type Profile = { login: string; name: string; avatar: string };
 export type Start = "github" | "keep" | "fresh";
 
-/** The text a fresh README starts with. */
 export const template = (name: string) => `# Hi, I'm ${name}\n\nA line or two about you: what you build, what you're learning, how to reach you.\n`;
 
 /** The account's display name and avatar; ok is false when GitHub has no such account and null when it could not
@@ -81,18 +80,29 @@ export default function LoginStep({
   const [phase, setPhase] = useState<"ask" | "checking" | "choose">("ask");
   const [error, setError] = useState("");
   const [found, setFound] = useState<{ profile: Profile; readme: string | null } | null>(null);
+  // each lookup gets a number; an answer to an older one, or one arriving after the step closed, is dropped
+  const run = useRef(0);
+  useEffect(
+    () => () => {
+      run.current++;
+    },
+    [],
+  );
   const trimmed = login.trim().replace(/^@/, "").replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, "").replace(/\/.*$/, "");
   const valid = LOGIN.test(trimmed);
   const keepable = draft.trim() !== "";
 
   const next = async () => {
+    if (phase === "checking") return;
     if (!valid) {
       setError(trimmed ? "A login has only letters, digits and hyphens, up to 39 of them." : "Type your GitHub login first.");
       return;
     }
     setError("");
     setPhase("checking");
+    const id = ++run.current;
     const [who, readme] = await Promise.all([lookUp(trimmed), profileReadme(trimmed)]);
+    if (id !== run.current) return;
     if (who.ok === false) {
       setPhase("ask");
       setError(`GitHub has no account named "${trimmed}". Check the spelling: it's the name in your profile address.`);
@@ -125,6 +135,10 @@ export default function LoginStep({
               onChange={(v) => {
                 setLogin(v);
                 if (error) setError("");
+                if (phase === "checking") {
+                  run.current++;
+                  setPhase("ask");
+                }
               }}
               maxLength={60}
               autoFocus

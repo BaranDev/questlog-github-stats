@@ -458,3 +458,8 @@ pre {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* pages that fill the window keep the nav at the top instead of floating over them */
+.nav.nav-still {
+  position: absolute;
+}

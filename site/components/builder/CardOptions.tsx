@@ -9,7 +9,6 @@ import s from "./builder.module.css";
 export type Mode = "single" | "auto";
 type Time = "day" | "night" | "auto";
 
-/** A small picture of a demo card, drawn at scale 2. */
 export function thumb(w: Widget, scene: string, night = false, fire = "") {
   return `/demo/${w}?scene=${scene}&scale=2&animate=false${night ? "&time=night" : ""}${fire === "themed" && w === "streak" ? "&fire=themed" : ""}`;
 }
