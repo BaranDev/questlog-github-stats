@@ -1,0 +1,34 @@
+name: Something looks wrong
+description: A card draws wrong numbers, text runs off the painting, a page breaks, or anything else that misbehaves.
+labels: [bug]
+body:
+  - type: input
+    id: url
+    attributes:
+      label: Card address
+      description: The full address of the card or page, as it is in your README or browser.
+      placeholder: https://questlog.cc/octocat/stats/forest
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you see
+      description: What is wrong. A screenshot helps a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - On my GitHub profile
+        - On questlog.cc
+        - In the profile builder
+        - On my own copy of questlog
+    validations:
+      required: true

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Rune from "@/components/Rune";
-import { RUNES, THEMES, REPO, HOST, card, cardName, isReady, sceneName, snap, type Widget } from "@/components/data";
+import { RUNES, THEMES, REPO, HOST, card, cardName, sceneName, snap, type Widget } from "@/components/data";
 import w from "./wiki.module.css";
 
 export const metadata: Metadata = {
@@ -334,16 +334,15 @@ export default function Wiki() {
                         <code>scene={scene}</code>
                         <span>
                           Character Sheet, Spellbook, {cardName("streak", scene)}
-                          {isReady(scene) ? ": themed or classic fire" : ""}
+                          : themed or classic fire
                         </span>
-                        {!isReady(scene) && <small className={w.wip}>WIP: fire being reworked</small>}
                       </h4>
                       <div className={w.variations}>
                         {WIDGETS.map((wd) =>
                           (["day", "night"] as const).map((time) => (
                             <Shot
                               key={wd + time}
-                              src={card(wd, scene, `&time=${time}${wd === "streak" && isReady(scene) ? "&fire=themed" : ""}`)}
+                              src={card(wd, scene, `&time=${time}${wd === "streak" ? "&fire=themed" : ""}`)}
                               alt={`${cardName(wd, scene)}, ${sceneName(scene)}, ${time}`}
                             />
                           )),

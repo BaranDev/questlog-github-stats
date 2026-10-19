@@ -1,10 +1,10 @@
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
-import Bento from "@/components/Bento";
-import Themes from "@/components/Themes";
-import CardStack from "@/components/CardStack";
-import Marquee from "@/components/Marquee";
-import Gallery from "@/components/Gallery";
+import Bento from "@/components/home/Bento";
+import Themes from "@/components/home/Themes";
+import CardStack from "@/components/home/CardStack";
+import Marquee from "@/components/home/Marquee";
+import Gallery from "@/components/home/Gallery";
 import { snap } from "@/components/data";
 import s from "./page.module.css";
 

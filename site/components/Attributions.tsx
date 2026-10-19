@@ -17,7 +17,7 @@ const ATTRIBUTIONS: [string, ReactNode][] = [
   [
     "Code",
     <>
-      questlog, under the <a href={`${REPO}/blob/master/LICENSE`}>MIT license</a>.
+      questlog, under the <a href={`${REPO}/blob/main/LICENSE`}>MIT license</a>.
     </>,
   ],
   [
