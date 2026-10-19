@@ -1,6 +1,6 @@
 # questlog-github-stats
 
-Pixel-art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a campfire for your streak. Paste one line into your profile README: no token, no workflow, no setup.
+Pixel art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a campfire for your streak. Paste one line into your profile README: no token, no workflow, no setup.
 
 ![The forest scene: Character Sheet, Spellbook and Campfire, by day and by night](assets/readme/hero.png)
 
@@ -92,6 +92,8 @@ docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog
 ## Development
 
 The pages at `/`, `/builder` and `/wiki` come from `site/`, a Next.js static export that the binary embeds. Build it before `cargo build`: `cd site && npm ci && npm run build` (it writes `static/`).
+
+The cards on those pages are not drawn live: the site ships its own WebP copies in `site/public/cards/`. After a change to the art or the drawing, build the site, run a local server of the new build, draw the copies again with `uv run site/scripts/snap_cards.py http://127.0.0.1:8080`, then build the site once more.
 
 ## License
 
