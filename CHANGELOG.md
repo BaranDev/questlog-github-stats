@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Cards are WebP:** lossless, animated where they move, about a third of the size of the PNGs before, pixel for pixel the same.
-- **Decorations** at `/decorations/<name>`: painted banners for README sections, with an optional title (`reading-nook`, `workbench`, `raven-moon`, `enchanted-clearing`, `forest-divider`, `forest-footer`).
+- **Decorations** at `/decorations/<name>`: painted banners for README sections, with an optional title (`reading-nook`, `workbench`, `raven-moon`, `enchanted-clearing`, `crystal-owl`, `forest-divider`, `forest-footer`).
 
 ## 1.0.0
 
