@@ -109,6 +109,7 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
     Router::new()
         .route("/", get(|| async { static_file("index.html", PAGE) }))
         .route("/wiki", get(|| async { static_file("wiki.html", PAGE) }))
+        .route("/builder", get(|| async { static_file("builder.html", PAGE) }))
         .route("/static/{*path}", get(|Path(p): Path<String>| async move { static_file(&p, ASSET) }))
         .route("/art/{scene}/{file}", get(art::<F>))
         .route("/demo/message", get(demo_message::<F>))
@@ -613,7 +614,7 @@ mod tests {
     #[tokio::test]
     async fn pages_and_static_files() {
         let (base, _) = serve(QueueConfig::default()).await;
-        for (path, html) in [("/", true), ("/wiki", true), ("/static/index.html", true)] {
+        for (path, html) in [("/", true), ("/wiki", true), ("/builder", true), ("/static/index.html", true)] {
             let (st, ct, cc, body) = raw(&format!("{base}{path}")).await;
             assert_eq!((st, ct.as_str()), (200, "text/html; charset=utf-8"), "{path}");
             assert_eq!(cc, if path == "/static/index.html" { ASSET } else { PAGE }, "{path}");

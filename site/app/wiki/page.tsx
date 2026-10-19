@@ -169,7 +169,7 @@ export default function Wiki() {
               <p>
                 Paste this line into your profile README, the repository named after your login (<code>you/you</code>).
                 Change <code>you</code> to your login and <code>forest</code> to any scene. The{" "}
-                <a href="/#demo">builder</a> writes it for you.
+                <a href="/builder">profile builder</a> writes it for you.
               </p>
               <Code>{SNIPPET}</Code>
               <p>
