@@ -59,6 +59,19 @@ export function sceneName(scene: string): string {
   return s[0].toUpperCase() + s.slice(1);
 }
 
+/** The painted banners at /decorations/<name>: an example title (the divider has none) and the painting's height
+ * on the 320-wide card grid. */
+export const DECORATIONS = [
+  { name: "reading-nook", label: "Reading nook", title: "About Me", h: 128 },
+  { name: "workbench", label: "Workbench", title: "Technical Skills", h: 128 },
+  { name: "raven-moon", label: "Raven and moon", title: "Projects", h: 128 },
+  { name: "enchanted-clearing", label: "Enchanted clearing", title: "Get In Touch", h: 128 },
+  { name: "forest-divider", label: "Forest divider", title: "", h: 80 },
+  { name: "forest-footer", label: "Forest footer", title: "", h: 80 },
+] as const;
+
+export const decorationLabel = (name: string) => DECORATIONS.find((d) => d.name === name)?.label ?? name;
+
 /** A live card of the demo profile on this host. */
 export function card(w: Widget, scene: string, extra = ""): string {
   return `/${w}?user=${DEMO_USER}&scene=${scene}${extra}`;

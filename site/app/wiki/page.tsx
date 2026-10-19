@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Rune from "@/components/Rune";
-import { RUNES, THEMES, REPO, HOST, card, cardName, sceneName, snap, type Widget } from "@/components/data";
+import { RUNES, THEMES, REPO, HOST, card, cardName, DECORATIONS, sceneName, snap, type Widget } from "@/components/data";
 import w from "./wiki.module.css";
 
 export const metadata: Metadata = {
@@ -28,14 +28,6 @@ const TOC = [
 
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 
-/** Each decoration with an example title; the divider has none by default. */
-const DECORATIONS: [string, string, number][] = [
-  ["reading-nook", "About Me", 128],
-  ["workbench", "Technical Skills", 128],
-  ["raven-moon", "Projects", 128],
-  ["enchanted-clearing", "Get In Touch", 128],
-  ["forest-divider", "", 80],
-];
 
 function Shot({ src, alt, scale = 2, h = 128 }: { src: string; alt: string; scale?: number; h?: number }) {
   return (
@@ -377,11 +369,11 @@ export default function Wiki() {
                 trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.
               </p>
               <div className={w.grid2}>
-                {DECORATIONS.map(([name, title, h]) => (
+                {DECORATIONS.map(({ name, label, title, h }) => (
                   <figure key={name}>
                     <Shot
                       src={`/decorations/${name}?title=${encodeURIComponent(title)}`}
-                      alt={title ? `The ${name} decoration titled ${title}` : `The ${name} decoration`}
+                      alt={title ? `The ${label} decoration titled ${title}` : `The ${label} decoration`}
                       h={h}
                     />
                     <figcaption>
