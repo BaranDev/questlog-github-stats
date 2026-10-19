@@ -1,0 +1,22 @@
+name: Uptime
+
+# Every 15 minutes: questlog.cc answers /health and draws a card. A failed run sends GitHub's usual failure email.
+# GitHub pauses scheduled runs after 60 days without a commit; re-enable it in the Actions tab if that happens.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Health
+        run: curl -fsS --retry 3 --retry-delay 20 https://questlog.cc/health | grep -q '"ok":true'
+      - name: A card
+        run: |
+          type=$(curl -fsS --retry 3 --retry-delay 20 -o /dev/null -w '%{content_type}' "https://questlog.cc/demo/stats?scale=1")
+          test "$type" = "image/webp"
