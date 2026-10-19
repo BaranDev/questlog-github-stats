@@ -18,7 +18,9 @@ function Mark() {
   );
 }
 
-type Tag = { top: number; left: number; kind: "sel" | "hover" } | null;
+/** A label on a card in the preview, at its top right corner: every card says it can be changed, so nobody has to
+ * find out by hovering. */
+type Tag = { i: number; top: number; right: number; kind: "sel" | "hover" | "idle" };
 
 /** The README inside a likeness of a GitHub profile page. Clicking a card picks it. */
 export default function ProfilePreview({
@@ -48,7 +50,9 @@ export default function ProfilePreview({
   const box = useRef<HTMLDivElement>(null);
   const [drawn, setDrawn] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
-  const [tag, setTag] = useState<Tag>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [touch, setTouch] = useState(false);
+  useEffect(() => setTouch(matchMedia("(hover: none)").matches), []);
 
   useEffect(() => {
     if (!article.current) return;
@@ -58,17 +62,23 @@ export default function ProfilePreview({
 
   const cardEl = (i: number | null) => (i === null ? null : article.current?.querySelector<HTMLElement>(`[data-spot="${i}"]:not([hidden])`) ?? null);
 
-  // the card being changed keeps an outline, and a label says so
+  // the card being changed keeps an outline, and every card wears a label; cards too small for one go without
   const place = useCallback(() => {
     article.current?.querySelectorAll("[data-sel]").forEach((e) => e.removeAttribute("data-sel"));
-    const sel = cardEl(selected);
-    sel?.setAttribute("data-sel", "");
-    const el = sel ?? cardEl(hover);
+    cardEl(selected)?.setAttribute("data-sel", "");
     const b = box.current;
-    if (!el || !b) return setTag(null);
-    const r = el.getBoundingClientRect();
+    if (!b || !article.current) return setTags([]);
     const o = b.getBoundingClientRect();
-    setTag({ top: r.top - o.top + 8, left: r.left - o.left + 8, kind: sel ? "sel" : "hover" });
+    const seen = new Set<number>();
+    const next: Tag[] = [];
+    for (const el of article.current.querySelectorAll<HTMLElement>("[data-spot]:not([hidden])")) {
+      const i = Number(el.dataset.spot);
+      const r = el.getBoundingClientRect();
+      if (seen.has(i) || r.width < 140 || r.height < 40) continue;
+      seen.add(i);
+      next.push({ i, top: r.top - o.top + 8, right: o.right - r.right + 8, kind: i === selected ? "sel" : i === hover ? "hover" : "idle" });
+    }
+    setTags(next);
   }, [selected, hover]);
 
   useLayoutEffect(place, [place, drawn]);
@@ -151,12 +161,17 @@ export default function ProfilePreview({
           >
             {!text.trim() && empty}
             <div ref={article} className="markdown-body" hidden={!text.trim()} />
-            {tag && (
-              <span className={`${s.cardTag} ${tag.kind === "sel" ? s.cardTagSel : ""}`} style={{ top: tag.top, left: tag.left }} aria-hidden="true">
-                {tag.kind === "sel" ? <Pencil /> : <MousePointerClick />}
-                {tag.kind === "sel" ? "Changing this card" : "Click to change"}
+            {tags.map((t) => (
+              <span
+                key={t.i}
+                className={`${s.cardTag} ${t.kind === "sel" ? s.cardTagSel : t.kind === "hover" ? s.cardTagHover : ""}`}
+                style={{ top: t.top, right: t.right }}
+                aria-hidden="true"
+              >
+                {t.kind === "sel" ? <Pencil /> : <MousePointerClick />}
+                {t.kind === "sel" ? "Changing this card" : touch ? "Tap to change" : "Click to change"}
               </span>
-            )}
+            ))}
           </div>
         </div>
       </div>

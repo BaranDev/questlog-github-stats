@@ -119,6 +119,52 @@ const STEPS = [
   { title: "Copy to GitHub", wide: "Copy the text, then paste it into your profile README.", phone: "Copy the text, then paste it into your profile README." },
 ];
 
+type Toast = { text: string; undo?: boolean; error?: boolean; n: number };
+
+/** How long a message stays: longer when it can be undone, longest when it says something went wrong. */
+const life = (t: Toast) => (t.error ? 9000 : t.undo ? 7000 : 4500);
+
+/** A message at the bottom of the screen with a bar showing the time it has left. Shown as a popover, so it stays
+ * on top of an open dialog. */
+function ToastNote({ toast, onUndo }: { toast: Toast; onUndo: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    try {
+      ref.current?.showPopover?.();
+    } catch {
+      // without popovers the message still shows, under any open dialog
+    }
+  }, []);
+  return (
+    <div
+      ref={ref}
+      popover="manual"
+      className={s.toast}
+      role={toast.error ? "alert" : "status"}
+      style={{ "--life": `${life(toast)}ms` } as React.CSSProperties}
+    >
+      <span>{toast.text}</span>
+      {toast.undo && (
+        <button type="button" className={s.linkBtn} onClick={onUndo}>
+          Undo
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Left and right arrows move a tab row or a radio group to its neighbour and focus it, as screen readers expect. */
+function arrows<T extends string>(values: readonly T[], value: T, set: (v: T) => void) {
+  return (e: React.KeyboardEvent<HTMLElement>) => {
+    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const i = (values.indexOf(value) + d + values.length) % values.length;
+    set(values[i]);
+    (e.currentTarget.children[i] as HTMLElement | undefined)?.focus();
+  };
+}
+
 function Num({ n, state }: { n: number; state: "done" | "now" | "next" }) {
   return (
     <span className={s.num} data-state={state}>
@@ -159,9 +205,11 @@ export default function ProfileBuilder() {
   const [retry, setRetry] = useState(0);
   const [v, setV] = useState(0);
   const [flash, setFlash] = useState<number | null>(null);
-  const [toast, setToast] = useState<{ text: string; undo?: boolean; n: number } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const cursor = useRef<number | null>(null);
+  const changeBtn = useRef<HTMLButtonElement>(null);
+  const optionsPane = useRef<HTMLDivElement>(null);
   const work = useRef<HTMLDivElement>(null);
   const history = useRef<{ text: string; at: number; typing: boolean }[]>([]);
   const narrow = useNarrow();
@@ -224,12 +272,19 @@ export default function ProfileBuilder() {
       for (let n = 0; n < 45 && !stop; n++) {
         await new Promise((r) => window.setTimeout(r, 4000));
         if (stop) return;
+        // nobody is looking: wait without using up the tries
+        if (document.hidden) {
+          n--;
+          continue;
+        }
         const k = await probe(profile.login);
         if (stop || k === "placeholder") continue;
         setStatus(k);
         if (k === "card") setV((x) => x + 1);
         return;
       }
+      // three minutes without the stats: say so instead of promising they are coming
+      if (!stop) setStatus("failed");
     })();
     return () => {
       stop = true;
@@ -261,7 +316,7 @@ export default function ProfileBuilder() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), toast.undo ? 7000 : 4500);
+    const t = window.setTimeout(() => setToast(null), life(toast));
     return () => window.clearTimeout(t);
   }, [toast]);
 
@@ -286,7 +341,7 @@ export default function ProfileBuilder() {
     setCanUndo(history.current.length > 0);
     setToast(null);
   };
-  const say = (t: string, undoable = false) => setToast({ text: t, undo: undoable, n: Date.now() });
+  const say = (t: string, o: { undo?: boolean; error?: boolean } = {}) => setToast({ text: t, ...o, n: Date.now() });
 
   const onLogin = (p: Profile, next: string | null, start: Start) => {
     const old = profile?.login;
@@ -321,7 +376,7 @@ export default function ProfileBuilder() {
     const name = cardName(spot.card.widget, spot.card.scene);
     edit(removeSpot(text, spot), { now: true });
     setSel(null);
-    say(`Removed the ${name}.`, true);
+    say(`Removed the ${name}.`, { undo: true });
   };
 
   const openAdd = () => {
@@ -354,7 +409,7 @@ export default function ProfileBuilder() {
   const copy = async () => {
     if (!(await toClipboard(text))) {
       setTab("write");
-      say("Your browser didn't let us copy. Select all of your README text and copy it yourself.");
+      say("Your browser didn't let us copy. Select all of your README text and copy it yourself.", { error: true });
       return;
     }
     setCopied(true);
@@ -366,6 +421,8 @@ export default function ProfileBuilder() {
    * text by what it says, the nearest one when it is there twice. */
   const pick = (i: number) => {
     setAdding(false);
+    // keyboard users land in the options they just opened
+    if (!narrow) window.setTimeout(() => optionsPane.current?.focus());
     if (shown === text) return setSel(i);
     const was = shownSpots[i];
     if (!was) return;
@@ -375,7 +432,12 @@ export default function ProfileBuilder() {
   };
   const step = (d: -1 | 1) => setSel((i) => (i === null ? i : (i + d + spots.length) % spots.length));
 
-  if (!ready) return <div className={s.loading} aria-hidden="true" />;
+  if (!ready)
+    return (
+      <div className={s.loading} role="status">
+        <span className="visually-hidden">Loading the builder</span>
+      </div>
+    );
 
   if (!profile || asking) {
     return (
@@ -388,7 +450,14 @@ export default function ProfileBuilder() {
           tour={tour && !profile}
           onTourDone={() => setTour(false)}
           onDone={onLogin}
-          onCancel={profile ? () => setAsking(false) : undefined}
+          onCancel={
+            profile
+              ? () => {
+                  setAsking(false);
+                  window.setTimeout(() => changeBtn.current?.focus());
+                }
+              : undefined
+          }
         />
       </div>
     );
@@ -486,6 +555,15 @@ export default function ProfileBuilder() {
         </button>
       </header>
 
+      {narrow && (
+        <span className={`${s.who} ${s.whoNarrow}`}>
+          <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
+          <b>{profile.login}</b>
+          <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
+            Change login
+          </button>
+        </span>
+      )}
       {narrow ? (
         <div className={s.stepNow}>
           {now === -1 ? (
@@ -518,7 +596,7 @@ export default function ProfileBuilder() {
             <span className={s.who}>
               <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
               <b>{profile.login}</b>
-              <button type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
+              <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
                 Change
               </button>
             </span>
@@ -561,12 +639,18 @@ export default function ProfileBuilder() {
       )}
 
       {narrow && (
-        <div className={s.tabs} role="tablist" aria-label="Show">
-          <button type="button" role="tab" aria-selected={tab === "write"} onClick={() => setTab("write")}>
+        <div className={s.tabs} role="tablist" aria-label="Show" onKeyDown={arrows(["write", "preview"] as const, tab, setTab)}>
+          <button type="button" role="tab" aria-selected={tab === "write"} tabIndex={tab === "write" ? 0 : -1} onClick={() => setTab("write")}>
             <Pencil aria-hidden="true" />
             Write
           </button>
-          <button type="button" role="tab" aria-selected={tab === "preview"} onClick={() => setTab("preview")}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "preview"}
+            tabIndex={tab === "preview" ? 0 : -1}
+            onClick={() => setTab("preview")}
+          >
             <Eye aria-hidden="true" />
             Preview
           </button>
@@ -583,7 +667,12 @@ export default function ProfileBuilder() {
                   Back to the text
                 </button>
               </div>
-              <div className={s.paneScroll} onKeyDown={(e) => e.key === "Escape" && setSel(null)}>
+              <div
+                ref={optionsPane}
+                tabIndex={-1}
+                className={s.paneScroll}
+                onKeyDown={(e) => e.key === "Escape" && setSel(null)}
+              >
                 {options}
               </div>
             </>
@@ -626,9 +715,21 @@ export default function ProfileBuilder() {
               <Eye aria-hidden="true" />
               Preview: your GitHub profile
             </span>
-            <span className={s.themeSwitch} role="radiogroup" aria-label="GitHub theme">
+            <span
+              className={s.themeSwitch}
+              role="radiogroup"
+              aria-label="GitHub theme"
+              onKeyDown={arrows(["light", "dark"] as const, theme, setTheme)}
+            >
               {(["light", "dark"] as const).map((t) => (
-                <button key={t} type="button" role="radio" aria-checked={theme === t} onClick={() => setTheme(t)}>
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === t}
+                  tabIndex={theme === t ? 0 : -1}
+                  onClick={() => setTheme(t)}
+                >
                   {t === "light" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
                   {t === "light" ? "Light" : "Dark"}
                 </button>
@@ -722,16 +823,7 @@ export default function ProfileBuilder() {
         </div>
       </Sheet>
 
-      {toast && (
-        <div className={s.toast} role="status" key={toast.n}>
-          <span>{toast.text}</span>
-          {toast.undo && (
-            <button type="button" className={s.linkBtn} onClick={undo}>
-              Undo
-            </button>
-          )}
-        </div>
-      )}
+      {toast && <ToastNote key={toast.n} toast={toast} onUndo={undo} />}
     </div>
   );
 }

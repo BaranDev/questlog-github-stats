@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, TriangleAlert, X } from "lucide-react";
 import s from "./builder.module.css";
 
 type FieldProps = {
@@ -21,11 +21,17 @@ type FieldProps = {
 /** A text field whose label sits inside it while empty and moves up once you type. */
 export function Field({ label, value, onChange, help, error, prefix, maxLength = 60, inputMode, autoFocus, onEnter, end }: FieldProps) {
   const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  // a new error takes the person to the field it is about
+  useEffect(() => {
+    if (error) input.current?.focus();
+  }, [error]);
   return (
     <div className={s.fieldWrap}>
       <label className={`${s.ff} ${prefix ? s.prefixed : ""} ${error ? s.bad : ""}`}>
         {prefix && <span className={s.pre}>{prefix}</span>}
         <input
+          ref={input}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
@@ -48,7 +54,8 @@ export function Field({ label, value, onChange, help, error, prefix, maxLength =
         {end}
       </label>
       {(error || help) && (
-        <span id={`${id}-help`} className={error ? s.error : s.help}>
+        <span id={`${id}-help`} className={error ? s.error : s.help} role={error ? "alert" : undefined}>
+          {error && <TriangleAlert aria-hidden="true" />}
           {error || help}
         </span>
       )}

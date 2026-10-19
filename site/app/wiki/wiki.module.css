@@ -469,12 +469,15 @@
   }
 }
 
-@media (max-width: 640px) {
+/* below the full page width the snippets wrap instead of scrolling sideways out of sight */
+@media (max-width: 960px) {
   .code {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+}
 
+@media (max-width: 640px) {
   .variations {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: none;

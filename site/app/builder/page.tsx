@@ -4,14 +4,14 @@ import Footer from "@/components/Footer";
 import ProfileBuilder from "@/components/builder/ProfileBuilder";
 
 export const metadata: Metadata = {
-  title: "questlog profile builder: your GitHub README with pixel-art cards",
+  title: "questlog profile builder: your GitHub README with pixel art cards",
   description:
-    "Write your GitHub profile README, add pixel-art cards for your stats, languages and streak, and see it the way GitHub will show it, in light and dark.",
+    "Write your GitHub profile README, add pixel art cards for your stats, languages and streak, and see it the way GitHub will show it, in light and dark.",
   alternates: { canonical: "/builder" },
   openGraph: {
     url: "/builder",
     title: "questlog profile builder",
-    description: "Your GitHub profile README with pixel-art cards, in four steps.",
+    description: "Your GitHub profile README with pixel art cards, in four steps.",
   },
 };
 

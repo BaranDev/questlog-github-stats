@@ -9,7 +9,9 @@ export default function Nav({ still = false }: { still?: boolean }) {
       </a>
       <nav aria-label="Main">
         <a href="/builder">Make cards</a>
-        <a href="/#scenes">Scenes</a>
+        <a className="nav-more" href="/#scenes">
+          Scenes
+        </a>
         <a href="/wiki">Wiki</a>
         <a href={REPO}>GitHub</a>
       </nav>

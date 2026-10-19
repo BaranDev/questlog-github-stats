@@ -26,6 +26,7 @@
 }
 
 .card {
+  position: relative;
   margin: 0;
   padding: 12px;
   border: 1px solid var(--line);
@@ -33,7 +34,16 @@
   background: linear-gradient(180deg, #1d1926, #141119);
   box-shadow: 0 40px 80px -40px rgba(0, 0, 0, 0.95);
   transform-origin: 50% 0%;
-  will-change: transform;
+}
+
+/* a card sinking under the next one darkens: a black veil whose opacity the scroll animates */
+.dim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .card img {

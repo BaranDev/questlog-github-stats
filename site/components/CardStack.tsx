@@ -25,7 +25,7 @@ export default function CardStack() {
         const el = root.current!;
         const cards = gsap.utils.toArray<HTMLElement>(`.${s.card}`, el);
         el.classList.add(s.stacking);
-        gsap.set(cards, { filter: "brightness(1)" });
+        const dims = cards.map((c) => c.querySelector(`.${s.dim}`));
         const tl = gsap.timeline({
           defaults: { ease: "none" },
           scrollTrigger: { trigger: el, start: "top top", end: "+=180%", pin: true, scrub: 0.6, invalidateOnRefresh: true },
@@ -34,7 +34,8 @@ export default function CardStack() {
           tl.fromTo(c, { y: () => window.innerHeight }, { y: 0, duration: 1 }, i);
           cards.slice(0, i + 1).forEach((under, j) => {
             const depth = i + 1 - j;
-            tl.to(under, { y: -depth * 26, scale: 1 - depth * 0.05, filter: `brightness(${1 - depth * 0.22})`, duration: 1 }, i);
+            tl.to(under, { y: -depth * 26, scale: 1 - depth * 0.05, duration: 1 }, i);
+            tl.to(dims[j], { opacity: depth * 0.22, duration: 1 }, i);
           });
         });
         return () => el.classList.remove(s.stacking);
@@ -56,6 +57,7 @@ export default function CardStack() {
           {CARDS.map((c) => (
             <figure key={c.name} className={s.card}>
               <img className="pix" src={c.src} width={640} height={256} alt={`BaranDev's ${c.name} in the forest scene`} />
+              <span className={s.dim} aria-hidden="true" />
               <figcaption>
                 <strong className="display">{c.name}</strong>
                 <span>{c.caption}</span>

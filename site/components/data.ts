@@ -57,7 +57,7 @@ export function cardName(w: Widget, scene: string): string {
 
 /** "forest-autumn" -> "Forest autumn" */
 export function sceneName(scene: string): string {
-  const s = scene.replace("-", " ");
+  const s = scene.replace(/-/g, " ");
   return s[0].toUpperCase() + s.slice(1);
 }
 

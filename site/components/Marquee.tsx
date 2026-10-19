@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import Rune from "./Rune";
 import { RUNES } from "./data";
 import s from "./Marquee.module.css";
@@ -16,6 +19,15 @@ function Row({ hidden }: { hidden?: boolean }) {
 }
 
 export default function Marquee() {
+  const box = useRef<HTMLDivElement>(null);
+  // the row moves only while it can be seen
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-live", e.isIntersecting), { rootMargin: "200px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   return (
     <section className={s.wrap} aria-labelledby="runes-title">
       <div className={`section ${s.head}`}>
@@ -29,7 +41,7 @@ export default function Marquee() {
           </p>
         </div>
       </div>
-      <div className={s.marquee}>
+      <div ref={box} className={s.marquee}>
         <div className={s.track}>
           <Row />
           <Row hidden />
