@@ -1,5 +1,5 @@
 # Build the site (a static export into static/) first.
-FROM node:22-alpine AS site
+FROM node:26-alpine AS site
 WORKDIR /src/site
 COPY site/package.json site/package-lock.json ./
 RUN npm ci
