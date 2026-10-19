@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 const FAILED_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 256'><rect width='640' height='256' rx='12' fill='#17141f'/><rect x='1' y='1' width='638' height='254' rx='11' fill='none' stroke='#f5dea0' stroke-opacity='.35' stroke-width='2'/><text x='320' y='120' fill='#f2e6c9' font-family='system-ui,sans-serif' font-size='26' text-anchor='middle'>This card did not load.</text><text x='320' y='158' fill='#f2e6c9' fill-opacity='.7' font-family='system-ui,sans-serif' font-size='22' text-anchor='middle'>Reload the page to try again.</text></svg>";
-const FAILED_CARD = `document.addEventListener("error",function(e){var i=e.target;if(!i||i.tagName!=="IMG"||i.src.indexOf("data:")===0)return;try{var u=new URL(i.src);if(u.origin!==location.origin||!/\\/(stats|languages|streak)\\//.test(u.pathname+"/"))return}catch(_){return}i.src="data:image/svg+xml,"+encodeURIComponent(${JSON.stringify(FAILED_SVG)})},true)`;
+const FAILED_CARD = `document.addEventListener("error",function(e){var i=e.target;if(!i||i.tagName!=="IMG"||i.src.indexOf("data:")===0)return;try{var u=new URL(i.src);if(u.origin!==location.origin||!/\\/(stats|languages|streak)\\/|\\/static\\/cards\\//.test(u.pathname+"/"))return}catch(_){return}i.src="data:image/svg+xml,"+encodeURIComponent(${JSON.stringify(FAILED_SVG)})},true)`;
 
 export const viewport: Viewport = { themeColor: "#0f0d14", colorScheme: "dark" };
 

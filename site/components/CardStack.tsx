@@ -4,15 +4,15 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { card } from "./data";
+import { card, snap } from "./data";
 import s from "./CardStack.module.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const CARDS = [
-  { name: "Character Sheet", src: card("stats", "forest", "&scale=2"), caption: "Your level from lifetime contributions, with commits, PRs, stars, reviews and a class." },
-  { name: "Spellbook", src: card("languages", "forest", "&scale=2"), caption: "Your top five languages by code, each marked with its own rune." },
-  { name: "Campfire", src: card("streak", "forest", "&scale=2"), caption: "Your current and best streak. Keep it going and the fire grows." },
+  { name: "Character Sheet", src: snap(card("stats", "forest", "&scale=2")), caption: "Your level from lifetime contributions, with commits, PRs, stars, reviews and a class." },
+  { name: "Spellbook", src: snap(card("languages", "forest", "&scale=2")), caption: "Your top five languages by code, each marked with its own rune." },
+  { name: "Campfire", src: snap(card("streak", "forest", "&scale=2")), caption: "Your current and best streak. Keep it going and the fire grows." },
 ];
 
 export default function CardStack() {

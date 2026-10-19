@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { cardName, type Widget } from "../data";
-import { WIDGETS } from "./cards";
-import { describe, sceneGroups, thumb } from "./CardOptions";
+import { WIDGETS, thumb } from "./cards";
+import { describe, sceneGroups } from "./CardOptions";
 import { CloseButton, SelectField } from "./ui";
 import s from "./builder.module.css";
 

@@ -1,4 +1,4 @@
-import { THEMES, card, isReady, sceneName } from "./data";
+import { THEMES, card, isReady, sceneName, snap } from "./data";
 import s from "./Themes.module.css";
 
 export default function Themes() {
@@ -27,7 +27,7 @@ export default function Themes() {
                     <a href={`/wiki#scene-${scene}`}>
                       <img
                         className="pix"
-                        src={card("stats", scene, "&scale=1")}
+                        src={snap(card("stats", scene, "&scale=1"))}
                         width={320}
                         height={128}
                         loading="lazy"

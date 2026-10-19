@@ -5,6 +5,7 @@ import Themes from "@/components/Themes";
 import CardStack from "@/components/CardStack";
 import Marquee from "@/components/Marquee";
 import Gallery from "@/components/Gallery";
+import { snap } from "@/components/data";
 import s from "./page.module.css";
 
 const HERO = "/stats?user=BaranDev&scene=castle&scale=3";
@@ -37,8 +38,8 @@ export default function Home() {
           </div>
           <div className={s.heroArt}>
             <picture className="pix">
-              <source media="(prefers-color-scheme: dark)" srcSet={`${HERO}&time=night`} />
-              <img src={HERO} width={960} height={384} alt="BaranDev's Character Sheet in the castle scene" />
+              <source media="(prefers-color-scheme: dark)" srcSet={snap(`${HERO}&time=night`)} />
+              <img src={snap(HERO)} width={960} height={384} alt="BaranDev's Character Sheet in the castle scene" />
             </picture>
           </div>
         </section>

@@ -1,7 +1,7 @@
-import { SCENES, card } from "./data";
+import { SCENES, card, snap } from "./data";
 import s from "./Bento.module.css";
 
-const FAN = [card("stats", "castle-aurora", "&time=night&scale=2"), card("languages", "castle-aurora", "&time=night&scale=2"), card("streak", "castle-aurora", "&time=night&scale=2")];
+const FAN = (["stats", "languages", "streak"] as const).map((w) => snap(card(w, "castle-aurora", "&time=night&scale=2")));
 
 export default function Bento() {
   return (
