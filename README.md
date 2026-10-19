@@ -62,6 +62,7 @@ Painted banners to head a section of your README or divide two, with an optional
 | `workbench` | a table under a great tree's roots; title in the middle |
 | `raven-moon` | a raven before the moon; title on the left |
 | `enchanted-clearing` | a glowing gate between old trees; title at the top |
+| `crystal-owl` | an owl on a mossy pillar at sunset, by a flickering lantern; title on the left |
 | `forest-divider` | a mossy log, lower than the others; no title unless you give one |
 | `forest-footer` | glowing mushrooms and ferns, as low as the divider; for the end of a README |
 

@@ -66,6 +66,7 @@ export const DECORATIONS = [
   { name: "workbench", label: "Workbench", title: "Technical Skills", h: 128 },
   { name: "raven-moon", label: "Raven and moon", title: "Projects", h: 128 },
   { name: "enchanted-clearing", label: "Enchanted clearing", title: "Get In Touch", h: 128 },
+  { name: "crystal-owl", label: "Crystal owl", title: "Learning Focus", h: 128 },
   { name: "forest-divider", label: "Forest divider", title: "", h: 80 },
   { name: "forest-footer", label: "Forest footer", title: "", h: 80 },
 ] as const;
