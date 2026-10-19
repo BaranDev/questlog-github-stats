@@ -17,7 +17,12 @@ async fn main() -> Result<(), questlog::BoxError> {
 
     let store = Arc::new(Store::open(&data)?);
     let github = GitHub::new(Http::new(token)?).with_past_years(std::path::Path::new(&data).join("years"));
-    let queue = Queue::new(github, store.clone(), QueueConfig::default());
+    // NEW_LOGINS_PER_HOUR raises the cap on first-time logins for a busy day; GitHub's quota still pauses fetching
+    let mut cfg = QueueConfig::default();
+    if let Some(n) = std::env::var("NEW_LOGINS_PER_HOUR").ok().and_then(|v| v.parse().ok()) {
+        cfg.new_per_hour = n;
+    }
+    let queue = Queue::new(github, store.clone(), cfg);
     queue.start();
     let sweeper = store.clone();
     tokio::spawn(async move {
