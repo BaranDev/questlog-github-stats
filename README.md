@@ -95,4 +95,10 @@ The pages at `/`, `/builder` and `/wiki` come from `site/`, a Next.js static exp
 
 ## License
 
-Code: MIT (see `LICENSE`). Art: © Cevdet Baran Oral, CC BY-NC 4.0 (see `ART-LICENSE.md`): free for non-commercial use with credit; commercial use, including a commercial self-hosted instance, needs written permission (contact@cevdetbaran.com). Fonts: see `fonts/README.md`.
+The code and the art have different licenses.
+
+- **Code: MIT** (see `LICENSE`). Use it, change it, self-host it.
+- **Art: © Cevdet Baran Oral, CC BY-NC 4.0** (see `ART-LICENSE.md`). This covers the paintings and sprites in `art/` and `assets/`, and the cards drawn from them.
+  - Free for non-commercial use with credit, such as cards on your own GitHub profile.
+  - Commercial use needs written permission, and that includes a commercial self-hosted instance. Ask at contact@cevdetbaran.com.
+- **Fonts:** their own licenses (see `fonts/README.md`).
