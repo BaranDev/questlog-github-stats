@@ -19,10 +19,15 @@
 .track {
   display: flex;
   width: max-content;
-  animation: scroll 70s linear infinite;
+  animation: scroll 70s linear infinite paused;
 }
 
-.marquee:hover .track {
+.marquee[data-live] .track {
+  animation-play-state: running;
+}
+
+.marquee[data-live]:hover .track,
+.marquee[data-live]:focus-within .track {
   animation-play-state: paused;
 }
 

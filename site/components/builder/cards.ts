@@ -1,6 +1,6 @@
 // Reading and writing questlog card addresses inside a README.
 
-import { THEMES, SCENES, cardName, type Widget } from "../data";
+import { THEMES, SCENES, cardName, sceneName, type Widget } from "../data";
 
 export const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 export const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -43,11 +43,7 @@ export function themeOf(scene: string) {
   return THEMES.find((t) => t.scenes.includes(scene)) ?? THEMES[0];
 }
 
-/** "forest-autumn" -> "Forest autumn" */
-export function sceneLabel(scene: string) {
-  const s = scene.replace(/-/g, " ");
-  return s[0].toUpperCase() + s.slice(1);
-}
+export const sceneLabel = sceneName;
 
 /** A card address, or null for anything that is not one. Reads the short form /user/card/scene/time and the long
  * form /card?user=..&scene=..&time=.. */

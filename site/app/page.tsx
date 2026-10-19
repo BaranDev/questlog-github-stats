@@ -21,7 +21,7 @@ export default function Home() {
       <main id="top" style={{ overflowX: "clip" }}>
         <section className={s.hero}>
           <div className={s.heroCopy}>
-            <h1 className={s.h1}>Pixel-art cards for your GitHub profile</h1>
+            <h1 className={s.h1}>Pixel art cards for your GitHub profile</h1>
             <p className={s.heroLine}>
               Your stats, your top languages and your streak, drawn in one of 16 painted scenes. Add them to your README
               with one line: no token, no setup.

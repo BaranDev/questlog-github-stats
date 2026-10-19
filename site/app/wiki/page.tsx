@@ -21,7 +21,7 @@ const TOC = [
   ["options", "Options"],
   ["messages", "What the messages mean"],
   ["limits", "Caching and limits"],
-  ["self-hosting", "Self-hosting"],
+  ["self-hosting", "Hosting it yourself"],
   ["faq", "FAQ"],
 ];
 
@@ -134,7 +134,7 @@ const FAQ = [
   ["My language has no rune.", "The thirty most common languages each have a rune. Every other language gets othala, in gold."],
   ["Can I use the cards outside GitHub?", "Yes. They are plain PNG images, so any page or README that shows images can show them."],
   ["Can I use a different scene on each card?", "Yes, every card takes its own parameters. One scene for all three makes the profile read like one place."],
-  ["Is it free?", "Yes, for non-commercial use such as your own profile. The code is MIT. The paintings are © Cevdet Baran Oral under CC BY-NC 4.0, so commercial use needs written permission: contact@cevdetbaran.com."],
+  ["Is it free?", "Yes, for noncommercial use such as your own profile. The code is MIT. The paintings are © Cevdet Baran Oral under CC BY-NC 4.0, so commercial use needs written permission: contact@cevdetbaran.com."],
 ];
 
 export default function Wiki() {
@@ -305,7 +305,7 @@ export default function Wiki() {
             <section id="runes" className={w.section}>
               <h2>Runes</h2>
               <p>
-                Each language in the Spellbook gets a rune from the Elder Futhark and the Anglo-Saxon futhorc, in its own
+                Each language in the Spellbook gets a rune from the Elder Futhark and the Anglo Saxon futhorc, in its own
                 color. Any language not listed gets othala.
               </p>
               <ul className={w.runes}>
@@ -357,7 +357,11 @@ export default function Wiki() {
 
             <section id="options" className={w.section}>
               <h2>Options</h2>
-              <p>Every card takes the same query parameters.</p>
+              <p>
+                Every card takes the same options, written after a <code>?</code> in its address. Most people only need{" "}
+                <code>scene</code>, <code>time</code> and <code>title</code>, and the <a href="/builder">profile builder</a>{" "}
+                sets all of them for you.
+              </p>
               <table className={w.table}>
                 <thead>
                   <tr>
@@ -379,7 +383,7 @@ export default function Wiki() {
                 </tbody>
               </table>
               <p className={w.note}>
-                Keys are case-insensitive. On /stats, <code>labels</code> and <code>values</code> both take{" "}
+                Keys ignore capital letters. On /stats, <code>labels</code> and <code>values</code> both take{" "}
                 <code>level</code>, <code>commits</code>, <code>prs</code>, <code>repos</code>, <code>stars</code>,{" "}
                 <code>issues</code>, <code>reviews</code>, <code>followers</code>, <code>contributions</code>. On
                 /languages, both take any language name, such as <code>typescript</code>, <code>c%23</code> for C# or{" "}
@@ -455,7 +459,7 @@ export default function Wiki() {
             </section>
 
             <section id="self-hosting" className={w.section}>
-              <h2>Self-hosting</h2>
+              <h2>Hosting it yourself</h2>
               <p>
                 questlog is one Docker image. With your own token, your instance can count your private contributions too.
               </p>
@@ -464,7 +468,7 @@ cd questlog-github-stats
 docker build -t questlog .
 docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog`}</Code>
               <p>
-                <code>.env</code> holds a fine-grained GitHub token that can read public repositories:
+                <code>.env</code> holds a GitHub token (the fine grained kind) that can read public repositories:
               </p>
               <Code>{`GITHUB_TOKEN=github_pat_...`}</Code>
               <p className={w.note}>

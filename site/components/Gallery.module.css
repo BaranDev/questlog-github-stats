@@ -18,7 +18,6 @@
   box-shadow:
     0 0 0 1px rgba(245, 222, 160, 0.14),
     0 50px 90px -45px rgba(0, 0, 0, 0.95);
-  will-change: transform, opacity;
 }
 
 .frame img {

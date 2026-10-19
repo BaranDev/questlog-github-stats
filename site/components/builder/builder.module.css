@@ -108,7 +108,17 @@
 }
 
 .error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
   color: #f0a27a;
+}
+
+.error svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.2em;
 }
 
 /* Step numbers */
@@ -220,6 +230,10 @@
 .who .linkBtn {
   margin-left: auto;
   padding-right: 0.4rem;
+}
+
+.whoNarrow {
+  margin-bottom: 0.6rem;
 }
 
 /* The current step on phones */
@@ -671,11 +685,32 @@
   font-size: 12.5px;
   font-weight: 600;
   pointer-events: none;
+  animation: nudge 0.5s ease-in-out 0.6s 2;
+}
+
+/* a card the pointer is on: the label lights up with the card's outline */
+.cardTagHover {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 6px 18px -6px rgba(0, 0, 0, 0.6);
 }
 
 .cardTagSel {
   background: var(--gold);
   color: var(--ink);
+  animation: none;
+}
+
+@keyframes nudge {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardTag {
+    animation: none;
+  }
 }
 
 .cardTag svg {
@@ -1637,8 +1672,10 @@
 /* A short message at the bottom of the screen */
 .toast {
   position: fixed;
-  left: 50%;
-  bottom: 1.5rem;
+  inset: auto auto 1.5rem 50%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--parchment);
   z-index: 70;
   display: flex;
   align-items: center;
@@ -1659,6 +1696,31 @@
   from {
     opacity: 0;
     transform: translate(-50%, 0.75rem);
+  }
+}
+
+/* the time the message has left */
+.toast::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--gold);
+  transform-origin: left;
+  animation: life var(--life, 4500ms) linear forwards;
+}
+
+@keyframes life {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast::after {
+    display: none;
   }
 }
 
@@ -1729,6 +1791,28 @@
 
   .toast {
     bottom: 5.5rem;
+  }
+
+  /* phone sheets: the title and the close button stay in view while the options scroll */
+  .sheet .optsHead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin: -1.1rem -1.25rem 0;
+    padding: 1.1rem 1.25rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--night-2);
+  }
+
+  .optsNav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .navBtn,
+  .x {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .sheet,

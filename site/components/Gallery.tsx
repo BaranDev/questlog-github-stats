@@ -4,7 +4,7 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { card, cardName, type Widget } from "./data";
+import { card, cardName, sceneName, type Widget } from "./data";
 import s from "./Gallery.module.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -32,7 +32,7 @@ export default function Gallery() {
           gsap
             .timeline({ scrollTrigger: { trigger: shot, start: "top bottom", end: "bottom top", scrub: true } })
             .fromTo(frame, { scale: 0.8 }, { scale: 1, duration: 0.4, ease: "power1.out" })
-            .fromTo(frame, { opacity: 1, filter: "brightness(1)" }, { opacity: 0.2, filter: "brightness(0.5)", duration: 0.2, ease: "none" }, 0.8);
+            .fromTo(frame, { opacity: 1 }, { opacity: 0.2, duration: 0.2, ease: "none" }, 0.8);
         });
       });
     },
@@ -57,13 +57,13 @@ export default function Gallery() {
                 width={640}
                 height={256}
                 loading="lazy"
-                alt={`BaranDev's ${cardName(w, scene)} in the ${scene} scene, ${time}`}
+                alt={`BaranDev's ${cardName(w, scene)} in the ${sceneName(scene)} scene, ${time}`}
               />
             </div>
             <figcaption>
               <strong className="display">{cardName(w, scene)}</strong>
               <span>
-                {scene}, {time}
+                {sceneName(scene)}, {time}
                 {fire && `, ${fire} fire`}
               </span>
             </figcaption>

@@ -4,7 +4,7 @@
   --deep-blue: #18224a;
   --parchment: #f2e6c9;
   --muted: rgba(242, 230, 201, 0.68);
-  --faint: rgba(242, 230, 201, 0.44);
+  --faint: rgba(242, 230, 201, 0.6);
   --gold: #f5dea0;
   --ember: #c17530;
   --moss: #36804a;
@@ -177,6 +177,7 @@ pre {
 }
 
 .nav nav a {
+  white-space: nowrap;
   padding: 0.5rem 0.85rem;
   border-radius: 999px;
   color: var(--muted);
@@ -214,12 +215,34 @@ pre {
   }
 
   .nav-mark {
-    font-size: 1.45rem;
+    font-size: 1.15rem;
   }
 
   .nav nav a {
-    padding: 0.45rem 0.55rem;
+    padding: 0.45rem 0.5rem;
     font-size: 0.875rem;
+  }
+
+  /* the scene gallery is one scroll down the home page; the pill keeps what fits */
+  .nav .nav-more {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .nav {
+    gap: 0.1rem;
+    padding-left: 0.7rem;
+    padding-right: 0.3rem;
+  }
+
+  .nav-mark {
+    font-size: 0.95rem;
+  }
+
+  .nav nav a {
+    padding: 0.4rem 0.35rem;
+    font-size: 0.8125rem;
   }
 }
 
@@ -443,6 +466,13 @@ pre {
 
 .attributions a {
   color: var(--parchment);
+}
+
+/* a card still being drawn holds its place in the glass color, so the page never shows an empty hole */
+img[src*="/stats"],
+img[src*="/languages"],
+img[src*="/streak"] {
+  background: rgba(255, 246, 225, 0.06);
 }
 
 @media (prefers-reduced-motion: reduce) {
