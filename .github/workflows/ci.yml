@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # the site is a static export that the server embeds, so it is built first
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
