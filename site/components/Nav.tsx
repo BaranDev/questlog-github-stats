@@ -1,8 +1,9 @@
 import { REPO } from "./data";
 
-export default function Nav() {
+/** `still`: the nav stays at the top of the page instead of floating over it, for pages that fill the window. */
+export default function Nav({ still = false }: { still?: boolean }) {
   return (
-    <header className="nav">
+    <header className={still ? "nav nav-still" : "nav"}>
       <a className="nav-mark" href="/" aria-label="questlog home">
         questlog
       </a>

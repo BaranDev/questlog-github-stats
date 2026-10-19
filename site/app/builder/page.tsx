@@ -21,7 +21,7 @@ export default function BuilderPage() {
       <a className="skip" href="#top">
         Skip to content
       </a>
-      <Nav />
+      <Nav still />
       <main id="top">
         <ProfileBuilder />
         <noscript>

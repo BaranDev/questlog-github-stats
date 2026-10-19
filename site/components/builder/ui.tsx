@@ -1,8 +1,5 @@
 "use client";
 
-// Form pieces of the builder: fields whose placeholder becomes their label, dropdowns, short choices, switches,
-// the system color picker and a dialog that turns into a bottom sheet on phones.
-
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import s from "./builder.module.css";
@@ -244,7 +241,6 @@ export function Sheet({
   );
 }
 
-/** A round close button. */
 export function CloseButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button type="button" className={s.x} onClick={onClick} aria-label={label}>

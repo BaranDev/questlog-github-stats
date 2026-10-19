@@ -5,7 +5,7 @@ import { THEMES, SCENES, cardName, type Widget } from "../data";
 export const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 export const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 /** Hosts that serve questlog cards; the page's own host counts too. */
-const HOSTS = ["questlog.cc", "questlog.cevdetbaran.com", "www.questlog.cc"];
+export const HOSTS = ["questlog.cc", "questlog.cevdetbaran.com", "www.questlog.cc"];
 
 export type Card = {
   origin: string;
@@ -15,6 +15,8 @@ export type Card = {
   night: boolean;
   /** Every other option, in the order it was written, decoded. */
   params: [string, string][];
+  /** GitHub's #gh-dark-mode-only or #gh-light-mode-only, kept as written. */
+  hash: string;
 };
 
 /** One card found in the README text. */
@@ -82,19 +84,34 @@ export function parseCard(src: string, ownHost = ""): Card | null {
   }
   if (!isWidget(widget) || !user) return null;
   const params = [...q.entries()].filter(([k]) => !["user", "scene", "time"].includes(k));
-  return { origin: u.origin, user, widget, scene: scene || "forest", night: time === "night", params };
+  return { origin: u.origin, user, widget, scene: scene || "forest", night: time === "night", params, hash: u.hash };
 }
 
-/** Encoded like encodeURIComponent, but keeps the commas, colons and bars of lists readable. */
-function enc(v: string) {
-  return encodeURIComponent(v).replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%7C/g, "|");
+/** Encoded like encodeURIComponent, but keeps the commas, colons and bars of lists readable. Brackets and quotes are
+ * encoded too: a ")" would end a Markdown image and a "'" a quoted attribute. */
+export function enc(v: string) {
+  return encodeURIComponent(v)
+    .replace(/[()'!*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/%2C/g, ",")
+    .replace(/%3A/g, ":")
+    .replace(/%7C/g, "|");
 }
 
 /** The short address: the scene and night as path parts when they differ from the defaults, the rest as a query. */
 export function writeCard(c: Card, night = c.night): string {
   const path = night ? `/${c.scene}/night` : c.scene !== "forest" ? `/${c.scene}` : "";
   const query = c.params.map(([k, v]) => `${k}=${enc(v)}`).join("&");
-  return `${c.origin}/${encodeURIComponent(c.user)}/${c.widget}${path}${query ? `?${query}` : ""}`;
+  return `${c.origin}/${enc(c.user)}/${c.widget}${path}${query ? `?${query}` : ""}${c.hash}`;
+}
+
+/** `base` with the change from `before` to `after` made to it: a picture's night card keeps its own scene and options
+ * unless that one changed. */
+function carry(base: Card, before: Card, after: Card): Card {
+  let out: Card = { ...base };
+  for (const k of ["origin", "user", "widget", "scene"] as const) if (before[k] !== after[k]) out = { ...out, [k]: after[k] };
+  const keys = new Set([...before.params, ...after.params].map(([k]) => k));
+  for (const k of keys) if (getParam(before, k) !== getParam(after, k)) out = setParam(out, k, getParam(after, k));
+  return out;
 }
 
 export function getParam(c: Card, key: string) {
@@ -118,7 +135,8 @@ export function readPairs(s: string): Map<string, string> {
   const m = new Map<string, string>();
   for (const p of s.split(",")) {
     const i = p.indexOf(":");
-    if (i > 0) m.set(p.slice(0, i).trim().toLowerCase(), p.slice(i + 1).trim());
+    // the value keeps its trailing space, so a name can be typed word by word
+    if (i > 0) m.set(p.slice(0, i).trim().toLowerCase(), p.slice(i + 1).trimStart());
   }
   return m;
 }
@@ -143,8 +161,9 @@ export function nextAlt(alt: string, before: Card, after: Card) {
   return isAutoAlt(alt, before) ? autoAlt(after) : alt;
 }
 
-/** The text of one card, written fresh: one Markdown line, or a picture block when it switches with dark mode. */
-export function writeSpot(c: Card, alt: string, mode: "single" | "auto", attrs = "", inline = false): string {
+/** The text of one card, written fresh: one Markdown line, or a picture block when it switches with dark mode. A card
+ * that was HTML stays HTML (`html`), since GitHub shows Markdown inside an HTML block as plain text. */
+export function writeSpot(c: Card, alt: string, mode: "single" | "auto", attrs = "", inline = false, html = false): string {
   const a = alt.replace(/"/g, "&quot;");
   if (mode === "auto") {
     const lines = [
@@ -155,7 +174,7 @@ export function writeSpot(c: Card, alt: string, mode: "single" | "auto", attrs =
     ];
     return inline ? lines.map((l) => l.trim()).join("") : lines.join("\n");
   }
-  if (attrs) return `<img alt="${a}" src="${writeCard(c)}"${attrs}>`;
+  if (attrs || html) return `<img alt="${a}" src="${writeCard(c)}"${attrs}>`;
   return `![${alt.replace(/[[\]]/g, "")}](${writeCard(c)})`;
 }
 
@@ -165,7 +184,8 @@ function quiet(text: string): [number, number][] {
   const fence = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))/gm;
   for (const m of text.matchAll(fence)) out.push([m.index, m.index + m[0].length]);
   for (const m of text.matchAll(/<!--[\s\S]*?(?:-->|$(?![\s\S]))/g)) out.push([m.index, m.index + m[0].length]);
-  for (const m of text.matchAll(/(`+)(?!`)[\s\S]*?[^`]\1(?!`)/g)) {
+  // a code span ends at a blank line, like on GitHub
+  for (const m of text.matchAll(/(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?[^`]\1(?!`)/g)) {
     if (!out.some(([a, b]) => m.index >= a && m.index < b)) out.push([m.index, m.index + m[0].length]);
   }
   return out;
@@ -180,7 +200,6 @@ function attr(tag: string, name: string): { value: string; start: number; end: n
   return { value, start, end: start + value.length };
 }
 
-/** The first address of a srcset. */
 const firstSrc = (srcset: string) => srcset.trim().split(/\s+/)[0] ?? "";
 
 /** Whether a range has nothing else on its lines. */
@@ -191,7 +210,16 @@ function alone(text: string, start: number, end: number) {
   return !before.trim() && !after.trim();
 }
 
-/** The img tag's attributes other than src and alt, as written. */
+/** Whether a range is a paragraph of its own: alone on its lines, with a blank line (or the text's edge) above and
+ * below. */
+function paragraph(text: string, start: number, end: number) {
+  if (!alone(text, start, end)) return false;
+  const above = text.slice(0, text.lastIndexOf("\n", start - 1) + 1);
+  const nl = text.indexOf("\n", end);
+  const below = nl < 0 ? "" : text.slice(nl + 1);
+  return (above === "" || /\n[ \t]*\n$/.test(above) || /^[ \t]*\n$/.test(above)) && (below === "" || /^[ \t]*(\n|$)/.test(below));
+}
+
 function otherAttrs(tag: string) {
   return tag
     .replace(/^<img\b/i, "")
@@ -201,7 +229,6 @@ function otherAttrs(tag: string) {
     .trimEnd();
 }
 
-/** Every questlog card in the text, in order. */
 export function findSpots(text: string, ownHost = ""): Spot[] {
   const hidden = quiet(text);
   const inQuiet = (i: number) => hidden.some(([a, b]) => i >= a && i < b);
@@ -296,8 +323,10 @@ export function replaceSpot(text: string, spot: Spot, card: Card, mode: "single"
   if (was === mode) {
     // a picture keeps its shape; each address follows its role
     let out = text;
+    const dark = spot.dark ? carry(spot.dark, spot.card, card) : card;
     for (const u of [...spot.urls].sort((a, b) => b.start - a.start)) {
-      out = out.slice(0, u.start) + writeCard(card, mode === "auto" ? u.role === "dark" : card.night) + out.slice(u.end);
+      const url = mode === "auto" ? (u.role === "dark" ? writeCard(dark, true) : writeCard(card, false)) : writeCard(card, card.night);
+      out = out.slice(0, u.start) + url + out.slice(u.end);
     }
     return alt === spot.alt ? out : findAndRename(out, spot.start, alt);
   }
@@ -305,7 +334,9 @@ export function replaceSpot(text: string, spot: Spot, card: Card, mode: "single"
   let after = text.slice(spot.end);
   // later lines of a picture block line up with the line it starts on
   const indent = /[ \t]*$/.exec(before)?.[0] ?? "";
-  const fresh = writeSpot(card, alt, mode, spot.attrs, spot.inline).replace(/\n/g, `\n${indent}`);
+  // an img tag stays one, and so does a picture inside an HTML block, where Markdown would show as plain text
+  const html = spot.kind === "html" || (spot.kind === "picture" && !paragraph(text, spot.start, spot.end));
+  const fresh = writeSpot(card, alt, mode, spot.attrs, spot.inline, html).replace(/\n/g, `\n${indent}`);
   if (mode === "auto" && spot.kind === "md" && !spot.inline) {
     // a picture block is HTML, which runs to the next blank line, so a Markdown line becoming one gets blank lines
     // around it; a card already inside HTML stays where it is
