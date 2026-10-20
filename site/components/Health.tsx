@@ -20,13 +20,20 @@ type HealthData = {
   now: number;
   started_at: number;
   queue: number;
-  cache: { entries: number; bytes: number; budget: number; hits: number; misses: number };
+  cache: { entries: number; bytes: number; budget: number; hits: number; misses: number; disk_bytes: number | null; disk_budget: number };
   renders: { busy: number; slots: number };
+  held: number;
+  users: { saved: number | null; in_memory: number; unknown: number };
+  memory: { used: number | null; limit: number | null };
+  traffic: Minute[];
+  recent: string[];
   scenes: string[];
   github: { remaining: number | null; limit: number; resets_at: number | null; paused_secs: number };
   new_users: { this_hour: number; per_hour: number; oldest_frees_in_secs: number | null };
   waiting: { new: number; new_capacity: number; refresh: number; refresh_capacity: number };
 };
+
+type Minute = { minute: number; cache: number; drawn: number; busy: number; error: number; other: number };
 
 const EVERY = 30; // seconds between automatic checks
 const REST = 10; // seconds the Refresh button rests after a press
@@ -39,7 +46,9 @@ const mins = (secs: number) => {
 };
 const num = (n: number) => n.toLocaleString("en-US");
 const mb = (b: number) =>
-  b < 1048576 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
+  b >= 1073741824
+    ? `${+(b / 1073741824).toFixed(1)} GB`
+    : b < 1048576 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
 
 function since(secs: number) {
   const d = Math.floor(secs / 86400);
@@ -282,6 +291,7 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
   const rate = asks ? Math.round((c.hits * 100) / asks) : 0;
 
   return (
+    <>
     <div className={s.grid}>
       <Panel
         title="GitHub quota"
@@ -371,6 +381,135 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
         </p>
         <p>A start clears the in-memory cache; cards saved on disk come back at once.</p>
       </Panel>
+
+      <Panel
+        title="Users"
+        tone={d.held > 0 ? "watch" : "good"}
+        value={d.users.saved === null ? num(d.users.in_memory) : num(d.users.saved)}
+        of={d.users.saved === null ? "users in memory" : "users saved"}
+      >
+        <p>
+          <strong>{num(d.users.in_memory)}</strong> of them asked for since the last start. <strong>{num(d.users.unknown)}</strong>{" "}
+          {d.users.unknown === 1 ? "name was" : "names were"} not on GitHub in the last hour.
+        </p>
+        <p>
+          {d.held > 0
+            ? `${num(d.held)} held after failed GitHub fetches; their cards say the road is closed for 10 minutes.`
+            : "No user is held after failed fetches."}
+        </p>
+      </Panel>
+
+      <Panel
+        title="Server"
+        tone={memTone(d.memory)}
+        value={d.memory.used === null ? "Unknown" : mb(d.memory.used)}
+        of={d.memory.limit ? `of ${mb(d.memory.limit)} memory` : "memory in use"}
+        meter={d.memory.used && d.memory.limit ? { share: d.memory.used / d.memory.limit, label: `${mb(d.memory.used)} of ${mb(d.memory.limit)} memory` } : undefined}
+      >
+        <p>
+          Saved cards on disk: <strong>{d.cache.disk_bytes === null ? "none" : mb(d.cache.disk_bytes)}</strong> of{" "}
+          {mb(d.cache.disk_budget)}. Past that, the hourly trim removes the least recently used.
+        </p>
+      </Panel>
     </div>
+
+    <Traffic minutes={d.traffic} />
+    <Log lines={d.recent} />
+    </>
+  );
+}
+
+const memTone = (m: { used: number | null; limit: number | null }): Tone =>
+  m.used && m.limit ? toneOfUsed(m.used / m.limit) : "good";
+
+const KINDS = [
+  { key: "cache", label: "From the cache" },
+  { key: "drawn", label: "Drawn" },
+  { key: "busy", label: "Busy" },
+  { key: "error", label: "Errors" },
+  { key: "other", label: "Pages and files" },
+] as const;
+
+/** Requests per minute for the last hour, stacked by what they were answered with. */
+function Traffic({ minutes }: { minutes: Minute[] }) {
+  const total = (m: Minute) => KINDS.reduce((n, k) => n + m[k.key], 0);
+  const peak = Math.max(1, ...minutes.map(total));
+  const sums = KINDS.map((k) => minutes.reduce((n, m) => n + m[k.key], 0));
+  const all = sums.reduce((a, b) => a + b, 0);
+  const summary = `${num(all)} requests in the last hour: ` + KINDS.map((k, i) => `${num(sums[i])} ${k.label.toLowerCase()}`).join(", ");
+  return (
+    <section className={`${s.panel} ${s.wide}`} aria-label="Traffic in the last hour">
+      <header className={s.panelHead}>
+        <h2>Traffic, last hour</h2>
+        <span className={s.peak}>busiest minute: {num(peak === 1 && all === 0 ? 0 : peak)}</span>
+      </header>
+      <div className={s.chart} role="img" aria-label={summary}>
+        {minutes.map((m) => (
+          <div key={m.minute} className={s.col} title={`${utc(m.minute)}: ${num(total(m))} requests`}>
+            {KINDS.map((k) =>
+              m[k.key] ? <span key={k.key} data-kind={k.key} style={{ height: `${(m[k.key] / peak) * 100}%` }} /> : null,
+            )}
+          </div>
+        ))}
+      </div>
+      <div className={s.axis} aria-hidden="true">
+        <span>{minutes[0] ? utc(minutes[0].minute) : ""}</span>
+        <span>now</span>
+      </div>
+      <ul className={s.legend}>
+        {KINDS.map((k, i) => (
+          <li key={k.key}>
+            <span data-kind={k.key} aria-hidden="true" />
+            {k.label} <strong>{num(sums[i])}</strong>
+          </li>
+        ))}
+      </ul>
+      <p className={s.notes}>Requests Cloudflare answers from its own cache never reach the server, so they are not counted here.</p>
+    </section>
+  );
+}
+
+/** The latest log lines, newest first, with a filter for warnings and errors and a text search. */
+function Log({ lines }: { lines: string[] }) {
+  const [only, setOnly] = useState(false);
+  const [find, setFind] = useState("");
+  const shown = lines
+    .slice()
+    .reverse()
+    .filter((l) => (!only || / (WARN|ERROR) /.test(l)) && (!find || l.toLowerCase().includes(find.toLowerCase())));
+  return (
+    <section className={`${s.panel} ${s.wide}`} aria-label="Recent log lines">
+      <header className={s.panelHead}>
+        <h2>Recent log</h2>
+        <div className={s.tools}>
+          <button type="button" className={s.toggle} aria-pressed={only} onClick={() => setOnly((o) => !o)}>
+            Warnings and errors only
+          </button>
+          <label className={s.search}>
+            <span className="visually-hidden">Search the log</span>
+            <input id="log-search" type="search" placeholder="Search, e.g. a username" value={find} onChange={(e) => setFind(e.target.value)} />
+          </label>
+        </div>
+      </header>
+      <div className={s.notes}>
+        <p>
+          The last {num(lines.length)} lines since the start, newest first. The full log is in Portainer or <code>docker logs questlog</code>.
+        </p>
+      </div>
+      {shown.length ? (
+        <ol className={s.log}>
+          {shown.map((l, i) => {
+            const level = / ERROR /.test(l) ? "error" : / WARN /.test(l) ? "warn" : "info";
+            return (
+              <li key={i} data-level={level}>
+                {l}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className={s.notes}>{lines.length ? "No line matches. Clear the search or the filter." : "Nothing logged yet."}</p>
+      )}
+    </section>
   );
 }

@@ -40,7 +40,9 @@ async fn main() -> Result<(), questlog::BoxError> {
 
     let cache = questlog::cache::RenderCache::new(questlog::server::CACHE_BYTES)
         .with_disk(std::path::Path::new(&data).join("renders"), env!("RENDER_VERSION"));
-    let app = Arc::new(App::with_cache(Arc::new(Assets::embedded()?), store, queue, cache));
+    let access = questlog::server::Access::from_env();
+    let admin = if access.is_some() { "admin pages open to ADMIN_EMAILS through Cloudflare Access" } else { "admin pages local only" };
+    let app = Arc::new(App::with_cache(Arc::new(Assets::embedded()?), store, queue, cache).with_access(access));
     let trim = app.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(3600));
@@ -67,11 +69,12 @@ async fn main() -> Result<(), questlog::BoxError> {
     let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
     questlog::info!(
         "start",
-        "questlog {} (render version {}) listening on {host}:{port} | data in {data} | up to {new_per_hour} new users an hour",
+        "questlog {} (render version {}) listening on {host}:{port} | data in {data} | up to {new_per_hour} new users an hour | {admin}",
         env!("CARGO_PKG_VERSION"),
         env!("RENDER_VERSION")
     );
-    axum::serve(listener, router(app)).with_graceful_shutdown(shutdown()).await?;
+    let service = router(app).into_make_service_with_connect_info::<std::net::SocketAddr>();
+    axum::serve(listener, service).with_graceful_shutdown(shutdown()).await?;
     Ok(())
 }
 

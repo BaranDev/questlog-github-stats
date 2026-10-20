@@ -1,7 +1,11 @@
 //! HTTP: the card routes, the preview page and /health. Every card response is a 200 image, because a non-200
 //! shows as a broken image on GitHub. The X-Questlog header says which kind it is.
+mod admin;
 mod cards;
 mod pages;
+
+pub use admin::Access;
+use admin::{Outcome, admin_health, admin_status};
 
 use cards::*;
 use pages::*;
@@ -62,6 +66,8 @@ pub struct App<F: Fetcher> {
     pub cache: RenderCache,
     pub ip_renders: IpBudget,
     pub started_at: u64,
+    /// The admin login check; None lets only local runs open the admin pages.
+    pub access: Option<Access>,
     shed: HashMap<Widget, Vec<u8>>,
 }
 
@@ -91,8 +97,14 @@ impl<F: Fetcher> App<F> {
             cache,
             ip_renders: IpBudget::new(RENDERS_PER_IP_MINUTE),
             started_at: now_secs(),
+            access: None,
             shed,
         }
+    }
+
+    pub fn with_access(mut self, access: Option<Access>) -> App<F> {
+        self.access = access;
+        self
     }
 }
 
@@ -102,9 +114,15 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/wiki", get(|| async { static_file("wiki.html", PAGE) }))
         .route("/builder", get(|| async { static_file("builder.html", PAGE) }))
         .route("/status", get(|| async { static_file("status.html", PAGE) }))
-        .route("/admin/status", get(|h: HeaderMap| async move { admin(&h, || static_file("admin/status.html", ADMIN)) }))
+        .route("/admin/status", get(admin_status::<F>))
         .route("/admin/health", get(admin_health::<F>))
-        .route("/static/{*path}", get(|Path(p): Path<String>| async move { static_file(&p, ASSET) }))
+        // the admin page's shell is only served through its guarded address
+        .route(
+            "/static/{*path}",
+            get(|Path(p): Path<String>| async move {
+                if p.starts_with("admin/") { (StatusCode::NOT_FOUND, "not found").into_response() } else { static_file(&p, ASSET) }
+            }),
+        )
         .route("/art/{scene}/{file}", get(art::<F>))
         .route("/demo/message", get(demo_message::<F>))
         .route("/decorations/{name}", get(decoration::<F>))
@@ -149,6 +167,17 @@ async fn log_request(req: axum::extract::Request, next: axum::middleware::Next) 
     }
     let uri: String = uri.chars().take(300).collect();
     let line = format!("{method} {uri} -> {}{answer} | {ms} ms{} | {}", status.as_u16(), bytes.unwrap_or_default(), who.join(" | "));
+    admin::count(if status.is_server_error() || answer.contains("drawing failed") || kind == "failed" {
+        Outcome::Error
+    } else if kind == "busy" {
+        Outcome::Busy
+    } else if answer.contains("drawn in") {
+        Outcome::Drawn
+    } else if answer.contains(" cache") {
+        Outcome::Cache
+    } else {
+        Outcome::Other
+    });
     if status.is_server_error() || answer.contains("drawing failed") {
         crate::error!("http", "{line}");
     } else if matches!(kind, "busy" | "failed") {
@@ -222,48 +251,6 @@ async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::
     }))
 }
 
-/// Pages and data for Baran only. Cloudflare Access guards questlog.cc/admin; the old host and any other name
-/// pointing here get a 404, so the guard can't be stepped around. Local runs (no Cloudflare) are allowed.
-/// ponytail: trusts the Host header behind Cloudflare; verify the Cf-Access-Jwt-Assertion if this ever holds secrets.
-fn admin(h: &HeaderMap, page: impl FnOnce() -> Response) -> Response {
-    let host = h.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
-    let name = host.rsplit_once(':').map_or(host, |(n, _)| n);
-    let local = h.get("cf-ray").is_none() && matches!(name, "127.0.0.1" | "localhost" | "[::1]");
-    if name == "questlog.cc" || local { page() } else { (StatusCode::NOT_FOUND, "not found").into_response() }
-}
-
-/// Never kept by a browser or an edge: it is behind a login.
-const ADMIN: &str = "private, no-store";
-
-async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, h: HeaderMap) -> Response {
-    admin(&h, || {
-        let mut r = full_health(&app).into_response();
-        r.headers_mut().insert(header::CACHE_CONTROL, header::HeaderValue::from_static(ADMIN));
-        r
-    })
-}
-
-/// Everything: counts, capacities, quota, cache and renderer, for /admin/status.
-fn full_health<F: Fetcher>(app: &App<F>) -> Json<serde_json::Value> {
-    let (entries, bytes, hits, misses) = app.cache.stats();
-    let mut v = serde_json::json!({
-        "ok": true,
-        "version": env!("CARGO_PKG_VERSION"),
-        "now": now_secs(),
-        "started_at": app.started_at,
-        "queue": app.queue.len(),
-        "refresh": app.queue.refresh_len(),
-        "cache": {"entries": entries, "bytes": bytes, "budget": CACHE_BYTES, "hits": hits, "misses": misses},
-        "renders": {"busy": RENDER_SLOTS - app.renders.available_permits(), "slots": RENDER_SLOTS},
-        "quota": app.queue.quota(),
-        "scenes": app.assets.scene_names(),
-    });
-    if let (Some(v), serde_json::Value::Object(q)) = (v.as_object_mut(), app.queue.health()) {
-        v.extend(q);
-    }
-    Json(v)
-}
-
 /// The client IP for the per-IP limit, or None where it must not apply: local requests (no Cloudflare header)
 /// and GitHub's image proxy, which fetches every README image from a handful of IPs.
 fn client_ip(h: &HeaderMap) -> Option<String> {
@@ -302,7 +289,7 @@ mod tests {
         let app = Arc::new(App::new(Arc::new(Assets::embedded().unwrap()), store, queue));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
-        let r = router(app.clone());
+        let r = router(app.clone()).into_make_service_with_connect_info::<std::net::SocketAddr>();
         tokio::spawn(async move { axum::serve(listener, r).await.unwrap() });
         (base, app)
     }
@@ -515,13 +502,12 @@ mod tests {
         assert!(v.get("github").is_none() && v.get("quota").is_none(), "no capacities in public: {v}");
         let full: serde_json::Value = reqwest::get(format!("{base}/admin/health")).await.unwrap().json().await.unwrap();
         assert_eq!(full["new_users"]["per_hour"], 600);
+        assert!(full["traffic"].as_array().is_some_and(|t| t.len() == 60) && full["recent"].is_array(), "{full}");
         let client = reqwest::Client::new();
-        for host in ["questlog.cevdetbaran.com", "evil.example"] {
-            let r = client.get(format!("{base}/admin/health")).header("host", host).send().await.unwrap();
-            assert_eq!(r.status(), 404, "{host}");
+        for path in ["/admin/health", "/admin/status", "/static/admin/status.html"] {
+            let r = client.get(format!("{base}{path}")).header("cf-ray", "x").send().await.unwrap();
+            assert_eq!(r.status(), 404, "{path} through Cloudflare without a login");
         }
-        let r = client.get(format!("{base}/admin/health")).header("host", "127.0.0.1").header("cf-ray", "x").send().await.unwrap();
-        assert_eq!(r.status(), 404, "a local name through Cloudflare is not local");
         let scenes = v["scenes"].as_array().unwrap();
         assert!(scenes.contains(&serde_json::json!("forest")), "{scenes:?}");
         assert!(!scenes.contains(&serde_json::json!("_shared")), "shared art is not a scene");

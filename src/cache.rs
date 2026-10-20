@@ -107,6 +107,12 @@ impl RenderCache {
         self.remember(key, bytes);
     }
 
+    /// Bytes of saved cards on disk, for the admin page.
+    pub fn disk_bytes(&self) -> Option<u64> {
+        let dir = std::fs::read_dir(self.disk.as_ref()?).ok()?;
+        Some(dir.flatten().filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum())
+    }
+
     /// Deletes the least recently used saved cards (by modification time) until the disk holds at most `budget`
     /// bytes. Returns how many it deleted.
     pub fn trim_disk(&self, budget: u64) -> usize {

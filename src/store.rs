@@ -95,6 +95,17 @@ impl Store {
         m.touched.remove(login);
     }
 
+    /// (users in memory, logins remembered as not on GitHub), for the admin page.
+    pub fn counts(&self, now: u64) -> (usize, usize) {
+        let m = self.mem.lock().unwrap();
+        (m.users.len(), m.unknown.values().filter(|&&t| now.saturating_sub(t) < UNKNOWN_SECS).count())
+    }
+
+    /// Users saved on disk, for the admin page (lists the folder, so call it off the request threads).
+    pub fn saved_count(&self) -> Option<usize> {
+        Some(std::fs::read_dir(self.dir.join("users")).ok()?.count())
+    }
+
     pub fn mark_unknown(&self, login: &str, now: u64) {
         self.mem.lock().unwrap().unknown.insert(login.to_string(), now);
     }

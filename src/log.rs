@@ -7,11 +7,27 @@
 //! Columns: UTC time, level (INFO, WARN, ERROR), area (start, http, queue, github, cache, status), then the event
 //! in words. Client IPs are never written; Cloudflare's ray id finds the same request in its dashboard.
 use crate::dates::civil_from_days;
+use std::collections::VecDeque;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// The latest lines, newest last, for the admin page.
+static RECENT: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
+const KEEP: usize = 400;
 
 pub fn line(level: &str, area: &str, msg: std::fmt::Arguments) {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    eprintln!("{}  {level:<5}  {area:<7}  {msg}", stamp(secs));
+    let line = format!("{}  {level:<5}  {area:<7}  {msg}", stamp(secs));
+    eprintln!("{line}");
+    let mut r = RECENT.lock().unwrap();
+    if r.len() >= KEEP {
+        r.pop_front();
+    }
+    r.push_back(line);
+}
+
+pub fn recent() -> Vec<String> {
+    RECENT.lock().unwrap().iter().cloned().collect()
 }
 
 /// `2026-10-20 14:32:01` for a Unix time in seconds (UTC).

@@ -198,6 +198,7 @@ impl<F: Fetcher> Queue<F> {
                 "per_hour": cfg.new_per_hour,
                 "oldest_frees_in_secs": next_new,
             },
+            "held": s.failed.values().filter(|&&until| until > now).count(),
             "waiting": {"new": s.pending.len(), "new_capacity": cfg.capacity, "refresh": s.refresh.len(), "refresh_capacity": cfg.refresh_capacity},
         })
     }
