@@ -64,9 +64,13 @@ impl Access {
 
     /// The signed-in email, when the token is Access's, for this app, unexpired, and the email is allowed.
     pub async fn check(&self, token: &str) -> Result<String, String> {
-        let header = decode_header(token).map_err(|e| format!("unreadable login token ({e})"))?;
+        let header = decode_header(token).map_err(|_| "unreadable login token".to_string())?;
+        if !self.validation.algorithms.contains(&header.alg) {
+            return Err(format!("login token uses {:?}, not Access's algorithm", header.alg));
+        }
         let kid = header.kid.ok_or("login token has no key id")?;
-        let key = self.key(&kid).await.ok_or_else(|| format!("login token signed with an unknown key ({kid})"))?;
+        let short: String = kid.chars().take(64).collect();
+        let key = self.key(&kid).await.ok_or_else(|| format!("login token signed with an unknown key ({short:?})"))?;
         let data = decode::<Claims>(token, &key, &self.validation).map_err(|e| format!("login token refused ({e})"))?;
         let email = data.claims.email.unwrap_or_default().to_ascii_lowercase();
         if self.emails.contains(&email) { Ok(email) } else { Err(format!("{email} is signed in but not an admin")) }
@@ -84,6 +88,10 @@ impl Access {
             }
         }
         let mut k = self.keys.write().await;
+        // another request may have fetched while this one waited for the lock
+        if k.fetched.is_some_and(|t| t.elapsed() < REFETCH_AFTER) {
+            return k.by_kid.get(kid).cloned();
+        }
         match self.fetch().await {
             Ok(by_kid) => {
                 crate::info!("admin", "loaded {} Cloudflare Access signing keys", by_kid.len());
@@ -109,7 +117,7 @@ impl Access {
 /// else needs a valid Access login. Every refusal is logged with its reason.
 async fn allowed<F: Fetcher>(app: &App<F>, req: axum::extract::Request) -> bool {
     let loopback = req.extensions().get::<ConnectInfo<SocketAddr>>().is_some_and(|c| c.0.ip().is_loopback());
-    let (uri, h) = (req.uri().to_string(), req.headers().clone());
+    let (uri, h) = (req.uri().to_string().chars().take(300).collect::<String>(), req.headers().clone());
     drop(req); // a request is not Sync, so it can't be held across the key fetch below
     if loopback && h.get("cf-ray").is_none() {
         return true;
@@ -139,14 +147,14 @@ async fn allowed<F: Fetcher>(app: &App<F>, req: axum::extract::Request) -> bool 
 
 pub(super) async fn admin_status<F: Fetcher>(State(app): State<Arc<App<F>>>, req: axum::extract::Request) -> Response {
     if !allowed(&app, req).await {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
     }
     private(static_file("admin/status.html", ADMIN))
 }
 
 pub(super) async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, req: axum::extract::Request) -> Response {
     if !allowed(&app, req).await {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
     }
     let a = app.clone();
     let disk = tokio::task::spawn_blocking(move || (a.cache.disk_bytes(), a.store.saved_count())).await.unwrap_or((None, None));
@@ -272,6 +280,12 @@ mod tests {
             ("another Access app", token("k1", "aud2", "owner@example.com", 600)),
             ("expired", token("k1", "aud1", "owner@example.com", -600)),
             ("unknown key, no refetch within a minute", token("k9", "aud1", "owner@example.com", 600)),
+            ("another algorithm", {
+                let mut h = Header::new(Algorithm::HS384);
+                h.kid = Some("k1".into());
+                let claims = serde_json::json!({"aud": ["aud1"], "iss": format!("https://{TEAM}"), "email": "owner@example.com", "exp": now_secs() + 600});
+                encode(&h, &claims, &EncodingKey::from_secret(b"secret")).unwrap()
+            }),
             ("not a token", "abc.def.ghi".to_string()),
         ] {
             assert!(a.check(&t).await.is_err(), "{why}");

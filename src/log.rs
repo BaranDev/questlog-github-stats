@@ -8,22 +8,36 @@
 //! in words. Client IPs are never written; Cloudflare's ray id finds the same request in its dashboard.
 use crate::dates::civil_from_days;
 use std::collections::VecDeque;
+use std::io::Write;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The latest lines, newest last, for the admin page.
 static RECENT: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
 const KEEP: usize = 400;
+/// Characters of one message; the rest is cut, so a huge header can't make a huge line.
+const MAX_CHARS: usize = 600;
 
 pub fn line(level: &str, area: &str, msg: std::fmt::Arguments) {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let line = format!("{}  {level:<5}  {area:<7}  {msg}", stamp(secs));
-    eprintln!("{line}");
+    let line = format!("{}  {level:<5}  {area:<7}  {}", stamp(secs), clean(&msg.to_string()));
+    let _ = writeln!(std::io::stderr(), "{line}"); // a closed log pipe must not take the server down
     let mut r = RECENT.lock().unwrap();
     if r.len() >= KEEP {
         r.pop_front();
     }
     r.push_back(line);
+}
+
+/// One line of plain text: control characters (newlines, terminal escapes) and bidi overrides become `?`,
+/// and the text is cut at MAX_CHARS.
+pub fn clean(s: &str) -> String {
+    let bidi = |c: char| matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}');
+    let mut out: String = s.chars().take(MAX_CHARS).map(|c| if c.is_control() || bidi(c) { '?' } else { c }).collect();
+    if s.chars().nth(MAX_CHARS).is_some() {
+        out.push_str(" ...(cut)");
+    }
+    out
 }
 
 pub fn recent() -> Vec<String> {
@@ -78,5 +92,12 @@ mod tests {
         assert_eq!(size(512), "512 B");
         assert_eq!(size(18_637), "18.2 KB");
         assert_eq!(size(1_468_006), "1.4 MB");
+    }
+
+    #[test]
+    fn lines_stay_one_safe_line() {
+        assert_eq!(clean("a\nb\r\u{1b}[31mc\u{202E}d\u{9b}"), "a?b??[31mc?d?");
+        let long = clean(&"x".repeat(5000));
+        assert!(long.ends_with(" ...(cut)") && long.chars().count() == MAX_CHARS + 9);
     }
 }

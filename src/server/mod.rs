@@ -209,9 +209,9 @@ fn client_kind(ua: &str) -> String {
     } else if ua.starts_with("github-camo") {
         "GitHub image proxy".into()
     } else if let Some(bot) = ua.split([' ', ';', '(', ')']).find(|w| { let w = w.to_ascii_lowercase(); w.contains("bot") || w.contains("spider") || w.contains("crawl") }) {
-        bot.trim_end_matches(',').to_string()
+        bot.trim_end_matches(',').chars().take(40).collect()
     } else if low.starts_with("curl") || low.starts_with("wget") || low.starts_with("python") || low.starts_with("go-http") {
-        ua.split(' ').next().unwrap_or(ua).to_string()
+        ua.split(' ').next().unwrap_or(ua).chars().take(40).collect()
     } else if low.contains("mozilla") {
         let os = ["Android", "iPhone", "iPad", "Windows", "Mac OS", "Linux"].into_iter().find(|o| ua.contains(o));
         format!("browser{}", os.map(|o| format!(" on {o}")).unwrap_or_default())
@@ -240,13 +240,16 @@ async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::
     let q = app.queue.health();
     let paused = q["github"]["paused_secs"].as_u64().unwrap_or(0);
     let (n, w) = (&q["new_users"], &q["waiting"]);
-    let open = n["this_hour"].as_u64() < n["per_hour"].as_u64() && w["new"].as_u64() < w["new_capacity"].as_u64();
+    let capped = n["this_hour"].as_u64() >= n["per_hour"].as_u64();
+    let open = !capped && w["new"].as_u64() < w["new_capacity"].as_u64();
+    // whole minutes: enough for people, and no second-exact timing for anyone flooding new logins
+    let minutes = |s: Option<u64>| s.map(|s| s.div_ceil(60) * 60);
     Json(serde_json::json!({
         "ok": true,
         "now": now_secs(),
         "started_at": app.started_at,
-        "fetching": {"paused": paused > 0, "back_in_secs": (paused > 0).then_some(paused)},
-        "new_users": {"open": open, "next_opening_secs": if open { None } else { n["oldest_frees_in_secs"].as_u64() }},
+        "fetching": {"paused": paused > 0, "back_in_secs": minutes((paused > 0).then_some(paused))},
+        "new_users": {"open": open, "next_opening_secs": if capped { minutes(n["oldest_frees_in_secs"].as_u64()) } else { None }},
         "scenes": app.assets.scene_names(),
     }))
 }
