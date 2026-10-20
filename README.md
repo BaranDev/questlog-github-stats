@@ -111,6 +111,8 @@ docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog
 
 `.env` holds `GITHUB_TOKEN=` with a fine-grained token that can read public repositories (see `.env.example`). `NEW_LOGINS_PER_HOUR` (600 by default) caps how many logins are fetched for the first time each hour; raise it for a busy day, GitHub's own limit still pauses fetching when it runs low. The server listens on `PORT` (8080) and keeps its cache in `DATA_DIR` (`/data`). With your own token, your own instance can count your private contributions too.
 
+**Watching it.** The server writes one plain line per request and per background event to stderr (`docker logs questlog`): what was asked, whether the card came from the memory cache, the disk cache or was drawn (and how long that took), each GitHub fetch with the quota left, queue decisions, and a status line every 15 minutes. Client IPs are never written; the Cloudflare ray id links a line to Cloudflare's own logs. `/status` and `/health` show the public state (up, whether GitHub fetching runs, whether new users get in, with times in UTC). `/admin/status` and `/admin/health` show every count and capacity; they answer only on the `questlog.cc` host (or locally), so put them behind a login such as Cloudflare Access.
+
 ## Development
 
 The pages at `/`, `/builder` and `/wiki` come from `site/`, a Next.js static export that the binary embeds. Build it before `cargo build`: `cd site && npm ci && npm run build` (it writes `static/`).

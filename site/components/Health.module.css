@@ -1,0 +1,243 @@
+/* The health page: a header with the overall state and a Refresh button, then one glass panel per part of the
+   service, each with a tone chip and a pixel meter built from 20 blocks like the cards' own bars. */
+.page {
+  --good: var(--moss);
+  --watch: var(--ember);
+  --bad: #d0543f;
+  width: min(100% - 2 * var(--gutter), var(--wide));
+  margin: 0 auto;
+  padding: clamp(8rem, 14vw, 11rem) 0 var(--section);
+}
+
+.header {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: clamp(2.5rem, 5vw, 4rem);
+}
+
+.eyebrow {
+  font-family: var(--tiny);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+}
+
+.h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-family: var(--display);
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+  letter-spacing: -0.02em;
+}
+
+/* a square pixel lamp: steady when fine, slow pulse while waiting */
+.dot {
+  flex: none;
+  width: 0.42em;
+  height: 0.42em;
+  background: var(--good);
+  box-shadow: 0 0 0.5em var(--good);
+}
+
+.dot[data-tone="bad"] {
+  background: var(--bad);
+  box-shadow: 0 0 0.5em var(--bad);
+}
+
+.dot[data-tone="wait"] {
+  background: var(--gold);
+  box-shadow: none;
+  animation: pulse 1.4s steps(2) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.refresh {
+  min-height: 2.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.updated {
+  max-width: 46rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.failed {
+  color: #f0a08f;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 1.25rem;
+}
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(8, 7, 12, 0.72);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.panelHead h2 {
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+  color: var(--gold);
+}
+
+.chip {
+  flex: none;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-family: var(--tiny);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7fc58f;
+}
+
+.chip[data-tone="watch"] {
+  color: #e7a564;
+}
+
+.chip[data-tone="bad"] {
+  color: #f0a08f;
+}
+
+.value {
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.of {
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 3px;
+  height: 14px;
+}
+
+.meter span {
+  background: rgba(245, 222, 160, 0.1);
+}
+
+.meter .on {
+  background: var(--good);
+}
+
+.meter[data-tone="watch"] .on {
+  background: var(--watch);
+}
+
+.meter[data-tone="bad"] .on {
+  background: var(--bad);
+}
+
+.notes {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.notes strong {
+  color: var(--parchment);
+  font-variant-numeric: tabular-nums;
+}
+
+.warn {
+  color: #f0a08f;
+}
+
+.raw {
+  margin-top: 2.5rem;
+  color: var(--faint);
+  font-size: 0.95rem;
+}
+
+.raw a {
+  color: var(--gold);
+  text-underline-offset: 3px;
+}
+
+/* loading: panels in their real shape with a soft light passing over */
+.shimmer {
+  min-height: 14rem;
+  background:
+    linear-gradient(100deg, transparent 30%, rgba(245, 222, 160, 0.06) 50%, transparent 70%) 0 0 / 300% 100%,
+    rgba(8, 7, 12, 0.72);
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0, 0 0;
+  }
+  to {
+    background-position: -100% 0, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot[data-tone="wait"],
+  .spin,
+  .shimmer {
+    animation: none;
+  }
+}
+
+.dot[data-tone="watch"] {
+  background: var(--watch);
+  box-shadow: 0 0 0.5em var(--watch);
+}

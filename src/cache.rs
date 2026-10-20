@@ -64,6 +64,11 @@ impl RenderCache {
     }
 
     pub fn get(&self, key: u64) -> Option<Arc<Vec<u8>>> {
+        self.lookup(key).map(|(bytes, _)| bytes)
+    }
+
+    /// Like get, and says where the card was found: "memory" or "disk".
+    pub fn lookup(&self, key: u64) -> Option<(Arc<Vec<u8>>, &'static str)> {
         {
             let mut l = self.inner.lock().unwrap();
             l.tick += 1;
@@ -72,7 +77,7 @@ impl RenderCache {
                 *used = tick;
                 let bytes = bytes.clone();
                 l.hits += 1;
-                return Some(bytes);
+                return Some((bytes, "memory"));
             }
         }
         // not in memory: a card saved on disk is read without holding the lock, then kept in memory
@@ -81,7 +86,7 @@ impl RenderCache {
                 let bytes = Arc::new(bytes);
                 self.remember(key, bytes.clone());
                 self.inner.lock().unwrap().disk_hits += 1;
-                Some(bytes)
+                Some((bytes, "disk"))
             }
             None => {
                 self.inner.lock().unwrap().misses += 1;

@@ -61,8 +61,12 @@ pub struct App<F: Fetcher> {
     pub renders: Arc<Semaphore>,
     pub cache: RenderCache,
     pub ip_renders: IpBudget,
+    pub started_at: u64,
     shed: HashMap<Widget, Vec<u8>>,
 }
+
+/// Cards drawn at the same time; the rest wait up to SHED_AFTER.
+const RENDER_SLOTS: usize = 2;
 
 impl<F: Fetcher> App<F> {
     /// Two render slots; the busy cards for overload are drawn once here, so shedding costs no render.
@@ -83,9 +87,10 @@ impl<F: Fetcher> App<F> {
             assets,
             store,
             queue,
-            renders: Arc::new(Semaphore::new(2)),
+            renders: Arc::new(Semaphore::new(RENDER_SLOTS)),
             cache,
             ip_renders: IpBudget::new(RENDERS_PER_IP_MINUTE),
+            started_at: now_secs(),
             shed,
         }
     }
@@ -96,6 +101,9 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/", get(|| async { static_file("index.html", PAGE) }))
         .route("/wiki", get(|| async { static_file("wiki.html", PAGE) }))
         .route("/builder", get(|| async { static_file("builder.html", PAGE) }))
+        .route("/status", get(|| async { static_file("status.html", PAGE) }))
+        .route("/admin/status", get(|h: HeaderMap| async move { admin(&h, || static_file("admin/status.html", ADMIN)) }))
+        .route("/admin/health", get(admin_health::<F>))
         .route("/static/{*path}", get(|Path(p): Path<String>| async move { static_file(&p, ASSET) }))
         .route("/art/{scene}/{file}", get(art::<F>))
         .route("/demo/message", get(demo_message::<F>))
@@ -108,18 +116,152 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/{user}/{widget}/{scene}", get(card_at::<F>))
         .route("/{user}/{widget}/{scene}/{time}", get(card_at::<F>))
         .with_state(app)
+        .layer(axum::middleware::from_fn(log_request))
 }
 
-async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::Value> {
+/// One line per request: what was asked, what was answered and how, how long it took, and who asked (country,
+/// kind of client, Cloudflare ray id). Busy and failed answers are WARN, server errors ERROR.
+async fn log_request(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    let start = std::time::Instant::now();
+    let (method, uri) = (req.method().clone(), req.uri().to_string());
+    let h = req.headers();
+    let hv = |k: &str| h.get(k).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    let (country, ray, client) = (hv("cf-ipcountry"), hv("cf-ray"), client_kind(&hv("user-agent")));
+    let res = next.run(req).await;
+    let ms = start.elapsed().as_millis();
+    let status = res.status();
+    let kind = res.headers().get("x-questlog").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let answer = match (kind, res.extensions().get::<Served>()) {
+        ("", _) if status == StatusCode::NOT_FOUND => " no such address".to_string(),
+        ("", _) if uri.starts_with("/health") || uri.starts_with("/admin/health") => " health report".to_string(),
+        ("", _) if status.is_success() => " page or file built into the server".to_string(),
+        ("", _) => String::new(),
+        (k, Some(Served(how))) => format!(" {}, {how}", describe(k)),
+        (k, None) => format!(" {}", describe(k)),
+    };
+    let bytes = axum::body::HttpBody::size_hint(res.body()).exact().map(|b| format!(" | {}", crate::log::size(b)));
+    let mut who = vec![client];
+    if !country.is_empty() {
+        who.push(country);
+    }
+    if !ray.is_empty() {
+        who.push(format!("ray {ray}"));
+    }
+    let uri: String = uri.chars().take(300).collect();
+    let line = format!("{method} {uri} -> {}{answer} | {ms} ms{} | {}", status.as_u16(), bytes.unwrap_or_default(), who.join(" | "));
+    if status.is_server_error() || answer.contains("drawing failed") {
+        crate::error!("http", "{line}");
+    } else if matches!(kind, "busy" | "failed") {
+        crate::warn!("http", "{line}");
+    } else {
+        crate::info!("http", "{line}");
+    }
+    res
+}
+
+/// What the X-Questlog kind means, in words.
+fn describe(kind: &str) -> &str {
+    match kind {
+        "card" => "card",
+        "placeholder" => "placeholder (user waits for the first GitHub fetch)",
+        "unknown" => "\"no adventurer by that name\" (not a GitHub user)",
+        "busy" => "busy card",
+        "failed" => "\"road is closed\" (GitHub fetches for this user keep failing)",
+        "error" => "error card (bad options in the address)",
+        k => k,
+    }
+}
+
+/// Who asked, from the user agent: GitHub's image proxy, a browser, a known tool or bot, or the start of it.
+fn client_kind(ua: &str) -> String {
+    let low = ua.to_ascii_lowercase();
+    if ua.is_empty() {
+        "no user agent".into()
+    } else if ua.starts_with("github-camo") {
+        "GitHub image proxy".into()
+    } else if let Some(bot) = ua.split([' ', ';', '(', ')']).find(|w| { let w = w.to_ascii_lowercase(); w.contains("bot") || w.contains("spider") || w.contains("crawl") }) {
+        bot.trim_end_matches(',').to_string()
+    } else if low.starts_with("curl") || low.starts_with("wget") || low.starts_with("python") || low.starts_with("go-http") {
+        ua.split(' ').next().unwrap_or(ua).to_string()
+    } else if low.contains("mozilla") {
+        let os = ["Android", "iPhone", "iPad", "Windows", "Mac OS", "Linux"].into_iter().find(|o| ua.contains(o));
+        format!("browser{}", os.map(|o| format!(" on {o}")).unwrap_or_default())
+    } else {
+        ua.chars().take(40).collect()
+    }
+}
+
+/// A status line every 15 minutes, so the log shows the service's state without opening /health.
+pub fn log_status<F: Fetcher>(app: &App<F>) {
     let (entries, bytes, hits, misses) = app.cache.stats();
+    let rate = if hits + misses > 0 { hits * 100 / (hits + misses) } else { 0 };
+    let quota = app.queue.quota().map_or("not known yet (no fetch since start)".into(), |q| format!("{q} points left this hour"));
+    crate::info!(
+        "status",
+        "{} new users waiting, {} refreshes waiting | cache {entries} cards, {}, {rate}% of asks found ({hits} found, {misses} drawn) | GitHub quota {quota}",
+        app.queue.len(),
+        app.queue.refresh_len(),
+        crate::log::size(bytes as u64)
+    );
+}
+
+/// The public health: up or not, whether GitHub fetching runs, and whether new users get in now or when they
+/// will. No capacities or counts, so it tells nobody how much load it takes to fill the service.
+async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::Value> {
+    let q = app.queue.health();
+    let paused = q["github"]["paused_secs"].as_u64().unwrap_or(0);
+    let (n, w) = (&q["new_users"], &q["waiting"]);
+    let open = n["this_hour"].as_u64() < n["per_hour"].as_u64() && w["new"].as_u64() < w["new_capacity"].as_u64();
     Json(serde_json::json!({
         "ok": true,
-        "queue": app.queue.len(),
-        "refresh": app.queue.refresh_len(),
-        "cache": {"entries": entries, "bytes": bytes, "hits": hits, "misses": misses},
-        "quota": app.queue.quota(),
+        "now": now_secs(),
+        "started_at": app.started_at,
+        "fetching": {"paused": paused > 0, "back_in_secs": (paused > 0).then_some(paused)},
+        "new_users": {"open": open, "next_opening_secs": if open { None } else { n["oldest_frees_in_secs"].as_u64() }},
         "scenes": app.assets.scene_names(),
     }))
+}
+
+/// Pages and data for Baran only. Cloudflare Access guards questlog.cc/admin; the old host and any other name
+/// pointing here get a 404, so the guard can't be stepped around. Local runs (no Cloudflare) are allowed.
+/// ponytail: trusts the Host header behind Cloudflare; verify the Cf-Access-Jwt-Assertion if this ever holds secrets.
+fn admin(h: &HeaderMap, page: impl FnOnce() -> Response) -> Response {
+    let host = h.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let name = host.rsplit_once(':').map_or(host, |(n, _)| n);
+    let local = h.get("cf-ray").is_none() && matches!(name, "127.0.0.1" | "localhost" | "[::1]");
+    if name == "questlog.cc" || local { page() } else { (StatusCode::NOT_FOUND, "not found").into_response() }
+}
+
+/// Never kept by a browser or an edge: it is behind a login.
+const ADMIN: &str = "private, no-store";
+
+async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, h: HeaderMap) -> Response {
+    admin(&h, || {
+        let mut r = full_health(&app).into_response();
+        r.headers_mut().insert(header::CACHE_CONTROL, header::HeaderValue::from_static(ADMIN));
+        r
+    })
+}
+
+/// Everything: counts, capacities, quota, cache and renderer, for /admin/status.
+fn full_health<F: Fetcher>(app: &App<F>) -> Json<serde_json::Value> {
+    let (entries, bytes, hits, misses) = app.cache.stats();
+    let mut v = serde_json::json!({
+        "ok": true,
+        "version": env!("CARGO_PKG_VERSION"),
+        "now": now_secs(),
+        "started_at": app.started_at,
+        "queue": app.queue.len(),
+        "refresh": app.queue.refresh_len(),
+        "cache": {"entries": entries, "bytes": bytes, "budget": CACHE_BYTES, "hits": hits, "misses": misses},
+        "renders": {"busy": RENDER_SLOTS - app.renders.available_permits(), "slots": RENDER_SLOTS},
+        "quota": app.queue.quota(),
+        "scenes": app.assets.scene_names(),
+    });
+    if let (Some(v), serde_json::Value::Object(q)) = (v.as_object_mut(), app.queue.health()) {
+        v.extend(q);
+    }
+    Json(v)
 }
 
 /// The client IP for the per-IP limit, or None where it must not apply: local requests (no Cloudflare header)
@@ -369,6 +511,17 @@ mod tests {
         let (base, _) = serve(QueueConfig::default()).await;
         let v: serde_json::Value = reqwest::get(format!("{base}/health")).await.unwrap().json().await.unwrap();
         assert_eq!(v["ok"], true);
+        assert_eq!(v["new_users"]["open"], true);
+        assert!(v.get("github").is_none() && v.get("quota").is_none(), "no capacities in public: {v}");
+        let full: serde_json::Value = reqwest::get(format!("{base}/admin/health")).await.unwrap().json().await.unwrap();
+        assert_eq!(full["new_users"]["per_hour"], 600);
+        let client = reqwest::Client::new();
+        for host in ["questlog.cevdetbaran.com", "evil.example"] {
+            let r = client.get(format!("{base}/admin/health")).header("host", host).send().await.unwrap();
+            assert_eq!(r.status(), 404, "{host}");
+        }
+        let r = client.get(format!("{base}/admin/health")).header("host", "127.0.0.1").header("cf-ray", "x").send().await.unwrap();
+        assert_eq!(r.status(), 404, "a local name through Cloudflare is not local");
         let scenes = v["scenes"].as_array().unwrap();
         assert!(scenes.contains(&serde_json::json!("forest")), "{scenes:?}");
         assert!(!scenes.contains(&serde_json::json!("_shared")), "shared art is not a scene");
