@@ -23,6 +23,8 @@ pub struct Card<'a> {
     /// The title at twice the card's resolution, laid over every frame when the card is encoded at scale 2 or more:
     /// the painting's hard pixels made the big letters hard to read. None at scale 1, where the title is in `layer`.
     pub title_layer: Option<Image>,
+    /// pixels=chunky: the painting drawn in 2x2 blocks; the text, bars and fire keep their own pixels.
+    pub chunky: bool,
 }
 
 /// Where note lines may go: x, top y, width, and the y they must end above.
@@ -42,6 +44,7 @@ impl<'a> Card<'a> {
             outline_color: None,
             truncate: true,
             title_layer: None,
+            chunky: false,
         })
     }
 
@@ -179,6 +182,9 @@ impl<'a> Card<'a> {
             (Some(night), true) => night.clone(),
             _ => self.scene.tint(&self.painting.image, self.night),
         };
+        if self.chunky {
+            out = out.chunky();
+        }
         out.alpha_composite(&self.layer, 0, 0);
         out
     }
