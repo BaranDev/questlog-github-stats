@@ -365,8 +365,10 @@ export default function Wiki() {
               <Code>{`![About Me](${HOST}/decorations/reading-nook?title=About%20Me)`}</Code>
               <p>
                 Decorations take only <code>title</code>, <code>title_color</code>, <code>outline_color</code>,{" "}
-                <code>truncate</code>, <code>animate</code> and <code>scale</code>. A title too long for its place is
-                trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.
+                <code>truncate</code>, <code>animate</code>, <code>scale</code> and <code>time</code>. A title too long
+                for its place is trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.{" "}
+                <code>time=night</code> draws the night painting; the builder can switch it with dark mode, as for the
+                cards.
               </p>
               <div className={w.grid2}>
                 {DECORATIONS.map(({ name, label, title, h }) => (

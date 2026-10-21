@@ -8,7 +8,7 @@ use crate::scene::{Align, Assets};
 use crate::widgets::Drawn;
 use std::collections::HashMap;
 
-pub const OPTIONS: [&str; 6] = ["title", "title_color", "outline_color", "truncate", "animate", "scale"];
+pub const OPTIONS: [&str; 7] = ["title", "title_color", "outline_color", "truncate", "animate", "scale", "time"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Options {
@@ -18,11 +18,13 @@ pub struct Options {
     pub truncate: bool,
     pub animate: bool,
     pub scale: u8,
+    /// `time=night`: the night painting, for a dark theme.
+    pub night: bool,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { title: String::new(), title_color: None, outline_color: None, truncate: true, animate: true, scale: 5 }
+        Options { title: String::new(), title_color: None, outline_color: None, truncate: true, animate: true, scale: 5, night: false }
     }
 }
 
@@ -37,6 +39,11 @@ pub fn parse(q: &HashMap<String, String>) -> Result<Options, String> {
         None | Some("true") | Some("1") => Ok(true),
         Some("false") | Some("0") => Ok(false),
         Some(v) => Err(format!("Unknown {k} '{}' (use true or false)", clip(v))),
+    };
+    o.night = match q.get("time").map(String::as_str) {
+        None | Some("day") => false,
+        Some("night") => true,
+        Some(t) => return Err(format!("Unknown time '{}' (use day or night)", clip(t))),
     };
     o.truncate = switch("truncate")?;
     o.animate = switch("animate")?;
@@ -58,7 +65,8 @@ pub fn parse(q: &HashMap<String, String>) -> Result<Options, String> {
 /// each frame shows. None for an unknown name.
 pub fn render(assets: &Assets, name: &str, o: &Options) -> Option<(Drawn, u16)> {
     let d = assets.decorations.get(name)?;
-    let mut frames = if o.animate { d.frames.clone() } else { d.frames[..1].to_vec() };
+    let painting = if o.night && !d.night.is_empty() { &d.night } else { &d.frames };
+    let mut frames = if o.animate { painting.clone() } else { painting[..1].to_vec() };
     let (w, h) = (frames[0].w, frames[0].h);
     let mut title = (o.scale >= 2).then(|| Image::new(2 * w, 2 * h));
     let line = if o.truncate { fit(&assets.title_font, &o.title, d.title.w) } else { o.title.clone() };
@@ -98,6 +106,8 @@ mod tests {
         assert!(e.starts_with("Decorations take title,") && e.ends_with("not 'user'"), "{e}");
         assert!(parse(&q(&[("scale", "9")])).unwrap_err().starts_with("Unknown scale '9'"));
         assert!(parse(&q(&[("outline_color", "red")])).unwrap_err().starts_with("Bad outline_color"));
+        assert!(parse(&q(&[("time", "night")])).unwrap().night);
+        assert!(parse(&q(&[("time", "noon")])).unwrap_err().starts_with("Unknown time 'noon'"));
     }
 
     #[test]
@@ -115,6 +125,11 @@ mod tests {
             assert!(coarse.title.is_none() && coarse.frames.len() == 1 && coarse.frames[0] != plain.frames[0], "{name}: scale 1");
         }
         assert!(render(&a, "nope", &Options::default()).is_none());
+        for (name, d) in &a.decorations {
+            assert_eq!(d.night.len(), d.frames.len(), "{name} has a night painting");
+            let (night, _) = render(&a, name, &Options { night: true, ..Default::default() }).unwrap();
+            assert_ne!(night.frames[0], render(&a, name, &Options::default()).unwrap().0.frames[0], "{name}: night differs");
+        }
     }
 
     #[test]

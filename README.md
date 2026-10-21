@@ -66,7 +66,7 @@ Painted banners to head a section of your README or divide two, with an optional
 | `forest-divider` | a mossy log, lower than the others; no title unless you give one |
 | `forest-footer` | glowing mushrooms and ferns, as low as the divider; for the end of a README |
 
-Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate` and `scale`; any other option draws an error card.
+Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate`, `scale` and `time` (`time=night` for the night painting); any other option draws an error card.
 
 ## Options
 
