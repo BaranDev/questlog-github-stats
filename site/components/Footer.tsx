@@ -11,6 +11,7 @@ export default function Footer() {
         <nav aria-label="Footer">
           <a href="/builder">Make my cards</a>
           <a href="/#scenes">Scenes</a>
+          <a href="/cards">All cards</a>
           <a href="/wiki">Wiki</a>
           <a href="/status">Health</a>
           <a href={REPO}>GitHub</a>

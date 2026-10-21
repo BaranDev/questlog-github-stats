@@ -491,3 +491,15 @@ img[src*="/streak"] {
 .nav.nav-still {
   position: absolute;
 }
+
+.nav-gh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
+.gh-mark {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+}

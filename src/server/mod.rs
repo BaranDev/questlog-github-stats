@@ -114,6 +114,7 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/wiki", get(|| async { static_file("wiki.html", PAGE) }))
         .route("/builder", get(|| async { static_file("builder.html", PAGE) }))
         .route("/status", get(|| async { static_file("status.html", PAGE) }))
+        .route("/cards", get(|| async { static_file("cards.html", PAGE) }))
         .route("/admin/status", get(admin_status::<F>))
         .route("/admin/health", get(admin_health::<F>))
         // the admin page's shell is only served through its guarded address
