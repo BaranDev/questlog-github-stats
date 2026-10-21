@@ -77,7 +77,7 @@ To switch to the night painting for readers in dark mode, add `time=night` to th
 | `forest-divider` | a mossy log, lower than the others; no title unless you give one |
 | `forest-footer` | glowing mushrooms and ferns, as low as the divider; for the end of a README |
 
-Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate`, `scale` and `time` (`time=night` for the night painting); any other option draws an error card.
+Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate`, `scale`, `time` (`time=night` for the night painting) and `pixels`; any other option draws an error card.
 
 ## Options
 
@@ -86,6 +86,7 @@ Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `anim
 | `user` | your GitHub login | required |
 | `scene` | any scene above | `forest` |
 | `time` | `day`, `night` | `day` |
+| `pixels` | `fine`, `chunky`: `chunky` draws the painting in pixels twice as big; text, bars and fire stay sharp | `fine` |
 | `title` | any text, up to 60 characters | the scene's title |
 | `subtitle` | any text, up to 60 characters | `/stats`: a class from your top language; none on the others |
 | `labels` | `key:Text,key:Text`, e.g. `commits:Deeds`; keys below | the scene's labels |

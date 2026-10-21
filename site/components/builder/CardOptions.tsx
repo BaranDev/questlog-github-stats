@@ -148,6 +148,16 @@ function DecorationOptions({ spot, index, count, onChange, onRemove, onClose, on
             : "Pick Switch with dark mode to show night to readers who use GitHub in dark mode."
         }
       />
+      <Segmented<"fine" | "chunky">
+        label="Pixels"
+        value={getParam(c, "pixels") === "chunky" ? "chunky" : "fine"}
+        onChange={(v) => set("pixels", v === "chunky" ? "chunky" : "", false)}
+        options={[
+          { value: "fine", label: "Fine" },
+          { value: "chunky", label: "Chunky" },
+        ]}
+        help="Chunky draws the painting in pixels twice as big; the words stay sharp. The switch above the preview sets every card at once."
+      />
       <Field label="Title" value={title} onChange={(v) => set("title", v)} help="Empty: the painting alone. Example: About Me" />
       <details className={s.more}>
         <summary>
@@ -267,6 +277,16 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
         }
       />
 
+      <Segmented<"fine" | "chunky">
+        label="Pixels"
+        value={getParam(c, "pixels") === "chunky" ? "chunky" : "fine"}
+        onChange={(v) => set("pixels", v === "chunky" ? "chunky" : "", false)}
+        options={[
+          { value: "fine", label: "Fine" },
+          { value: "chunky", label: "Chunky" },
+        ]}
+        help="Chunky draws the painting in pixels twice as big; the words stay sharp. The switch above the preview sets every card at once."
+      />
       {c.widget === "streak" && (
         <Segmented
           label="Fire"

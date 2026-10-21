@@ -1868,3 +1868,129 @@
     padding: 0.9rem 1rem 1.25rem;
   }
 }
+
+/* The guided tour: the page dimmed around the thing being shown, a card that explains it. The page stays usable. */
+.coach {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.coachDim {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 5, 10, 0.62);
+}
+
+.coachHole {
+  position: fixed;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 0 9999px rgba(6, 5, 10, 0.62);
+  transition:
+    left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.coachCard {
+  position: fixed;
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.1rem 1.2rem 1rem;
+  border: 1px solid rgba(245, 222, 160, 0.3);
+  border-radius: 20px;
+  background: var(--night-2);
+  color: var(--parchment);
+  box-shadow: 0 30px 80px -20px #000;
+  pointer-events: auto;
+}
+
+.coachCard:focus {
+  outline: none;
+}
+
+.coachHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.coachClose {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.coachClose:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--parchment);
+}
+
+.coachClose svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.coachTitle {
+  font-size: 1.6rem;
+  color: var(--gold);
+}
+
+.coachBody {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.coachDots {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.coachDots span {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: rgba(245, 222, 160, 0.2);
+}
+
+.coachDots span[data-on] {
+  background: var(--gold);
+}
+
+.coachFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.coachNav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.themeSwitch button[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.themeSwitch button[aria-disabled="true"][aria-checked="true"] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coachHole {
+    transition: none;
+  }
+}

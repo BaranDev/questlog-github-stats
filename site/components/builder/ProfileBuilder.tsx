@@ -17,14 +17,15 @@ import {
   Undo2,
 } from "lucide-react";
 import { DECORATIONS, HOST, cardName, type Widget } from "../data";
-import { HOSTS, autoAlt, findSpots, insertAt, kindName, removeSpot, renameUser, replaceSpot, writeSpot, type Card } from "./cards";
+import { HOSTS, autoAlt, findSpots, getParam, insertAt, kindName, removeSpot, renameUser, replaceSpot, setParam, writeSpot, type Card, type Spot } from "./cards";
+import Coach, { type CoachStep } from "./Coach";
 import CardOptions, { type Mode } from "./CardOptions";
 import AddCard from "./AddCard";
 import CopyHelp from "./CopyHelp";
 import Editor from "./Editor";
-import LoginStep, { TourSteps, type Profile, type Start } from "./LoginStep";
+import LoginStep, { type Profile, type Start } from "./LoginStep";
 import ProfilePreview from "./ProfilePreview";
-import { CloseButton, Sheet } from "./ui";
+import { Sheet } from "./ui";
 import type { Theme } from "./render";
 import s from "./builder.module.css";
 
@@ -35,7 +36,7 @@ const OLD_KEY = "questlog-builder";
 /** What the server says about the login, from its X-Questlog header. */
 type Status = "card" | "placeholder" | "unknown" | "busy" | "failed" | "error" | "offline" | "checking";
 
-type Saved = { profile: Profile | null; text: string; theme: Theme; tour: boolean; changed: boolean; copied: boolean };
+type Saved = { profile: Profile | null; text: string; theme: Theme; tour: boolean; coached: boolean; changed: boolean; copied: boolean };
 
 function restore(): Partial<Saved> & { oldLogin?: string } {
   try {
@@ -51,6 +52,7 @@ function restore(): Partial<Saved> & { oldLogin?: string } {
         text: typeof v.text === "string" ? v.text : "",
         theme: v.theme === "light" ? "light" : "dark",
         tour: v.tour !== false,
+        coached: v.coached === true,
         changed: v.changed === true,
         copied: v.copied === true,
       };
@@ -120,6 +122,55 @@ const STEPS = [
 ];
 
 type Toast = { text: string; undo?: boolean; error?: boolean; n: number };
+
+type Pixels = "fine" | "chunky" | "mixed";
+
+/** Whether a card (and its night card, in a picture block) draws chunky pixels. */
+const chunky = (sp: Spot) => getParam(sp.card, "pixels") === "chunky";
+
+/** The pixel style of every card at once: fine, chunky, or mixed when they differ. No cards counts as fine. */
+function pixelsOf(spots: Spot[]): Pixels {
+  const n = spots.filter(chunky).length;
+  return n === 0 ? "fine" : n === spots.length ? "chunky" : "mixed";
+}
+
+/** The guided tour, shown once when the reader reaches step 3 (or from "How does this work?"). */
+const COACH: CoachStep[] = [
+  {
+    target: "[data-spot]",
+    tab: "preview",
+    title: "This is your card",
+    body: "Click it, or any card in the preview, to change it: its scene, day or night, its words and its pixel style.",
+  },
+  {
+    target: '[data-coach="pixels"]',
+    tab: "preview",
+    title: "One style for every card",
+    body: "Fine keeps the paintings sharp; Chunky draws them in pixels twice as big. Pick one to change every card at once. When cards differ, it shows Mixed.",
+  },
+  {
+    target: '[data-coach="theme"]',
+    tab: "preview",
+    title: "Light and dark readers",
+    body: "People read GitHub in a light or a dark theme. Switch here to see your profile the way each of them will.",
+  },
+  {
+    target: '[data-coach="editor"]',
+    tab: "write",
+    title: "Your README text",
+    body: "This is the text GitHub shows on your profile. Type anything you like; the lines with questlog in them are your cards.",
+  },
+  {
+    target: '[data-coach="add"]',
+    title: "More cards and banners",
+    body: "Add a card puts a new card, or a painted decoration banner, where your cursor is in the text.",
+  },
+  {
+    target: '[data-coach="copy"]',
+    title: "Copy it to GitHub",
+    body: "When it looks right, copy the text and paste it into your profile README. Where do I paste it? shows you how, step by step.",
+  },
+];
 
 /** How long a message stays: longer when it can be undone, longest when it says something went wrong. */
 const life = (t: Toast) => (t.error ? 9000 : t.undo ? 7000 : 4500);
@@ -193,7 +244,8 @@ export default function ProfileBuilder() {
   const [shown, setShown] = useState("");
   const [theme, setTheme] = useState<Theme>("dark");
   const [tour, setTour] = useState(true);
-  const [tourOpen, setTourOpen] = useState(false);
+  const [coached, setCoached] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const [changed, setChanged] = useState(false);
   const [copied, setCopied] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
@@ -226,6 +278,7 @@ export default function ProfileBuilder() {
     setShown(r.text ?? "");
     setTheme(r.theme ?? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
     setTour(r.tour ?? true);
+    setCoached(r.coached ?? false);
     setChanged(r.changed ?? false);
     setCopied(r.copied ?? false);
     // cards name questlog.cc; only a self-hosted copy on its own domain names itself
@@ -239,14 +292,14 @@ export default function ProfileBuilder() {
     if (!ready) return;
     const t = window.setTimeout(() => {
       try {
-        const saved: Saved = { profile, text, theme, tour, changed, copied };
+        const saved: Saved = { profile, text, theme, tour, coached, changed, copied };
         localStorage.setItem(KEY, JSON.stringify(saved));
       } catch {
         // storage can be unavailable (private mode); the work then lasts for this visit
       }
     }, 400);
     return () => window.clearTimeout(t);
-  }, [ready, profile, text, theme, tour, changed, copied]);
+  }, [ready, profile, text, theme, tour, coached, changed, copied]);
 
   // typing settles for a moment before the preview redraws, so cards are not asked for on every key
   useEffect(() => {
@@ -342,6 +395,33 @@ export default function ProfileBuilder() {
     setToast(null);
   };
   const say = (t: string, o: { undo?: boolean; error?: boolean } = {}) => setToast({ text: t, ...o, n: Date.now() });
+
+  // the tour opens by itself once, when the first card is in and nothing has been changed yet (step 3)
+  useEffect(() => {
+    if (!ready || coached || coachOpen || !profile || asking || adding || sel !== null || changed || copied || !spots.length) return;
+    const t = window.setTimeout(() => setCoachOpen(true), 900);
+    return () => window.clearTimeout(t);
+  }, [ready, coached, coachOpen, profile, asking, adding, sel, changed, copied, spots.length]);
+
+  const endCoach = (finished: boolean) => {
+    setCoachOpen(false);
+    setCoached(true);
+    if (!finished) say("Tour skipped. How does this work? at the top shows it again.");
+  };
+
+  const pixels = pixelsOf(spots);
+  /** Every card to one pixel style; each card can still be changed on its own afterwards (the chooser then says Mixed). */
+  const setPixels = (to: "fine" | "chunky") => {
+    if (!spots.length || pixels === to) return;
+    let next = text;
+    for (const sp of [...spots].reverse()) {
+      const mode: Mode = sp.kind === "picture" && sp.dark ? "auto" : "single";
+      next = replaceSpot(next, sp, setParam(sp.card, "pixels", to === "chunky" ? "chunky" : ""), mode);
+    }
+    edit(next, { now: true });
+    setChanged(true);
+    say(`Every card now uses ${to} pixels.`, { undo: true });
+  };
 
   const onLogin = (p: Profile, next: string | null, start: Start) => {
     const old = profile?.login;
@@ -572,7 +652,7 @@ export default function ProfileBuilder() {
           <h1 className={s.h1}>Profile builder</h1>
           <p className={s.lede}>Write your GitHub profile README here and see it the way GitHub will show it. Follow the four steps.</p>
         </div>
-        <button type="button" className={`btn ${s.quiet}`} onClick={() => setTourOpen(true)}>
+        <button type="button" className={`btn ${s.quiet}`} onClick={() => setCoachOpen(true)}>
           <CircleHelp aria-hidden="true" />
           How does this work?
         </button>
@@ -630,7 +710,12 @@ export default function ProfileBuilder() {
               {STEPS[1].title}
             </span>
             <p>{STEPS[1].wide}</p>
-            <button type="button" className={`btn ${now === 1 ? "btn-primary" : "btn-ghost"} ${s.small}`} onClick={openAdd}>
+            <button
+              type="button"
+              className={`btn ${now === 1 ? "btn-primary" : "btn-ghost"} ${s.small}`}
+              onClick={openAdd}
+              data-coach="add"
+            >
               <Plus aria-hidden="true" />
               Add a card
             </button>
@@ -649,7 +734,12 @@ export default function ProfileBuilder() {
             </span>
             <p>{STEPS[3].wide}</p>
             <span className={s.stepButtons}>
-              <button type="button" className={`btn ${now === 3 || now === -1 ? "btn-primary" : "btn-ghost"} ${s.small}`} onClick={copy}>
+              <button
+                type="button"
+                className={`btn ${now === 3 || now === -1 ? "btn-primary" : "btn-ghost"} ${s.small}`}
+                onClick={copy}
+                data-coach="copy"
+              >
                 {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
                 {copied ? "Copy again" : "Copy README"}
               </button>
@@ -681,7 +771,11 @@ export default function ProfileBuilder() {
       )}
 
       <div ref={work} className={s.work} data-tab={narrow ? tab : undefined}>
-        <section className={`${s.pane} ${s.writePane}`} aria-label={!narrow && options ? "Card options" : "Your README"}>
+        <section
+          className={`${s.pane} ${s.writePane}`}
+          aria-label={!narrow && options ? "Card options" : "Your README"}
+          data-coach="editor"
+        >
           {!narrow && options ? (
             <>
               <div className={s.paneHead}>
@@ -738,10 +832,38 @@ export default function ProfileBuilder() {
               <Eye aria-hidden="true" />
               Preview: your GitHub profile
             </span>
+            <span className={s.paneTools}>
+            <span
+              className={s.themeSwitch}
+              role="radiogroup"
+              aria-label="Pixel style of every card"
+              data-coach="pixels"
+              onKeyDown={arrows(["fine", "chunky"] as const, pixels === "mixed" ? "fine" : pixels, setPixels)}
+            >
+              {(["fine", "chunky", "mixed"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  role="radio"
+                  aria-checked={pixels === p}
+                  aria-disabled={p === "mixed" || !spots.length}
+                  tabIndex={pixels === p || (pixels === "mixed" && p === "fine") ? 0 : -1}
+                  title={
+                    p === "mixed"
+                      ? "Shown when your cards use different styles; pick Fine or Chunky to make them all the same"
+                      : `${p === "fine" ? "Sharp" : "Bigger"} pixels on every card`
+                  }
+                  onClick={() => p !== "mixed" && setPixels(p)}
+                >
+                  {p === "fine" ? "Fine" : p === "chunky" ? "Chunky" : "Mixed"}
+                </button>
+              ))}
+            </span>
             <span
               className={s.themeSwitch}
               role="radiogroup"
               aria-label="GitHub theme"
+              data-coach="theme"
               onKeyDown={arrows(["light", "dark"] as const, theme, setTheme)}
             >
               {(["light", "dark"] as const).map((t) => (
@@ -757,6 +879,7 @@ export default function ProfileBuilder() {
                   {t === "light" ? "Light" : "Dark"}
                 </button>
               ))}
+            </span>
             </span>
           </div>
           {notice}
@@ -793,11 +916,16 @@ export default function ProfileBuilder() {
 
       {narrow && (
         <div className={s.dock}>
-          <button type="button" className={`btn ${now === 1 ? "btn-primary" : "btn-ghost"}`} onClick={openAdd}>
+          <button type="button" className={`btn ${now === 1 ? "btn-primary" : "btn-ghost"}`} onClick={openAdd} data-coach="add">
             <Plus aria-hidden="true" />
             Add a card
           </button>
-          <button type="button" className={`btn ${now === 3 || now === -1 ? "btn-primary" : "btn-ghost"}`} onClick={copy}>
+          <button
+            type="button"
+            className={`btn ${now === 3 || now === -1 ? "btn-primary" : "btn-ghost"}`}
+            onClick={copy}
+            data-coach="copy"
+          >
             {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
             {copied ? "Copy again" : "Copy README"}
           </button>
@@ -829,22 +957,7 @@ export default function ProfileBuilder() {
           }}
         />
       </Sheet>
-      <Sheet open={tourOpen} onClose={() => setTourOpen(false)} label="How the builder works">
-        <div className={s.opts}>
-          <div className={s.optsHead}>
-            <h3 className={`display ${s.optsName}`}>How it works</h3>
-            <CloseButton onClick={() => setTourOpen(false)} label="Close" />
-          </div>
-          <TourSteps />
-          <p className={s.help}>
-            Your work stays in this browser, so you can close the page and come back. Nothing is sent to GitHub until you paste
-            it there yourself.
-          </p>
-          <button type="button" className="btn btn-primary" onClick={() => setTourOpen(false)}>
-            Got it
-          </button>
-        </div>
-      </Sheet>
+      {coachOpen && <Coach steps={COACH} onTab={setTab} onDone={endCoach} />}
 
       {toast && <ToastNote key={toast.n} toast={toast} onUndo={undo} />}
     </div>
