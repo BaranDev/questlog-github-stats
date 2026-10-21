@@ -1,12 +1,15 @@
 // Every card combination the All cards page shows, shared with the snapshot list so scripts/snap_cards.py draws each one.
 import { DECORATIONS, THEMES, cardName, type Widget } from "./data";
+import { m } from "@/i18n";
+
+const c = m.catalog.combos;
 
 /** The four looks every card comes in, in the order of the columns. */
 export const LOOKS = [
-  { time: "day", chunky: false, label: "Day, fine pixels" },
-  { time: "day", chunky: true, label: "Day, chunky pixels" },
-  { time: "night", chunky: false, label: "Night, fine pixels" },
-  { time: "night", chunky: true, label: "Night, chunky pixels" },
+  { time: "day", chunky: false, label: c.looks.dayFine },
+  { time: "day", chunky: true, label: c.looks.dayChunky },
+  { time: "night", chunky: false, label: c.looks.nightFine },
+  { time: "night", chunky: true, label: c.looks.nightChunky },
 ] as const;
 
 export type Look = (typeof LOOKS)[number];
@@ -17,19 +20,19 @@ export type Group = { title: string; note?: string; rows: Row[] };
 
 /** The demo adventurer's streak for each fire size: no streak, 1 to 6 days, 7 to 29, 30 and more. */
 const FIRES = [
-  { streak: 0, label: "ashes (no streak)" },
-  { streak: 3, label: "small flame (1 to 6 days)" },
-  { streak: 14, label: "steady flame (7 to 29 days)" },
-  { streak: 60, label: "bonfire (30 days and more)" },
+  { streak: 0, label: c.fires.ashes },
+  { streak: 3, label: c.fires.small },
+  { streak: 14, label: c.fires.steady },
+  { streak: 60, label: c.fires.bonfire },
 ];
 
 const MESSAGES = [
-  { kind: "placeholder", label: "first visit, stats on the way" },
-  { kind: "quota", label: "waiting for GitHub's hourly limit" },
-  { kind: "unknown", label: "no such GitHub user" },
-  { kind: "busy", label: "too busy right now" },
-  { kind: "failed", label: "GitHub could not be reached" },
-  { kind: "error", label: "a mistake in the address" },
+  { kind: "placeholder", label: c.messages.placeholder },
+  { kind: "quota", label: c.messages.quota },
+  { kind: "unknown", label: c.messages.unknown },
+  { kind: "busy", label: c.messages.busy },
+  { kind: "failed", label: c.messages.failed },
+  { kind: "error", label: c.messages.error },
 ];
 
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
@@ -37,32 +40,32 @@ const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 export function groups(scene: string): Group[] {
   const fire = cardName("streak", scene);
   return [
-    { title: "Character Sheet", rows: [{ name: "Character Sheet", base: `/demo/stats?scene=${scene}`, h: 128 }] },
+    { title: cardName("stats", scene), rows: [{ name: cardName("stats", scene), base: `/demo/stats?scene=${scene}`, h: 128 }] },
     {
-      title: "Spellbook",
+      title: cardName("languages", scene),
       rows: [
-        { name: "Top 5 languages", base: `/demo/languages?scene=${scene}`, h: 128 },
-        { name: "Top 3 languages", base: `/demo/languages?scene=${scene}&langs=3`, h: 128 },
+        { name: c.top5, base: `/demo/languages?scene=${scene}`, h: 128 },
+        { name: c.top3, base: `/demo/languages?scene=${scene}&langs=3`, h: 128 },
       ],
     },
     {
       title: fire,
-      note: "The fire grows with your streak. Classic is the same flame in every scene; themed takes the scene's own colors.",
+      note: c.fireNote,
       rows: FIRES.flatMap((f) =>
         ["classic", "themed"].map((style) => ({
-          name: `${style === "themed" ? "Themed" : "Classic"} fire, ${f.label}`,
+          name: c.fireRow(style === "themed", f.label),
           base: `/demo/streak?scene=${scene}&streak=${f.streak}${style === "themed" ? "&fire=themed" : ""}`,
           h: 128,
         })),
       ),
     },
     {
-      title: "Messages",
-      note: "What a card shows instead of the stats while they are on the way or when something is wrong.",
-      rows: MESSAGES.flatMap((m) =>
+      title: c.messagesTitle,
+      note: c.messagesNote,
+      rows: MESSAGES.flatMap((msg) =>
         WIDGETS.map((w) => ({
-          name: `${cardName(w, scene)}: ${m.label}`,
-          base: `/demo/message?kind=${m.kind}&widget=${w}&scene=${scene}`,
+          name: c.messageRow(cardName(w, scene), msg.label),
+          base: `/demo/message?kind=${msg.kind}&widget=${w}&scene=${scene}`,
           h: 128,
         })),
       ),
@@ -72,8 +75,8 @@ export function groups(scene: string): Group[] {
 
 export const DECORATION_GROUPS: Group[] = [
   {
-    title: "Decorations",
-    note: "Painted banners for the sections of a README. The title is yours to choose; these show the examples.",
+    title: c.decorationsTitle,
+    note: c.decorationsNote,
     rows: DECORATIONS.map((d) => ({
       name: d.label,
       base: `/decorations/${d.name}${d.title ? `?title=${encodeURIComponent(d.title)}` : ""}`,

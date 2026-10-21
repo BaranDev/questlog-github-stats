@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { m } from "@/i18n";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import s from "./builder.module.css";
 
@@ -113,9 +114,9 @@ export default function Coach({
       >
         <div className={s.coachHead}>
           <span className={s.label}>
-            Tip {i + 1} of {steps.length}
+            {m.builderParts.coach.tip(i + 1, steps.length)}
           </span>
-          <button type="button" className={s.coachClose} onClick={() => onDone(false)} aria-label="Skip the tour">
+          <button type="button" className={s.coachClose} onClick={() => onDone(false)} aria-label={m.builderParts.coach.skip}>
             <X aria-hidden="true" />
           </button>
         </div>
@@ -132,13 +133,13 @@ export default function Coach({
         </div>
         <div className={s.coachFoot}>
           <button type="button" className={s.linkBtn} onClick={() => onDone(false)}>
-            Skip the tour
+            {m.builderParts.coach.skip}
           </button>
           <span className={s.coachNav}>
             {i > 0 && (
               <button type="button" className={`btn btn-ghost ${s.small}`} onClick={() => setI(i - 1)}>
                 <ArrowLeft aria-hidden="true" />
-                Back
+                {m.builderParts.coach.back}
               </button>
             )}
             <button
@@ -152,7 +153,7 @@ export default function Coach({
                 else setI(i + 1);
               }}
             >
-              {step.action ? step.action.label : last ? "Start building" : "Next"}
+              {step.action ? step.action.label : last ? m.builderParts.coach.start : m.builderParts.coach.next}
               {!last && !step.action && <ArrowRight aria-hidden="true" />}
             </button>
           </span>

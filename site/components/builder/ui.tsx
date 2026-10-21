@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { m } from "@/i18n";
 import { ChevronDown, TriangleAlert, X } from "lucide-react";
 import s from "./builder.module.css";
 
@@ -86,7 +87,7 @@ export function SelectField({
         <select value={value} onChange={(e) => onChange(e.target.value)}>
           {!known && (
             <option value={value} disabled>
-              {value} (not a scene)
+              {m.builderParts.ui.notAScene(value)}
             </option>
           )}
           {groups.map((g, i) =>
@@ -184,18 +185,18 @@ export function ColorField({ label, value, onChange }: { label: string; value: s
         value={full ? `#${full.toLowerCase()}` : "#000000"}
         data-empty={!full || undefined}
         onChange={(e) => type(e.target.value.replace("#", "").toUpperCase())}
-        aria-label={`Pick the ${label.toLowerCase()}`}
+        aria-label={m.builderParts.ui.pickColor(label)}
       />
       <Field
         label={label}
         value={draft}
         onChange={type}
         maxLength={7}
-        error={draft.trim() && !h ? "Use a hex color, like FFD700." : undefined}
-        help={draft ? undefined : "Empty: the scene's own color."}
+        error={draft.trim() && !h ? m.builderParts.ui.hexError : undefined}
+        help={draft ? undefined : m.builderParts.ui.hexEmpty}
         end={
           draft ? (
-            <button type="button" className={s.clear} onClick={() => type("")} aria-label={`Reset the ${label.toLowerCase()}`}>
+            <button type="button" className={s.clear} onClick={() => type("")} aria-label={m.builderParts.ui.resetColor(label)}>
               <X aria-hidden="true" />
             </button>
           ) : undefined

@@ -2,19 +2,20 @@ import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import AllCards from "@/components/AllCards";
+import { m } from "@/i18n";
 
 export const metadata: Metadata = {
-  title: "All questlog cards: every scene, time and pixel style",
-  description: "Every questlog card in one place: pick a scene and see all of its cards by day and by night, in fine and chunky pixels, with every fire and board.",
+  title: m.meta.cards.title,
+  description: m.meta.cards.description,
   alternates: { canonical: "/cards" },
-  openGraph: { url: "/cards", title: "All questlog cards", description: "Every card in every scene, time and pixel style." },
+  openGraph: { url: "/cards", title: m.meta.cards.ogTitle, description: m.meta.cards.ogDescription },
 };
 
 export default function CardsPage() {
   return (
     <>
       <a className="skip" href="#top">
-        Skip to content
+        {m.site.skip}
       </a>
       <Nav />
       <main id="top">

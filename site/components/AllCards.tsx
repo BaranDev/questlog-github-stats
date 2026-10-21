@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { m, rich } from "@/i18n";
 import { Check, ChevronLeft, ChevronRight, Copy, ExternalLink, X } from "lucide-react";
 import { DECORATIONS, HOST, THEMES, card, sceneName, snap } from "./data";
 import { DECORATION_GROUPS, LOOKS, address, groups, stillOf, type Group, type Look } from "./combos";
 import s from "./AllCards.module.css";
 
 const DECOS = "decorations";
+const A = m.allCards;
 
 export default function AllCards() {
   const [picked, setPicked] = useState<string | null>(null);
@@ -31,14 +33,11 @@ export default function AllCards() {
   return (
     <div className={s.page}>
       <header className={s.head}>
-        <h1 className={s.h1}>All cards</h1>
-        <p className="lede">
-          Pick a scene to see every card it has: by day and by night, in fine and in chunky pixels, with every board, fire
-          size and message. Click a card to open it live, or copy its address for your README.
-        </p>
+        <h1 className={s.h1}>{A.title}</h1>
+        <p className="lede">{A.lede}</p>
       </header>
 
-      <nav className={s.picker} aria-label="Pick a scene">
+      <nav className={s.picker} aria-label={A.pickScene}>
         {THEMES.map((t) => (
           <fieldset key={t.name} className={s.theme}>
             <legend className={s.themeName}>{t.name}</legend>
@@ -53,7 +52,7 @@ export default function AllCards() {
           </fieldset>
         ))}
         <fieldset className={s.theme}>
-          <legend className={s.themeName}>Banners</legend>
+          <legend className={s.themeName}>{A.banners}</legend>
           <div className={s.chips}>
             <button type="button" className={s.chip} aria-pressed={picked === DECOS} onClick={() => pick(DECOS)}>
               <img
@@ -64,7 +63,7 @@ export default function AllCards() {
                 alt=""
                 loading="lazy"
               />
-              <span>Decorations</span>
+              <span>{A.decorations}</span>
             </button>
           </div>
         </fieldset>
@@ -72,9 +71,9 @@ export default function AllCards() {
 
       <div id="combos" className={s.combos} aria-live="polite">
         {!picked ? (
-          <p className={s.empty}>Pick a scene above. Its cards show here, sorted by card and by look.</p>
+          <p className={s.empty}>{A.empty}</p>
         ) : picked === DECOS ? (
-          <Combos title="Decorations" list={DECORATION_GROUPS} />
+          <Combos title={A.decorations} list={DECORATION_GROUPS} />
         ) : (
           <Combos title={sceneName(picked)} list={groups(picked)} />
         )}
@@ -119,14 +118,14 @@ function Combos({ title, list }: { title: string; list: Group[] }) {
         {title}
       </h2>
       <p className={s.count}>
-        {count} cards.{" "}
+        {A.count(count)}{" "}
         {list.length > 1 && (
           <>
-            Jump to{" "}
+            {A.jumpTo}{" "}
             {list.map((g, i) => (
               <span key={g.title}>
                 <a href={`#${id(g)}`}>{g.title}</a>
-                {i < list.length - 2 ? ", " : i === list.length - 2 ? " or " : "."}
+                {i < list.length - 2 ? A.jumpSep : i === list.length - 2 ? A.jumpOr : A.jumpEnd}
               </span>
             ))}
           </>
@@ -146,7 +145,7 @@ function Combos({ title, list }: { title: string; list: Group[] }) {
                     key={l.label}
                     address={address(r, l)}
                     look={l}
-                    alt={`${r.name}, ${title}, ${l.label}`}
+                    alt={A.tileAlt(r.name, title, l.label)}
                     h={r.h}
                     onOpen={() => setOpen(items.findIndex((it) => it.address === address(r, l)))}
                   />
@@ -213,7 +212,7 @@ function Preview({ item, place, index, count, onMove, onClose }: {
     `  <img alt="${item.name.replace(/"/g, "&quot;")}" src="${HOST + item.day}">`,
     "</picture>",
   ].join("\n");
-  const label = (key: string, text: string) => (done === key ? "Copied" : done === `fail:${key}` ? "Copy failed" : text);
+  const label = (key: string, text: string) => (done === key ? A.copied : done === `fail:${key}` ? A.copyFailed : text);
   const icon = (key: string) => (done === key ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />);
 
   return (
@@ -231,10 +230,10 @@ function Preview({ item, place, index, count, onMove, onClose }: {
               {item.name}
             </h2>
             <p className={s.previewSub}>
-              {place}, {item.look.label.toLowerCase()} · {index + 1} of {count}
+              {A.previewSub(place, item.look.label, index + 1, count)}
             </p>
           </div>
-          <button type="button" className={s.previewClose} onClick={onClose} aria-label="Close">
+          <button type="button" className={s.previewClose} onClick={onClose} aria-label={A.close}>
             <X aria-hidden="true" />
           </button>
         </div>
@@ -244,17 +243,17 @@ function Preview({ item, place, index, count, onMove, onClose }: {
             className={s.previewArrow}
             onClick={() => onMove(index - 1)}
             disabled={index === 0}
-            aria-label="Previous card"
+            aria-label={A.previous}
           >
             <ChevronLeft aria-hidden="true" />
           </button>
-          <img key={item.address} className="pix" src={`${item.address}&scale=4`} width={1280} height={item.h * 4} alt={`${item.name}, ${item.look.label}, live`} />
+          <img key={item.address} className="pix" src={`${item.address}&scale=4`} width={1280} height={item.h * 4} alt={A.liveAlt(item.name, item.look.label)} />
           <button
             type="button"
             className={s.previewArrow}
             onClick={() => onMove(index + 1)}
             disabled={index === count - 1}
-            aria-label="Next card"
+            aria-label={A.next}
           >
             <ChevronRight aria-hidden="true" />
           </button>
@@ -263,25 +262,23 @@ function Preview({ item, place, index, count, onMove, onClose }: {
         <div className={s.previewActions}>
           <button type="button" className="btn btn-primary" onClick={() => copy("url", url)}>
             {icon("url")}
-            {label("url", "Copy address")}
+            {label("url", A.copyAddress)}
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => copy("md", md)}>
             {icon("md")}
-            {label("md", "Copy Markdown line")}
+            {label("md", A.copyMarkdown)}
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => copy("pic", picture)}>
             {icon("pic")}
-            {label("pic", "Copy with dark mode switch")}
+            {label("pic", A.copyDark)}
           </button>
           <a className="btn btn-ghost" href={item.address} target="_blank" rel="noopener">
             <ExternalLink aria-hidden="true" />
-            Open live card
+            {A.openLive}
           </a>
         </div>
         <p className={s.previewHelp}>
-          The Markdown line works in any README. The dark mode switch shows the night painting to readers who use a dark
-          theme. Demo cards show the built-in adventurer: put your login in place of <code>/demo</code>, as in{" "}
-          <code>/you/stats</code>, or use the <a href="/builder">profile builder</a>.
+          {rich(A.help, { code: (c) => <code>{c}</code>, a: (c) => <a href="/builder">{c}</a> })}
         </p>
       </div>
     </dialog>
@@ -302,14 +299,14 @@ function Tile({ address, look, alt, h, onOpen }: { address: string; look: Look; 
   };
   return (
     <figure className={s.tile}>
-      <button type="button" className={s.shot} onClick={onOpen} aria-label={`Preview: ${alt}`}>
+      <button type="button" className={s.shot} onClick={onOpen} aria-label={A.previewLabel(alt)}>
         <img className="pix" src={snap(stillOf(address))} width={640} height={h * 2} alt="" loading="lazy" />
       </button>
       <figcaption className={s.cap}>
         <span className={s.look}>{look.label}</span>
         <button type="button" className={s.copy} onClick={copy} aria-live="polite">
           {copied === "yes" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-          {copied === "yes" ? "Copied" : copied === "no" ? "Copy failed" : "Copy address"}
+          {copied === "yes" ? A.copied : copied === "no" ? A.copyFailed : A.copyAddress}
         </button>
       </figcaption>
     </figure>

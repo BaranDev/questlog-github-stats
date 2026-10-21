@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { m, rich } from "@/i18n";
 import { ArrowRight, FileText, LoaderCircle, Sparkles } from "lucide-react";
 import { LOGIN } from "./cards";
 import { CloseButton, Field } from "./ui";
@@ -9,13 +10,15 @@ import s from "./builder.module.css";
 export type Profile = { login: string; name: string; avatar: string };
 export type Start = "github" | "keep" | "fresh";
 
-export const template = (name: string) => `# Hi, I'm ${name}\n\nA line or two about you: what you build, what you're learning, how to reach you.\n`;
+const tx = m.builderParts.login;
+
+export const template = (name: string) => tx.template(name);
 
 /** Who the builder is for: a GitHub profile README, or any other page or Markdown file. */
 export type Purpose = "profile" | "other";
 
 /** The first text for a page that is not a GitHub profile. */
-export const otherTemplate = () => `## My coding stats\n\nA line about the cards below.\n`;
+export const otherTemplate = () => tx.otherTemplate;
 
 /** The account's display name and avatar; ok is false when GitHub has no such account and null when it could not
  * say (offline, or its hourly limit for this reader). */
@@ -47,18 +50,9 @@ async function profileReadme(login: string): Promise<string | null> {
 export function TourSteps() {
   return (
     <ol className={s.tourList}>
-      <li>
-        <b>Type your login.</b> Your cards show that account&apos;s numbers.
-      </li>
-      <li>
-        <b>Add cards.</b> Pick a card and a scene.
-      </li>
-      <li>
-        <b>Change them.</b> Click a card in the preview to change it.
-      </li>
-      <li>
-        <b>Copy.</b> Paste the text into your profile README on GitHub.
-      </li>
+      {tx.tourSteps.map((step) => (
+        <li key={step}>{rich(step, { b: (c) => <b>{c}</b> })}</li>
+      ))}
     </ol>
   );
 }
@@ -107,7 +101,7 @@ export default function LoginStep({
   const next = async () => {
     if (phase === "checking") return;
     if (!valid) {
-      setError(trimmed ? "A login has only letters, digits and hyphens, up to 39 of them." : "Type your GitHub login first.");
+      setError(trimmed ? tx.invalidLogin : tx.emptyLogin);
       return;
     }
     setError("");
@@ -118,7 +112,7 @@ export default function LoginStep({
     if (id !== run.current) return;
     if (who.ok === false) {
       setPhase("ask");
-      setError(`GitHub has no account named "${trimmed}". Check the spelling: it's the name in your profile address.`);
+      setError(tx.noAccount(trimmed));
       return;
     }
     const profile = who.profile ?? { login: trimmed, name: trimmed, avatar: "" };
@@ -135,41 +129,31 @@ export default function LoginStep({
       <div className={s.soloBox}>
         {phase !== "choose" || !found ? (
           <>
-            <p className={s.label}>Step 1 of 4</p>
+            <p className={s.label}>{tx.step}</p>
             <fieldset className={s.purpose}>
-              <legend className={s.label}>What are you making?</legend>
+              <legend className={s.label}>{tx.purposeQuestion}</legend>
               <label>
                 <input type="radio" name="purpose" checked={!other} onChange={() => onPurpose("profile")} />
                 <span>
-                  <b>My GitHub profile</b>
-                  <small>The README on your github.com page.</small>
+                  <b>{tx.purposeProfile}</b>
+                  <small>{tx.purposeProfileNote}</small>
                 </span>
               </label>
               <label>
                 <input type="radio" name="purpose" checked={other} onChange={() => onPurpose("other")} />
                 <span>
-                  <b>Something else</b>
-                  <small>A website, a blog post, a project README or any Markdown file.</small>
+                  <b>{tx.purposeOther}</b>
+                  <small>{tx.purposeOtherNote}</small>
                 </span>
               </label>
             </fieldset>
-            <h2 className={s.soloTitle}>{other ? "Whose GitHub stats should the cards show?" : "What's your GitHub login?"}</h2>
+            <h2 className={s.soloTitle}>{other ? tx.titleOther : tx.titleProfile}</h2>
             <p className={s.soloText}>
-              {other ? (
-                <>
-                  Type a GitHub login, yours or anyone&apos;s: github.com/<b>octocat</b>. The cards show that account&apos;s
-                  numbers wherever you put them.
-                </>
-              ) : (
-                <>
-                  It&apos;s the name in your GitHub address: github.com/<b>octocat</b>. Your cards will show that
-                  account&apos;s numbers.
-                </>
-              )}
+              {rich(other ? tx.textOther : tx.textProfile, { b: (c) => <b>{c}</b> })}
             </p>
             <Field
-              label={other ? "A GitHub login" : "Your GitHub login"}
-              prefix="github.com/"
+              label={other ? tx.fieldOther : tx.fieldProfile}
+              prefix={tx.fieldPrefix}
               value={login}
               onChange={(v) => {
                 setLogin(v);
@@ -183,29 +167,27 @@ export default function LoginStep({
               autoFocus
               onEnter={next}
               error={error}
-              help="Example: octocat. Letters, digits and hyphens."
+              help={tx.fieldHelp}
             />
             <div className={s.soloFoot}>
               <p className={s.help}>
-                {other
-                  ? "Your text stays in this browser until you copy it."
-                  : "Already have a profile README? We'll find it, and you can start from it."}
+                {other ? tx.footOther : tx.footProfile}
               </p>
               <div className={s.soloButtons}>
                 {onCancel && (
                   <button type="button" className="btn btn-ghost" onClick={onCancel}>
-                    Cancel
+                    {tx.cancel}
                   </button>
                 )}
                 <button type="button" className="btn btn-primary" onClick={next} disabled={phase === "checking"}>
                   {phase === "checking" ? (
                     <>
                       <LoaderCircle className={s.spin} aria-hidden="true" />
-                      Looking you up
+                      {tx.checking}
                     </>
                   ) : (
                     <>
-                      Next
+                      {tx.next}
                       <ArrowRight aria-hidden="true" />
                     </>
                   )}
@@ -215,19 +197,16 @@ export default function LoginStep({
           </>
         ) : (
           <>
-            <p className={s.label}>Step 1 of 4</p>
+            <p className={s.label}>{tx.step}</p>
             {found.readme ? (
               <>
-                <h2 className={s.soloTitle}>We found your profile README</h2>
-                <p className={s.soloText}>
-                  github.com/{found.profile.login}/{found.profile.login} already has a README ({found.readme.split("\n").length}{" "}
-                  lines). Start from it and add cards to it, or start over with a short template.
-                </p>
+                <h2 className={s.soloTitle}>{tx.foundTitle}</h2>
+                <p className={s.soloText}>{tx.foundText(found.profile.login, found.readme.split("\n").length)}</p>
               </>
             ) : (
               <>
-                <h2 className={s.soloTitle}>Keep what you wrote?</h2>
-                <p className={s.soloText}>Your text from before is still here. Keep it, or start over with a short template.</p>
+                <h2 className={s.soloTitle}>{tx.keepTitle}</h2>
+                <p className={s.soloText}>{tx.keepText}</p>
               </>
             )}
             <div className={s.choices}>
@@ -235,8 +214,8 @@ export default function LoginStep({
                 <button type="button" className={s.choice} onClick={() => onDone(found.profile, found.readme, "github")}>
                   <FileText aria-hidden="true" />
                   <span>
-                    <b>Start from my README</b>
-                    <small>Your current profile text, with any cards it already has.</small>
+                    <b>{tx.startFromReadme}</b>
+                    <small>{tx.startFromReadmeNote}</small>
                   </span>
                   <ArrowRight aria-hidden="true" />
                 </button>
@@ -245,8 +224,8 @@ export default function LoginStep({
                 <button type="button" className={s.choice} onClick={() => onDone(found.profile, null, "keep")}>
                   <FileText aria-hidden="true" />
                   <span>
-                    <b>Keep what I wrote here</b>
-                    <small>The text you were working on in this builder.</small>
+                    <b>{tx.keepHere}</b>
+                    <small>{tx.keepHereNote}</small>
                   </span>
                   <ArrowRight aria-hidden="true" />
                 </button>
@@ -254,29 +233,29 @@ export default function LoginStep({
               <button type="button" className={s.choice} onClick={() => onDone(found.profile, fresh(found.profile.name), "fresh")}>
                 <Sparkles aria-hidden="true" />
                 <span>
-                  <b>Start fresh</b>
-                  <small>A heading and one line, then you add cards.</small>
+                  <b>{tx.startFresh}</b>
+                  <small>{tx.startFreshNote}</small>
                 </span>
                 <ArrowRight aria-hidden="true" />
               </button>
             </div>
             <button type="button" className={`btn ${s.quiet}`} onClick={() => setPhase("ask")}>
-              Back
+              {tx.back}
             </button>
           </>
         )}
       </div>
 
       {tour && (
-        <aside className={s.tour} aria-label="How the builder works">
+        <aside className={s.tour} aria-label={tx.tourLabel}>
           <div className={s.tourHead}>
-            <span className={s.label}>New here?</span>
-            <CloseButton onClick={onTourDone} label="Close the tour" />
+            <span className={s.label}>{tx.tourNew}</span>
+            <CloseButton onClick={onTourDone} label={tx.tourClose} />
           </div>
-          <p className={s.tourTitle}>Your profile in four steps:</p>
+          <p className={s.tourTitle}>{tx.tourTitle}</p>
           <TourSteps />
           <button type="button" className="btn btn-ghost" onClick={onTourDone}>
-            Got it
+            {tx.tourGotIt}
           </button>
         </aside>
       )}

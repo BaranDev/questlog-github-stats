@@ -26,6 +26,7 @@ import Editor from "./Editor";
 import LoginStep, { type Profile, type Purpose, type Start } from "./LoginStep";
 import ProfilePreview from "./ProfilePreview";
 import { Sheet } from "./ui";
+import { m, rich } from "@/i18n";
 import type { Theme } from "./render";
 import s from "./builder.module.css";
 
@@ -120,28 +121,10 @@ function useNarrow() {
   return narrow;
 }
 
-const STEPS = [
-  { title: "Your GitHub login", wide: "", phone: "" },
-  { title: "Add cards", wide: "Click Add a card. It goes in where your cursor is in the text.", phone: "Tap Add a card. It goes into your README." },
-  {
-    title: "Change them",
-    wide: "Click a card in the preview to pick its scene, time and words.",
-    phone: "Open Preview and tap a card to pick its scene, time and words.",
-  },
-  { title: "Copy to GitHub", wide: "Copy the text, then paste it into your profile README.", phone: "Copy the text, then paste it into your profile README." },
-];
+const STEPS = m.builder.profile.steps;
 
 /** The same four steps, for a page that is not a GitHub profile. */
-const OTHER_STEPS = [
-  { ...STEPS[0], title: "The GitHub login" },
-  STEPS[1],
-  STEPS[2],
-  {
-    title: "Copy to your page",
-    wide: "Copy the text, then paste it into your page or Markdown file.",
-    phone: "Copy the text, then paste it into your page or Markdown file.",
-  },
-];
+const OTHER_STEPS = [{ ...STEPS[0], title: m.builder.profile.otherLoginTitle }, STEPS[1], STEPS[2], m.builder.profile.otherCopyStep];
 
 type Toast = { text: string; undo?: boolean; error?: boolean; n: number };
 
@@ -160,13 +143,14 @@ function pixelsOf(spots: Spot[]): Pixels {
  * for any other page. With no card yet, it starts by adding one for the reader. */
 function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void): CoachStep[] {
   const other = purpose === "other";
+  const words = m.builder.profile.tour;
   const first: CoachStep[] = empty
     ? [
         {
           target: '[data-coach="add"]',
-          title: "Add your first card",
-          body: "Add a card puts a card, or a painted decoration banner, where your cursor is in the text. Let's add a Character Sheet with your stats.",
-          action: { label: "Add one for me", run: addFirst },
+          title: words.addFirst.title,
+          body: words.addFirst.body,
+          action: { label: words.addFirst.action, run: addFirst },
         },
       ]
     : [];
@@ -175,46 +159,40 @@ function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void): Coa
     {
       target: "[data-spot]",
       tab: "preview",
-      title: "This is your card",
-      body: "Click it, or any card in the preview, to change it: its scene, day or night, its words and its pixel style.",
+      title: words.card.title,
+      body: words.card.body,
     },
     {
       target: '[data-coach="pixels"]',
       tab: "preview",
-      title: "One style for every card",
-      body: "Fine keeps the paintings sharp; Chunky draws them in pixels twice as big. Pick one to change every card at once. When cards differ, it shows Mixed.",
+      title: words.pixels.title,
+      body: words.pixels.body,
     },
     {
       target: '[data-coach="theme"]',
       tab: "preview",
-      title: "Light and dark readers",
-      body: other
-        ? "Readers use a light or a dark theme. Switch here to see the cards both ways. A card set to switch with dark mode does so on pages that allow HTML."
-        : "People read GitHub in a light or a dark theme. Switch here to see your profile the way each of them will.",
+      title: words.theme.title,
+      body: other ? words.theme.bodyOther : words.theme.bodyProfile,
     },
     {
       target: '[data-coach="editor"]',
       tab: "write",
-      title: other ? "Your text" : "Your README text",
-      body: other
-        ? "This is the text you will paste into your page. Type anything you like; the lines with questlog in them are your cards."
-        : "This is the text GitHub shows on your profile. Type anything you like; the lines with questlog in them are your cards.",
+      title: other ? words.editor.titleOther : words.editor.titleProfile,
+      body: other ? words.editor.bodyOther : words.editor.bodyProfile,
     },
     ...(empty
       ? []
       : [
           {
             target: '[data-coach="add"]',
-            title: "More cards and banners",
-            body: "Add a card puts a new card, or a painted decoration banner, where your cursor is in the text.",
+            title: words.more.title,
+            body: words.more.body,
           },
         ]),
     {
       target: '[data-coach="copy"]',
-      title: other ? "Copy it to your page" : "Copy it to GitHub",
-      body: other
-        ? "When it looks right, copy the text and paste it into your page or Markdown file. Where do I paste it? explains where it works."
-        : "When it looks right, copy the text and paste it into your profile README. Where do I paste it? shows you how, step by step.",
+      title: other ? words.copy.titleOther : words.copy.titleProfile,
+      body: other ? words.copy.bodyOther : words.copy.bodyProfile,
     },
   ];
 }
@@ -244,7 +222,7 @@ function ToastNote({ toast, onUndo }: { toast: Toast; onUndo: () => void }) {
       <span>{toast.text}</span>
       {toast.undo && (
         <button type="button" className={s.linkBtn} onClick={onUndo}>
-          Undo
+          {m.builder.profile.undo}
         </button>
       )}
     </div>
@@ -461,7 +439,7 @@ export default function ProfileBuilder() {
   const endCoach = (finished: boolean) => {
     setCoachOpen(false);
     setCoached(true);
-    if (!finished) say("Tour skipped. How does this work? at the top shows it again.");
+    if (!finished) say(m.builder.profile.tourSkipped);
   };
 
   const pixels = pixelsOf(spots);
@@ -475,7 +453,7 @@ export default function ProfileBuilder() {
     }
     edit(next, { now: true });
     setChanged(true);
-    say(`Every card now uses ${to} pixels.`, { undo: true });
+    say(m.builder.profile.pixelsSet(to), { undo: true });
   };
 
   const onLogin = (p: Profile, next: string | null, start: Start) => {
@@ -495,7 +473,7 @@ export default function ProfileBuilder() {
       setChanged(false);
       setCopied(false);
     }
-    if (start === "github") say("Loaded your README from GitHub. Your cards go in next to it.");
+    if (start === "github") say(m.builder.profile.loadedReadme);
   };
 
   const change = (card: Card, mode: Mode, typing = false) => {
@@ -511,7 +489,7 @@ export default function ProfileBuilder() {
     const name = kindName(spot.card);
     edit(removeSpot(text, spot), { now: true });
     setSel(null);
-    say(`Removed the ${name}.`, { undo: true });
+    say(m.builder.profile.removed(name), { undo: true });
   };
 
   const openAdd = () => {
@@ -538,7 +516,7 @@ export default function ProfileBuilder() {
     setFlash(findSpots(r.text, env.host).findIndex((x) => x.start === r.start));
     setAdding(false);
     if (narrow) setTab("preview");
-    say(`Added the ${cardName(w, scene)}. ${narrow ? "Tap" : "Click"} it in the preview to change it.`);
+    say(m.builder.profile.added(cardName(w, scene), narrow));
   };
 
   const addDecoration = (name: string) => {
@@ -561,13 +539,13 @@ export default function ProfileBuilder() {
     setFlash(findSpots(r.text, env.host).findIndex((x) => x.start === r.start));
     setAdding(false);
     if (narrow) setTab("preview");
-    say(`Added the ${d?.label ?? name} decoration. ${narrow ? "Tap" : "Click"} it in the preview to change its title.`);
+    say(m.builder.profile.addedDecoration(d?.label ?? name, narrow));
   };
 
   const copy = async () => {
     if (!(await toClipboard(text))) {
       setTab("write");
-      say("Your browser didn't let us copy. Select all of your README text and copy it yourself.", { error: true });
+      say(m.builder.profile.copyFailed, { error: true });
       return;
     }
     setCopied(true);
@@ -593,14 +571,14 @@ export default function ProfileBuilder() {
   if (!ready)
     return (
       <div className={s.loading} role="status">
-        <span className="visually-hidden">Loading the builder</span>
+        <span className="visually-hidden">{m.builder.profile.loading}</span>
       </div>
     );
 
   if (!profile || asking) {
     return (
       <div className={s.page}>
-        <h1 className={s.kicker}>{other ? "Card builder" : "Profile builder"}</h1>
+        <h1 className={s.kicker}>{other ? m.builder.profile.cardBuilder : m.builder.profile.profileBuilder}</h1>
         <LoginStep
           initial={profile?.login ?? firstLogin}
           current={profile?.login ?? ""}
@@ -631,11 +609,11 @@ export default function ProfileBuilder() {
   const lastNight = !!spots[spots.length - 1]?.card.night && !spots[spots.length - 1]?.dark;
   const where =
     cursor.current === null || cursor.current >= text.trimEnd().length
-      ? "It goes at the end of your README."
-      : "It goes where your cursor is in the text.";
+      ? m.builder.profile.whereEnd
+      : m.builder.profile.whereCursor;
 
   const notice = (() => {
-    const again = (label = "Try again") => (
+    const again = (label = m.builder.profile.notice.tryAgain) => (
       <button
         type="button"
         className={`btn btn-ghost ${s.small}`}
@@ -652,10 +630,8 @@ export default function ProfileBuilder() {
     switch (status) {
       case "placeholder":
         return (
-          <Banner icon={<Hourglass aria-hidden="true" />} action={again("Check now")}>
-            We&apos;re fetching {profile.login}&apos;s GitHub stats for the first time. Until they arrive your cards say{" "}
-            <b>&quot;The scribe is inking your sheet&quot;</b>. That&apos;s normal: it takes a few seconds, and the preview
-            updates by itself.
+          <Banner icon={<Hourglass aria-hidden="true" />} action={again(m.builder.profile.notice.checkNow)}>
+            {rich(m.builder.profile.notice.placeholder(profile.login), { b: (c) => <b>{c}</b> })}
           </Banner>
         );
       case "unknown":
@@ -664,25 +640,24 @@ export default function ProfileBuilder() {
             icon={<TriangleAlert aria-hidden="true" />}
             action={
               <button type="button" className={`btn btn-ghost ${s.small}`} onClick={() => setAsking(true)}>
-                Change login
+                {m.builder.profile.changeLogin}
               </button>
             }
           >
-            GitHub has no account named <b>{profile.login}</b>, so the cards say &quot;No adventurer by that name&quot;.
+            {rich(m.builder.profile.notice.unknown(profile.login), { b: (c) => <b>{c}</b> })}
           </Banner>
         );
       case "busy":
         return (
           <Banner icon={<Hourglass aria-hidden="true" />} action={again()}>
-            The card painter is busy right now, so some cards may show a busy message. Wait a minute, then try again.
+            {m.builder.profile.notice.busy}
           </Banner>
         );
       case "failed":
       case "offline":
         return (
           <Banner icon={<TriangleAlert aria-hidden="true" />} action={again()}>
-            {status === "failed" ? "We couldn't reach GitHub just now." : "We couldn't reach questlog. Check your connection."} Try
-            again in a minute.
+            {status === "failed" ? m.builder.profile.notice.failed : m.builder.profile.notice.offline}
           </Banner>
         );
       default:
@@ -707,16 +682,16 @@ export default function ProfileBuilder() {
     <div className={s.page}>
       <header className={s.head}>
         <div>
-          <h1 className={s.h1}>{other ? "Card builder" : "Profile builder"}</h1>
+          <h1 className={s.h1}>{other ? m.builder.profile.cardBuilder : m.builder.profile.profileBuilder}</h1>
           <p className={s.lede}>
             {other
-              ? "Write your text here, add cards and see how they look. Follow the four steps, then paste it into your page."
-              : "Write your GitHub profile README here and see it the way GitHub will show it. Follow the four steps."}
+              ? m.builder.profile.ledeOther
+              : m.builder.profile.ledeProfile}
           </p>
         </div>
         <button type="button" className={`btn ${s.quiet}`} onClick={openCoach}>
           <CircleHelp aria-hidden="true" />
-          How does this work?
+          {m.builder.profile.howItWorks}
         </button>
       </header>
 
@@ -725,7 +700,7 @@ export default function ProfileBuilder() {
           <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
           <b>{profile.login}</b>
           <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
-            Change login
+            {m.builder.profile.changeLogin}
           </button>
         </span>
       )}
@@ -735,8 +710,8 @@ export default function ProfileBuilder() {
             <>
               <Num n={4} state="done" />
               <div>
-                <b>All done</b>
-                <p>Copy again whenever you change something, and paste it over the old text{other ? "" : " on GitHub"}.</p>
+                <b>{m.builder.profile.allDone}</b>
+                <p>{m.builder.profile.allDoneBody(other)}</p>
               </div>
             </>
           ) : (
@@ -744,7 +719,7 @@ export default function ProfileBuilder() {
               <Num n={now + 1} state="now" />
               <div>
                 <b>
-                  {steps[now].title} <small>Step {now + 1} of 4</small>
+                  {steps[now].title} <small>{m.builder.profile.stepOf(now + 1)}</small>
                 </b>
                 <p>{steps[now].phone}</p>
               </div>
@@ -762,7 +737,7 @@ export default function ProfileBuilder() {
               <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
               <b>{profile.login}</b>
               <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
-                Change
+                {m.builder.profile.change}
               </button>
             </span>
           </li>
@@ -779,7 +754,7 @@ export default function ProfileBuilder() {
               data-coach="add"
             >
               <Plus aria-hidden="true" />
-              Add a card
+              {m.builder.profile.addCard}
             </button>
           </li>
           <li className={s.step} data-state={state(2)}>
@@ -787,7 +762,7 @@ export default function ProfileBuilder() {
               <Num n={3} state={state(2)} />
               {steps[2].title}
             </span>
-            <p>{spots.length ? steps[2].wide : "Add a card first, then click it in the preview to change it."}</p>
+            <p>{spots.length ? steps[2].wide : m.builder.profile.addFirstThenClick}</p>
           </li>
           <li className={s.step} data-state={state(3)}>
             <span className={s.stepTitle}>
@@ -803,10 +778,10 @@ export default function ProfileBuilder() {
                 data-coach="copy"
               >
                 {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                {copied ? "Copy again" : other ? "Copy text" : "Copy README"}
+                {copied ? m.builder.profile.copyAgain : other ? m.builder.profile.copyText : m.builder.profile.copyReadme}
               </button>
               <button type="button" className={s.linkBtn} onClick={() => setHelpOpen(true)}>
-                Where do I paste it?
+                {m.builder.profile.wherePaste}
               </button>
             </span>
           </li>
@@ -814,10 +789,10 @@ export default function ProfileBuilder() {
       )}
 
       {narrow && (
-        <div className={s.tabs} role="tablist" aria-label="Show" onKeyDown={arrows(["write", "preview"] as const, tab, setTab)}>
+        <div className={s.tabs} role="tablist" aria-label={m.builder.profile.show} onKeyDown={arrows(["write", "preview"] as const, tab, setTab)}>
           <button type="button" role="tab" aria-selected={tab === "write"} tabIndex={tab === "write" ? 0 : -1} onClick={() => setTab("write")}>
             <Pencil aria-hidden="true" />
-            Write
+            {m.builder.profile.write}
           </button>
           <button
             type="button"
@@ -827,7 +802,7 @@ export default function ProfileBuilder() {
             onClick={() => setTab("preview")}
           >
             <Eye aria-hidden="true" />
-            Preview
+            {m.builder.profile.preview}
           </button>
         </div>
       )}
@@ -835,7 +810,7 @@ export default function ProfileBuilder() {
       <div ref={work} className={s.work} data-tab={narrow ? tab : undefined}>
         <section
           className={`${s.pane} ${s.writePane}`}
-          aria-label={!narrow && options ? "Card options" : other ? "Your text" : "Your README"}
+          aria-label={!narrow && options ? m.builder.profile.cardOptions : other ? m.builder.profile.yourText : m.builder.profile.yourReadme}
           data-coach="editor"
         >
           {!narrow && options ? (
@@ -843,7 +818,7 @@ export default function ProfileBuilder() {
               <div className={s.paneHead}>
                 <button type="button" className={`btn ${s.quiet}`} onClick={() => setSel(null)}>
                   <ArrowLeft aria-hidden="true" />
-                  Back to the text
+                  {m.builder.profile.backToText}
                 </button>
               </div>
               <div
@@ -860,16 +835,16 @@ export default function ProfileBuilder() {
               <div className={s.paneHead}>
                 <span className={s.paneTitle}>
                   <Pencil aria-hidden="true" />
-                  {other ? "Your text" : "Your README"}
+                  {other ? m.builder.profile.yourText : m.builder.profile.yourReadme}
                 </span>
                 <span className={s.paneTools}>
                   <button type="button" className={`btn ${s.quiet}`} onClick={undo} disabled={!canUndo}>
                     <Undo2 aria-hidden="true" />
-                    Undo
+                    {m.builder.profile.undo}
                   </button>
                   <button type="button" className={`btn btn-ghost ${s.small}`} onClick={openAdd}>
                     <Plus aria-hidden="true" />
-                    Add a card
+                    {m.builder.profile.addCard}
                   </button>
                 </span>
               </div>
@@ -878,27 +853,26 @@ export default function ProfileBuilder() {
                 onChange={(t) => edit(t, { typing: true })}
                 onCursor={(at) => (cursor.current = at)}
                 mark={spot ? [spot.start, spot.end] : null}
-                placeholder={`# Hi, I'm ${profile.login}\n\nType your README here, or click Add a card.`}
+                placeholder={m.builder.profile.editorPlaceholder(profile.login)}
               />
               <p className={s.editorTip}>
-                {other ? "This is Markdown." : "This is Markdown, the text GitHub turns into your profile."} Your cards are the lines
-                with <code>questlog</code> in them.
+                {rich(other ? m.builder.profile.editorTipOther : m.builder.profile.editorTipProfile, { code: (c) => <code>{c}</code> })}
               </p>
             </>
           )}
         </section>
 
-        <section className={`${s.pane} ${s.previewPane}`} aria-label="Preview">
+        <section className={`${s.pane} ${s.previewPane}`} aria-label={m.builder.profile.preview}>
           <div className={s.paneHead}>
             <span className={s.paneTitle}>
               <Eye aria-hidden="true" />
-              {purpose === "other" ? "Preview" : "Preview: your GitHub profile"}
+              {purpose === "other" ? m.builder.profile.previewOther : m.builder.profile.previewProfile}
             </span>
             <span className={s.paneTools}>
             <span
               className={s.themeSwitch}
               role="radiogroup"
-              aria-label="Pixel style of every card"
+              aria-label={m.builder.profile.pixelStyle}
               data-coach="pixels"
               onKeyDown={arrows(["fine", "chunky"] as const, pixels === "mixed" ? "fine" : pixels, setPixels)}
             >
@@ -912,19 +886,19 @@ export default function ProfileBuilder() {
                   tabIndex={pixels === p || (pixels === "mixed" && p === "fine") ? 0 : -1}
                   title={
                     p === "mixed"
-                      ? "Shown when your cards use different styles; pick Fine or Chunky to make them all the same"
-                      : `${p === "fine" ? "Sharp" : "Bigger"} pixels on every card`
+                      ? m.builder.profile.pixelMixedTitle
+                      : m.builder.profile.pixelTitle(p)
                   }
                   onClick={() => p !== "mixed" && setPixels(p)}
                 >
-                  {p === "fine" ? "Fine" : p === "chunky" ? "Chunky" : "Mixed"}
+                  {m.builder.profile.pixelLabels[p]}
                 </button>
               ))}
             </span>
             <span
               className={s.themeSwitch}
               role="radiogroup"
-              aria-label="GitHub theme"
+              aria-label={m.builder.profile.githubTheme}
               data-coach="theme"
               onKeyDown={arrows(["light", "dark"] as const, theme, setTheme)}
             >
@@ -938,7 +912,7 @@ export default function ProfileBuilder() {
                   onClick={() => setTheme(t)}
                 >
                   {t === "light" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-                  {t === "light" ? "Light" : "Dark"}
+                  {t === "light" ? m.builder.profile.light : m.builder.profile.dark}
                 </button>
               ))}
             </span>
@@ -960,15 +934,14 @@ export default function ProfileBuilder() {
               empty={
                 <div className={s.emptyState}>
                   <p>
-                    <b>{other ? "Your text is empty." : "Your README is empty."}</b>
+                    <b>{other ? m.builder.profile.emptyOther : m.builder.profile.emptyProfile}</b>
                   </p>
                   <p>
-                    {narrow ? "Tap" : "Click"} Add a card to put your first card here, or write some text. A first line could be:{" "}
-                    <code># Hi, I&apos;m {profile.name}</code>
+                    {m.builder.profile.emptyHint(narrow)} <code>{m.builder.profile.emptyFirstLine(profile.name)}</code>
                   </p>
                   <button type="button" className={`btn btn-primary ${s.small}`} onClick={openAdd}>
                     <Plus aria-hidden="true" />
-                    Add a card
+                    {m.builder.profile.addCard}
                   </button>
                 </div>
               }
@@ -981,7 +954,7 @@ export default function ProfileBuilder() {
         <div className={s.dock}>
           <button type="button" className={`btn ${now === 1 ? "btn-primary" : "btn-ghost"}`} onClick={openAdd} data-coach="add">
             <Plus aria-hidden="true" />
-            Add a card
+            {m.builder.profile.addCard}
           </button>
           <button
             type="button"
@@ -990,15 +963,15 @@ export default function ProfileBuilder() {
             data-coach="copy"
           >
             {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-            {copied ? "Copy again" : other ? "Copy text" : "Copy README"}
+            {copied ? m.builder.profile.copyAgain : other ? m.builder.profile.copyText : m.builder.profile.copyReadme}
           </button>
         </div>
       )}
 
-      <Sheet open={adding} onClose={() => setAdding(false)} label="Add a card">
+      <Sheet open={adding} onClose={() => setAdding(false)} label={m.builder.profile.addCard}>
         <AddCard scene={lastScene} night={lastNight} where={where} onAdd={add} onAddDecoration={addDecoration} onClose={() => setAdding(false)} />
       </Sheet>
-      <Sheet open={narrow && !!options} onClose={() => setSel(null)} label="Card options">
+      <Sheet open={narrow && !!options} onClose={() => setSel(null)} label={m.builder.profile.cardOptions}>
         {options}
       </Sheet>
       <Sheet
@@ -1007,7 +980,7 @@ export default function ProfileBuilder() {
           setHelpOpen(false);
           setJustCopied(false);
         }}
-        label="Where to paste your README"
+        label={m.builder.profile.pasteLabel}
         wide
       >
         {purpose === "other" ? (
