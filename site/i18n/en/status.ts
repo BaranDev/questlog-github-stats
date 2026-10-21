@@ -184,6 +184,9 @@ export const allCards = {
   previewSub: (place: string, look: string, n: number, count: number) =>
     `${place}, ${look.toLowerCase()} · ${n} of ${count}`,
   liveAlt: (name: string, look: string) => `${name}, ${look}, live`,
+  helpOwn:
+    "The Markdown line works in any README. The dark mode switch shows the night painting to readers who use a dark theme. These cards show the owner's stats: put your login in their place, or use the <a>profile builder</a>.",
+  wikiPlace: "Wiki",
   help: "The Markdown line works in any README. The dark mode switch shows the night painting to readers who use a dark theme. Demo cards show the built-in adventurer: put your login in place of <code>/demo</code>, as in <code>/you/stats</code>, or use the <a>profile builder</a>.",
 };
 

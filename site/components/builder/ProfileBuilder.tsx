@@ -12,6 +12,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  RotateCcw,
   Sun,
   TriangleAlert,
   Undo2,
@@ -280,6 +281,7 @@ export default function ProfileBuilder() {
   const [sel, setSel] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [tab, setTab] = useState<"write" | "preview">("preview");
   const [status, setStatus] = useState<Status>("checking");
   const [retry, setRetry] = useState(0);
@@ -838,6 +840,10 @@ export default function ProfileBuilder() {
                   {other ? m.builder.profile.yourText : m.builder.profile.yourReadme}
                 </span>
                 <span className={s.paneTools}>
+                  <button type="button" className={`btn ${s.quiet}`} onClick={() => setResetOpen(true)}>
+                    <RotateCcw aria-hidden="true" />
+                    {m.builder.profile.reset}
+                  </button>
                   <button type="button" className={`btn ${s.quiet}`} onClick={undo} disabled={!canUndo}>
                     <Undo2 aria-hidden="true" />
                     {m.builder.profile.undo}
@@ -968,6 +974,30 @@ export default function ProfileBuilder() {
         </div>
       )}
 
+      <Sheet open={resetOpen} onClose={() => setResetOpen(false)} label={m.builder.profile.resetTitle}>
+        <div className={s.opts}>
+          <h3 className={`display ${s.optsName}`}>{m.builder.profile.resetTitle}</h3>
+          <p className={s.help}>{m.builder.profile.resetText}</p>
+          <div className={s.stepButtons}>
+            <button type="button" className="btn btn-ghost" onClick={() => setResetOpen(false)}>
+              {m.builder.profile.resetCancel}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                // everything the builder keeps is this one entry; a reload starts it fresh at step 1
+                try {
+                  localStorage.removeItem(KEY);
+                } catch {}
+                location.reload();
+              }}
+            >
+              {m.builder.profile.resetConfirm}
+            </button>
+          </div>
+        </div>
+      </Sheet>
       <Sheet open={adding} onClose={() => setAdding(false)} label={m.builder.profile.addCard}>
         <AddCard scene={lastScene} night={lastNight} where={where} onAdd={add} onAddDecoration={addDecoration} onClose={() => setAdding(false)} />
       </Sheet>

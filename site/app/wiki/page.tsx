@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Rune from "@/components/Rune";
+import { PreviewHint, PreviewLinks } from "@/components/Preview";
 import { RUNES, THEMES, REPO, HOST, card, cardName, DECORATIONS, sceneName, snap, type Widget } from "@/components/data";
 import { m, rich, type Tags } from "@/i18n";
 import w from "./wiki.module.css";
@@ -35,7 +36,7 @@ const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 function Shot({ src, alt, scale = 2, h = 128, dark }: { src: string; alt: string; scale?: number; h?: number; dark?: string }) {
   const img = <img className="pix" src={snap(`${src}&scale=${scale}`)} width={320 * scale} height={h * scale} alt={alt} loading="lazy" />;
   return (
-    <a className={w.shot} href={src}>
+    <a className={w.shot} href={src} data-preview="" data-name={alt} data-h={h}>
       {dark ? (
         <picture>
           <source media="(prefers-color-scheme: dark)" srcSet={snap(`${dark}&scale=${scale}`)} />
@@ -44,6 +45,7 @@ function Shot({ src, alt, scale = 2, h = 128, dark }: { src: string; alt: string
       ) : (
         img
       )}
+      <PreviewHint />
     </a>
   );
 }
@@ -440,6 +442,7 @@ docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog`}</Co
           </div>
         </div>
       </main>
+      <PreviewLinks place={m.allCards.wikiPlace} />
       <Footer />
     </>
   );
