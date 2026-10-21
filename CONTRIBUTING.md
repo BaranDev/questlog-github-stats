@@ -22,9 +22,9 @@ GITHUB_TOKEN=... DATA_DIR=./tmp-data PORT=8080 HOST=127.0.0.1 cargo run --releas
 
 Then open http://127.0.0.1:8080. Every `/demo/...` card works without a token.
 
-- `src/` is the card server (Rust, axum): `server/` answers requests, `widgets/` draws the three cards, `card.rs`, `canvas.rs`, `text.rs` and `raster.rs` draw pixels, `github.rs` and `queue.rs` fetch stats.
-- `site/` is the website (Next.js static export): the home page, the wiki and the profile builder.
-- `art/` holds the paintings and their layout files, one folder per scene.
+- `src/` is the card server (Rust, axum): `server/` answers requests (`admin.rs` checks the admin login), `widgets/` draws the three cards, `decorations.rs` the banners, `card.rs`, `canvas.rs`, `text.rs` and `raster.rs` draw pixels, `github.rs` and `queue.rs` fetch stats, `log.rs` writes the log lines.
+- `site/` is the website (Next.js static export): the home page, the wiki, the profile builder and the status pages.
+- `art/` holds the paintings and their layout files, one folder per scene, and `art/decorations/` the banners by day and night.
 - `tests/goldens/` holds the expected pixels of every card.
 
 ## Changing how cards look

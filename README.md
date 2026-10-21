@@ -4,6 +4,8 @@
 
 Pixel art GitHub profile cards with a medieval feel: a character sheet, a spellbook of your languages and a campfire for your streak. Paste one line into your profile README: no token, no workflow, no setup.
 
+**[Website](https://questlog.cc)** · **[Profile builder](https://questlog.cc/builder)** · **[Wiki](https://questlog.cc/wiki)** · **[Status](https://questlog.cc/status)**
+
 ![The forest scene: Character Sheet, Spellbook and Campfire, by day and by night](assets/readme/hero.png)
 
 | Card | Shows |
@@ -14,7 +16,7 @@ Pixel art GitHub profile cards with a medieval feel: a character sheet, a spellb
 
 ## Use it
 
-Open the [profile builder](https://questlog.cc/builder), type your login, add cards and copy your README. Or write it yourself, one line per card:
+Open the [profile builder](https://questlog.cc/builder), type your login, add cards and copy your README; a short tour shows you around the first time. Or write it yourself, one line per card:
 
 ```md
 ![octocat's stats](https://questlog.cc/octocat/stats)
@@ -121,13 +123,15 @@ docker build -t questlog .
 docker run -d -p 8080:8080 --env-file .env -v questlog-data:/data questlog
 ```
 
+A self-hosted instance must credit the paintings as **"questlog by Cevdet Baran Oral"**, linked to https://questlog.cc, on the pages that show the cards and in its README (see `ART-LICENSE.md`); it can run under its own address.
+
 `.env` holds `GITHUB_TOKEN=` with a fine-grained token that can read public repositories (see `.env.example`). `NEW_LOGINS_PER_HOUR` (600 by default) caps how many logins are fetched for the first time each hour; raise it for a busy day, GitHub's own limit still pauses fetching when it runs low. The server listens on `PORT` (8080) and keeps its cache in `DATA_DIR` (`/data`). With your own token, your own instance can count your private contributions too.
 
 **Watching it.** The server writes one plain line per request and per background event to stderr (`docker logs questlog`): what was asked, whether the card came from the memory cache, the disk cache or was drawn (and how long that took), each GitHub fetch with the quota left, queue decisions, and a status line every 15 minutes. Client IPs are never written; the Cloudflare ray id links a line to Cloudflare's own logs. `/status` and `/health` show the public state (up, whether GitHub fetching runs, whether new users get in, with times in UTC). `/admin/status` and `/admin/health` show every count and capacity, the last hour's traffic and the latest log lines. Put them behind a Cloudflare Access app and set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `ADMIN_EMAILS` (see `.env.example`): the server then checks the login token Access signs on every request, so the pages stay closed even if someone reaches the server another way. Without those settings they open only for a local run.
 
 ## Development
 
-The pages at `/`, `/builder` and `/wiki` come from `site/`, a Next.js static export that the binary embeds. Build it before `cargo build`: `cd site && npm ci && npm run build` (it writes `static/`).
+The pages at `/`, `/builder`, `/wiki`, `/status` and `/admin/status` come from `site/`, a Next.js static export that the binary embeds. Build it before `cargo build`: `cd site && npm ci && npm run build` (it writes `static/`).
 
 The cards on those pages are not drawn live: the site ships its own WebP copies in `site/public/cards/`. After a change to the art or the drawing, build the site, run a local server of the new build, draw the copies again with `uv run site/scripts/snap_cards.py http://127.0.0.1:8080`, then build the site once more.
 
@@ -142,5 +146,6 @@ The code and the art have different licenses.
 - **Code: MIT** (see `LICENSE`). Use it, change it, self-host it.
 - **Art: © Cevdet Baran Oral, CC BY-NC 4.0** (see `ART-LICENSE.md`). This covers the paintings and sprites in `art/` and `assets/`, and the cards drawn from them.
   - Free for non-commercial use with credit, such as cards on your own GitHub profile.
+  - A self-hosted instance keeps the credit "questlog by Cevdet Baran Oral", linked to questlog.cc.
   - Commercial use needs written permission, and that includes a commercial self-hosted instance. Ask at contact@cevdetbaran.com.
 - **Fonts:** their own licenses (see `fonts/README.md`).
