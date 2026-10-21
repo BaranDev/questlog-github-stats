@@ -6,7 +6,14 @@ import s from "./builder.module.css";
 
 /** One step of the tour: what to point at (a CSS selector; the first visible match), which phone tab shows it, and
  * what to say. */
-export type CoachStep = { target?: string; tab?: "write" | "preview"; title: string; body: string };
+export type CoachStep = {
+  target?: string;
+  tab?: "write" | "preview";
+  title: string;
+  body: string;
+  /** Done for the reader by the main button, before the tour moves on (like adding a first card). */
+  action?: { label: string; run: () => void };
+};
 
 const PAD = 8;
 
@@ -134,9 +141,19 @@ export default function Coach({
                 Back
               </button>
             )}
-            <button type="button" className={`btn btn-primary ${s.small}`} onClick={() => (last ? onDone(true) : setI(i + 1))}>
-              {last ? "Start building" : "Next"}
-              {!last && <ArrowRight aria-hidden="true" />}
+            <button
+              type="button"
+              className={`btn btn-primary ${s.small}`}
+              onClick={() => {
+                if (step.action) {
+                  step.action.run();
+                  window.setTimeout(() => setI(i + 1), 450); // the new card needs a moment to appear
+                } else if (last) onDone(true);
+                else setI(i + 1);
+              }}
+            >
+              {step.action ? step.action.label : last ? "Start building" : "Next"}
+              {!last && !step.action && <ArrowRight aria-hidden="true" />}
             </button>
           </span>
         </div>

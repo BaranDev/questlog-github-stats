@@ -21,9 +21,9 @@ import { HOSTS, autoAlt, findSpots, getParam, insertAt, kindName, removeSpot, re
 import Coach, { type CoachStep } from "./Coach";
 import CardOptions, { type Mode } from "./CardOptions";
 import AddCard from "./AddCard";
-import CopyHelp from "./CopyHelp";
+import CopyHelp, { AnywhereHelp } from "./CopyHelp";
 import Editor from "./Editor";
-import LoginStep, { type Profile, type Start } from "./LoginStep";
+import LoginStep, { type Profile, type Purpose, type Start } from "./LoginStep";
 import ProfilePreview from "./ProfilePreview";
 import { Sheet } from "./ui";
 import type { Theme } from "./render";
@@ -36,7 +36,16 @@ const OLD_KEY = "questlog-builder";
 /** What the server says about the login, from its X-Questlog header. */
 type Status = "card" | "placeholder" | "unknown" | "busy" | "failed" | "error" | "offline" | "checking";
 
-type Saved = { profile: Profile | null; text: string; theme: Theme; tour: boolean; coached: boolean; changed: boolean; copied: boolean };
+type Saved = {
+  profile: Profile | null;
+  text: string;
+  theme: Theme;
+  tour: boolean;
+  coached: boolean;
+  purpose: Purpose;
+  changed: boolean;
+  copied: boolean;
+};
 
 function restore(): Partial<Saved> & { oldLogin?: string } {
   try {
@@ -53,6 +62,7 @@ function restore(): Partial<Saved> & { oldLogin?: string } {
         theme: v.theme === "light" ? "light" : "dark",
         tour: v.tour !== false,
         coached: v.coached === true,
+        purpose: v.purpose === "other" ? "other" : "profile",
         changed: v.changed === true,
         copied: v.copied === true,
       };
@@ -121,6 +131,18 @@ const STEPS = [
   { title: "Copy to GitHub", wide: "Copy the text, then paste it into your profile README.", phone: "Copy the text, then paste it into your profile README." },
 ];
 
+/** The same four steps, for a page that is not a GitHub profile. */
+const OTHER_STEPS = [
+  { ...STEPS[0], title: "The GitHub login" },
+  STEPS[1],
+  STEPS[2],
+  {
+    title: "Copy to your page",
+    wide: "Copy the text, then paste it into your page or Markdown file.",
+    phone: "Copy the text, then paste it into your page or Markdown file.",
+  },
+];
+
 type Toast = { text: string; undo?: boolean; error?: boolean; n: number };
 
 type Pixels = "fine" | "chunky" | "mixed";
@@ -134,43 +156,68 @@ function pixelsOf(spots: Spot[]): Pixels {
   return n === 0 ? "fine" : n === spots.length ? "chunky" : "mixed";
 }
 
-/** The guided tour, shown once when the reader reaches step 3 (or from "How does this work?"). */
-const COACH: CoachStep[] = [
-  {
-    target: "[data-spot]",
-    tab: "preview",
-    title: "This is your card",
-    body: "Click it, or any card in the preview, to change it: its scene, day or night, its words and its pixel style.",
-  },
-  {
-    target: '[data-coach="pixels"]',
-    tab: "preview",
-    title: "One style for every card",
-    body: "Fine keeps the paintings sharp; Chunky draws them in pixels twice as big. Pick one to change every card at once. When cards differ, it shows Mixed.",
-  },
-  {
-    target: '[data-coach="theme"]',
-    tab: "preview",
-    title: "Light and dark readers",
-    body: "People read GitHub in a light or a dark theme. Switch here to see your profile the way each of them will.",
-  },
-  {
-    target: '[data-coach="editor"]',
-    tab: "write",
-    title: "Your README text",
-    body: "This is the text GitHub shows on your profile. Type anything you like; the lines with questlog in them are your cards.",
-  },
-  {
-    target: '[data-coach="add"]',
-    title: "More cards and banners",
-    body: "Add a card puts a new card, or a painted decoration banner, where your cursor is in the text.",
-  },
-  {
-    target: '[data-coach="copy"]',
-    title: "Copy it to GitHub",
-    body: "When it looks right, copy the text and paste it into your profile README. Where do I paste it? shows you how, step by step.",
-  },
-];
+/** The guided tour, opened once right after the login (or from "How does this work?"), worded for a GitHub profile or
+ * for any other page. With no card yet, it starts by adding one for the reader. */
+function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void): CoachStep[] {
+  const other = purpose === "other";
+  const first: CoachStep[] = empty
+    ? [
+        {
+          target: '[data-coach="add"]',
+          title: "Add your first card",
+          body: "Add a card puts a card, or a painted decoration banner, where your cursor is in the text. Let's add a Character Sheet with your stats.",
+          action: { label: "Add one for me", run: addFirst },
+        },
+      ]
+    : [];
+  return [
+    ...first,
+    {
+      target: "[data-spot]",
+      tab: "preview",
+      title: "This is your card",
+      body: "Click it, or any card in the preview, to change it: its scene, day or night, its words and its pixel style.",
+    },
+    {
+      target: '[data-coach="pixels"]',
+      tab: "preview",
+      title: "One style for every card",
+      body: "Fine keeps the paintings sharp; Chunky draws them in pixels twice as big. Pick one to change every card at once. When cards differ, it shows Mixed.",
+    },
+    {
+      target: '[data-coach="theme"]',
+      tab: "preview",
+      title: "Light and dark readers",
+      body: other
+        ? "Readers use a light or a dark theme. Switch here to see the cards both ways. A card set to switch with dark mode does so on pages that allow HTML."
+        : "People read GitHub in a light or a dark theme. Switch here to see your profile the way each of them will.",
+    },
+    {
+      target: '[data-coach="editor"]',
+      tab: "write",
+      title: other ? "Your text" : "Your README text",
+      body: other
+        ? "This is the text you will paste into your page. Type anything you like; the lines with questlog in them are your cards."
+        : "This is the text GitHub shows on your profile. Type anything you like; the lines with questlog in them are your cards.",
+    },
+    ...(empty
+      ? []
+      : [
+          {
+            target: '[data-coach="add"]',
+            title: "More cards and banners",
+            body: "Add a card puts a new card, or a painted decoration banner, where your cursor is in the text.",
+          },
+        ]),
+    {
+      target: '[data-coach="copy"]',
+      title: other ? "Copy it to your page" : "Copy it to GitHub",
+      body: other
+        ? "When it looks right, copy the text and paste it into your page or Markdown file. Where do I paste it? explains where it works."
+        : "When it looks right, copy the text and paste it into your profile README. Where do I paste it? shows you how, step by step.",
+    },
+  ];
+}
 
 /** How long a message stays: longer when it can be undone, longest when it says something went wrong. */
 const life = (t: Toast) => (t.error ? 9000 : t.undo ? 7000 : 4500);
@@ -246,6 +293,9 @@ export default function ProfileBuilder() {
   const [tour, setTour] = useState(true);
   const [coached, setCoached] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [coach, setCoach] = useState<CoachStep[]>([]);
+  const [purpose, setPurpose] = useState<Purpose>("profile");
+  const other = purpose === "other";
   const [changed, setChanged] = useState(false);
   const [copied, setCopied] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
@@ -279,6 +329,7 @@ export default function ProfileBuilder() {
     setTheme(r.theme ?? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
     setTour(r.tour ?? true);
     setCoached(r.coached ?? false);
+    setPurpose(r.purpose ?? "profile");
     setChanged(r.changed ?? false);
     setCopied(r.copied ?? false);
     // cards name questlog.cc; only a self-hosted copy on its own domain names itself
@@ -292,14 +343,14 @@ export default function ProfileBuilder() {
     if (!ready) return;
     const t = window.setTimeout(() => {
       try {
-        const saved: Saved = { profile, text, theme, tour, coached, changed, copied };
+        const saved: Saved = { profile, text, theme, tour, coached, purpose, changed, copied };
         localStorage.setItem(KEY, JSON.stringify(saved));
       } catch {
         // storage can be unavailable (private mode); the work then lasts for this visit
       }
     }, 400);
     return () => window.clearTimeout(t);
-  }, [ready, profile, text, theme, tour, coached, changed, copied]);
+  }, [ready, profile, text, theme, tour, coached, purpose, changed, copied]);
 
   // typing settles for a moment before the preview redraws, so cards are not asked for on every key
   useEffect(() => {
@@ -396,12 +447,16 @@ export default function ProfileBuilder() {
   };
   const say = (t: string, o: { undo?: boolean; error?: boolean } = {}) => setToast({ text: t, ...o, n: Date.now() });
 
-  // the tour opens by itself once, when the first card is in and nothing has been changed yet (step 3)
+  // the tour opens by itself once, right after the login; its steps are fixed when it opens
+  const openCoach = () => {
+    setCoach(coachSteps(purpose, spots.length === 0, () => add("stats", "forest")));
+    setCoachOpen(true);
+  };
   useEffect(() => {
-    if (!ready || coached || coachOpen || !profile || asking || adding || sel !== null || changed || copied || !spots.length) return;
-    const t = window.setTimeout(() => setCoachOpen(true), 900);
+    if (!ready || coached || coachOpen || !profile || asking || adding || sel !== null) return;
+    const t = window.setTimeout(openCoach, 700);
     return () => window.clearTimeout(t);
-  }, [ready, coached, coachOpen, profile, asking, adding, sel, changed, copied, spots.length]);
+  });
 
   const endCoach = (finished: boolean) => {
     setCoachOpen(false);
@@ -545,7 +600,7 @@ export default function ProfileBuilder() {
   if (!profile || asking) {
     return (
       <div className={s.page}>
-        <h1 className={s.kicker}>Profile builder</h1>
+        <h1 className={s.kicker}>{other ? "Card builder" : "Profile builder"}</h1>
         <LoginStep
           initial={profile?.login ?? firstLogin}
           current={profile?.login ?? ""}
@@ -553,6 +608,8 @@ export default function ProfileBuilder() {
           tour={tour && !profile}
           onTourDone={() => setTour(false)}
           onDone={onLogin}
+          purpose={purpose}
+          onPurpose={setPurpose}
           onCancel={
             profile
               ? () => {
@@ -566,6 +623,7 @@ export default function ProfileBuilder() {
     );
   }
 
+  const steps = other ? OTHER_STEPS : STEPS;
   const done = [true, spots.length > 0, changed, copied];
   const now = copied ? -1 : done.findIndex((d) => !d);
   const state = (i: number) => (done[i] && i !== now ? "done" : i === now ? "now" : "next");
@@ -649,10 +707,14 @@ export default function ProfileBuilder() {
     <div className={s.page}>
       <header className={s.head}>
         <div>
-          <h1 className={s.h1}>Profile builder</h1>
-          <p className={s.lede}>Write your GitHub profile README here and see it the way GitHub will show it. Follow the four steps.</p>
+          <h1 className={s.h1}>{other ? "Card builder" : "Profile builder"}</h1>
+          <p className={s.lede}>
+            {other
+              ? "Write your text here, add cards and see how they look. Follow the four steps, then paste it into your page."
+              : "Write your GitHub profile README here and see it the way GitHub will show it. Follow the four steps."}
+          </p>
         </div>
-        <button type="button" className={`btn ${s.quiet}`} onClick={() => setCoachOpen(true)}>
+        <button type="button" className={`btn ${s.quiet}`} onClick={openCoach}>
           <CircleHelp aria-hidden="true" />
           How does this work?
         </button>
@@ -674,7 +736,7 @@ export default function ProfileBuilder() {
               <Num n={4} state="done" />
               <div>
                 <b>All done</b>
-                <p>Copy again whenever you change something, and paste it over the old text on GitHub.</p>
+                <p>Copy again whenever you change something, and paste it over the old text{other ? "" : " on GitHub"}.</p>
               </div>
             </>
           ) : (
@@ -682,9 +744,9 @@ export default function ProfileBuilder() {
               <Num n={now + 1} state="now" />
               <div>
                 <b>
-                  {STEPS[now].title} <small>Step {now + 1} of 4</small>
+                  {steps[now].title} <small>Step {now + 1} of 4</small>
                 </b>
-                <p>{STEPS[now].phone}</p>
+                <p>{steps[now].phone}</p>
               </div>
             </>
           )}
@@ -694,7 +756,7 @@ export default function ProfileBuilder() {
           <li className={s.step} data-state={state(0)}>
             <span className={s.stepTitle}>
               <Num n={1} state={state(0)} />
-              {STEPS[0].title}
+              {steps[0].title}
             </span>
             <span className={s.who}>
               <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
@@ -707,9 +769,9 @@ export default function ProfileBuilder() {
           <li className={s.step} data-state={state(1)}>
             <span className={s.stepTitle}>
               <Num n={2} state={state(1)} />
-              {STEPS[1].title}
+              {steps[1].title}
             </span>
-            <p>{STEPS[1].wide}</p>
+            <p>{steps[1].wide}</p>
             <button
               type="button"
               className={`btn ${now === 1 ? "btn-primary" : "btn-ghost"} ${s.small}`}
@@ -723,16 +785,16 @@ export default function ProfileBuilder() {
           <li className={s.step} data-state={state(2)}>
             <span className={s.stepTitle}>
               <Num n={3} state={state(2)} />
-              {STEPS[2].title}
+              {steps[2].title}
             </span>
-            <p>{spots.length ? STEPS[2].wide : "Add a card first, then click it in the preview to change it."}</p>
+            <p>{spots.length ? steps[2].wide : "Add a card first, then click it in the preview to change it."}</p>
           </li>
           <li className={s.step} data-state={state(3)}>
             <span className={s.stepTitle}>
               <Num n={4} state={state(3)} />
-              {STEPS[3].title}
+              {steps[3].title}
             </span>
-            <p>{STEPS[3].wide}</p>
+            <p>{steps[3].wide}</p>
             <span className={s.stepButtons}>
               <button
                 type="button"
@@ -741,7 +803,7 @@ export default function ProfileBuilder() {
                 data-coach="copy"
               >
                 {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                {copied ? "Copy again" : "Copy README"}
+                {copied ? "Copy again" : other ? "Copy text" : "Copy README"}
               </button>
               <button type="button" className={s.linkBtn} onClick={() => setHelpOpen(true)}>
                 Where do I paste it?
@@ -773,7 +835,7 @@ export default function ProfileBuilder() {
       <div ref={work} className={s.work} data-tab={narrow ? tab : undefined}>
         <section
           className={`${s.pane} ${s.writePane}`}
-          aria-label={!narrow && options ? "Card options" : "Your README"}
+          aria-label={!narrow && options ? "Card options" : other ? "Your text" : "Your README"}
           data-coach="editor"
         >
           {!narrow && options ? (
@@ -798,7 +860,7 @@ export default function ProfileBuilder() {
               <div className={s.paneHead}>
                 <span className={s.paneTitle}>
                   <Pencil aria-hidden="true" />
-                  Your README
+                  {other ? "Your text" : "Your README"}
                 </span>
                 <span className={s.paneTools}>
                   <button type="button" className={`btn ${s.quiet}`} onClick={undo} disabled={!canUndo}>
@@ -819,8 +881,8 @@ export default function ProfileBuilder() {
                 placeholder={`# Hi, I'm ${profile.login}\n\nType your README here, or click Add a card.`}
               />
               <p className={s.editorTip}>
-                This is Markdown, the text GitHub turns into your profile. Your cards are the lines with <code>questlog</code> in
-                them.
+                {other ? "This is Markdown." : "This is Markdown, the text GitHub turns into your profile."} Your cards are the lines
+                with <code>questlog</code> in them.
               </p>
             </>
           )}
@@ -830,7 +892,7 @@ export default function ProfileBuilder() {
           <div className={s.paneHead}>
             <span className={s.paneTitle}>
               <Eye aria-hidden="true" />
-              Preview: your GitHub profile
+              {purpose === "other" ? "Preview" : "Preview: your GitHub profile"}
             </span>
             <span className={s.paneTools}>
             <span
@@ -885,6 +947,7 @@ export default function ProfileBuilder() {
           {notice}
           <div className={s.paneScroll} data-scroll>
             <ProfilePreview
+              plain={purpose === "other"}
               text={shown}
               spots={shownSpots}
               theme={theme}
@@ -897,7 +960,7 @@ export default function ProfileBuilder() {
               empty={
                 <div className={s.emptyState}>
                   <p>
-                    <b>Your README is empty.</b>
+                    <b>{other ? "Your text is empty." : "Your README is empty."}</b>
                   </p>
                   <p>
                     {narrow ? "Tap" : "Click"} Add a card to put your first card here, or write some text. A first line could be:{" "}
@@ -927,7 +990,7 @@ export default function ProfileBuilder() {
             data-coach="copy"
           >
             {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-            {copied ? "Copy again" : "Copy README"}
+            {copied ? "Copy again" : other ? "Copy text" : "Copy README"}
           </button>
         </div>
       )}
@@ -947,17 +1010,28 @@ export default function ProfileBuilder() {
         label="Where to paste your README"
         wide
       >
-        <CopyHelp
-          login={profile.login}
-          copied={justCopied}
-          onCopy={copy}
-          onClose={() => {
-            setHelpOpen(false);
-            setJustCopied(false);
-          }}
-        />
+        {purpose === "other" ? (
+          <AnywhereHelp
+            copied={justCopied}
+            onCopy={copy}
+            onClose={() => {
+              setHelpOpen(false);
+              setJustCopied(false);
+            }}
+          />
+        ) : (
+      <CopyHelp
+            login={profile.login}
+            copied={justCopied}
+            onCopy={copy}
+            onClose={() => {
+              setHelpOpen(false);
+              setJustCopied(false);
+            }}
+          />
+        )}
       </Sheet>
-      {coachOpen && <Coach steps={COACH} onTab={setTab} onDone={endCoach} />}
+      {coachOpen && <Coach steps={coach} onTab={setTab} onDone={endCoach} />}
 
       {toast && <ToastNote key={toast.n} toast={toast} onUndo={undo} />}
     </div>

@@ -11,6 +11,12 @@ export type Start = "github" | "keep" | "fresh";
 
 export const template = (name: string) => `# Hi, I'm ${name}\n\nA line or two about you: what you build, what you're learning, how to reach you.\n`;
 
+/** Who the builder is for: a GitHub profile README, or any other page or Markdown file. */
+export type Purpose = "profile" | "other";
+
+/** The first text for a page that is not a GitHub profile. */
+export const otherTemplate = () => `## My coding stats\n\nA line about the cards below.\n`;
+
 /** The account's display name and avatar; ok is false when GitHub has no such account and null when it could not
  * say (offline, or its hourly limit for this reader). */
 async function lookUp(login: string): Promise<{ ok: boolean | null; profile?: Profile }> {
@@ -65,6 +71,8 @@ export default function LoginStep({
   onTourDone,
   onDone,
   onCancel,
+  purpose,
+  onPurpose,
 }: {
   initial: string;
   /** The login already in use, when changing it. */
@@ -75,7 +83,11 @@ export default function LoginStep({
   onTourDone: () => void;
   onDone: (p: Profile, text: string | null, start: Start) => void;
   onCancel?: () => void;
+  purpose: Purpose;
+  onPurpose: (p: Purpose) => void;
 }) {
+  const other = purpose === "other";
+  const fresh = (name: string) => (other ? otherTemplate() : template(name));
   const [login, setLogin] = useState(initial);
   const [phase, setPhase] = useState<"ask" | "checking" | "choose">("ask");
   const [error, setError] = useState("");
@@ -101,7 +113,8 @@ export default function LoginStep({
     setError("");
     setPhase("checking");
     const id = ++run.current;
-    const [who, readme] = await Promise.all([lookUp(trimmed), profileReadme(trimmed)]);
+    // a page that is not a GitHub profile does not start from the profile README
+    const [who, readme] = await Promise.all([lookUp(trimmed), other ? Promise.resolve(null) : profileReadme(trimmed)]);
     if (id !== run.current) return;
     if (who.ok === false) {
       setPhase("ask");
@@ -110,7 +123,7 @@ export default function LoginStep({
     }
     const profile = who.profile ?? { login: trimmed, name: trimmed, avatar: "" };
     if (!readme && (!keepable || profile.login.toLowerCase() === current.toLowerCase())) {
-      onDone(profile, keepable ? null : template(profile.name), keepable ? "keep" : "fresh");
+      onDone(profile, keepable ? null : fresh(profile.name), keepable ? "keep" : "fresh");
       return;
     }
     setFound({ profile, readme });
@@ -123,13 +136,39 @@ export default function LoginStep({
         {phase !== "choose" || !found ? (
           <>
             <p className={s.label}>Step 1 of 4</p>
-            <h2 className={s.soloTitle}>What&apos;s your GitHub login?</h2>
+            <fieldset className={s.purpose}>
+              <legend className={s.label}>What are you making?</legend>
+              <label>
+                <input type="radio" name="purpose" checked={!other} onChange={() => onPurpose("profile")} />
+                <span>
+                  <b>My GitHub profile</b>
+                  <small>The README on your github.com page.</small>
+                </span>
+              </label>
+              <label>
+                <input type="radio" name="purpose" checked={other} onChange={() => onPurpose("other")} />
+                <span>
+                  <b>Something else</b>
+                  <small>A website, a blog post, a project README or any Markdown file.</small>
+                </span>
+              </label>
+            </fieldset>
+            <h2 className={s.soloTitle}>{other ? "Whose GitHub stats should the cards show?" : "What's your GitHub login?"}</h2>
             <p className={s.soloText}>
-              It&apos;s the name in your GitHub address: github.com/<b>octocat</b>. Your cards will show that account&apos;s
-              numbers.
+              {other ? (
+                <>
+                  Type a GitHub login, yours or anyone&apos;s: github.com/<b>octocat</b>. The cards show that account&apos;s
+                  numbers wherever you put them.
+                </>
+              ) : (
+                <>
+                  It&apos;s the name in your GitHub address: github.com/<b>octocat</b>. Your cards will show that
+                  account&apos;s numbers.
+                </>
+              )}
             </p>
             <Field
-              label="Your GitHub login"
+              label={other ? "A GitHub login" : "Your GitHub login"}
               prefix="github.com/"
               value={login}
               onChange={(v) => {
@@ -147,7 +186,11 @@ export default function LoginStep({
               help="Example: octocat. Letters, digits and hyphens."
             />
             <div className={s.soloFoot}>
-              <p className={s.help}>Already have a profile README? We&apos;ll find it, and you can start from it.</p>
+              <p className={s.help}>
+                {other
+                  ? "Your text stays in this browser until you copy it."
+                  : "Already have a profile README? We'll find it, and you can start from it."}
+              </p>
               <div className={s.soloButtons}>
                 {onCancel && (
                   <button type="button" className="btn btn-ghost" onClick={onCancel}>
@@ -208,7 +251,7 @@ export default function LoginStep({
                   <ArrowRight aria-hidden="true" />
                 </button>
               )}
-              <button type="button" className={s.choice} onClick={() => onDone(found.profile, template(found.profile.name), "fresh")}>
+              <button type="button" className={s.choice} onClick={() => onDone(found.profile, fresh(found.profile.name), "fresh")}>
                 <Sparkles aria-hidden="true" />
                 <span>
                   <b>Start fresh</b>
