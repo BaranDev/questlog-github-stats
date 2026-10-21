@@ -58,6 +58,8 @@ pub struct Look {
     pub animate: bool,
     /// Output upscale, 1..=5. Only the final image changes, not the drawing.
     pub scale: u8,
+    /// pixels=chunky: the painting in pixels twice as big (the text keeps its own).
+    pub chunky: bool,
 }
 
 impl Default for Look {
@@ -79,6 +81,7 @@ impl Default for Look {
             hide: HashSet::new(),
             animate: true,
             scale: 5,
+            chunky: false,
         }
     }
 }
@@ -111,6 +114,7 @@ fn card<'a>(assets: &'a Assets, w: Widget, look: &Look) -> Option<Card<'a>> {
     };
     (card.title_color, card.text_color, card.outline_color) = (look.title_color, look.text_color, look.outline_color);
     card.truncate = look.truncate;
+    card.chunky = look.chunky;
     if look.scale >= 2 {
         card.title_layer = Some(Image::new(2 * OW, 2 * OH));
     }

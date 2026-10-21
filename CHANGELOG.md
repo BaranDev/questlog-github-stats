@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - **Cards are WebP:** lossless, animated where they move, about a third of the size of the PNGs before, pixel for pixel the same.
 - **Decorations** at `/decorations/<name>`: painted banners for README sections, with an optional title (`reading-nook`, `workbench`, `raven-moon`, `enchanted-clearing`, `crystal-owl`, `forest-divider`, `forest-footer`).
+- **Chunky pixels:** `pixels=chunky` draws any card's or decoration's painting in pixels twice as big. The profile builder has a Fine / Chunky switch for every card at once, and each card can still have its own (the switch then says Mixed).
+- **Guided tour** in the profile builder: once the first card is in, a short, skippable tour points out what each part does.
+- **Spellbook runes** keep a 1 px gap between rows, and their sparkles pass behind them.
 - **Decorations by night:** every decoration has a night painting (`time=night`), and the profile builder can switch them with dark mode like the cards.
 - **Status page** at [questlog.cc/status](https://questlog.cc/status): whether cards are served, whether stats arrive from GitHub, and whether new users get in right now, with times in UTC.
 - **Readable logs** for whoever runs an instance: one plain line per request and per background event, and an admin page behind Cloudflare Access (see "Watching it" in the README).

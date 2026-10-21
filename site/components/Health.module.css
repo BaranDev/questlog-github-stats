@@ -1,5 +1,4 @@
-/* The health page: a header with the overall state and a Refresh button, then one glass panel per part of the
-   service, each with a tone chip and a pixel meter built from 20 blocks like the cards' own bars. */
+/* Pixel meters are 20 blocks, like the cards' own bars. */
 .page {
   --good: var(--moss);
   --watch: var(--ember);

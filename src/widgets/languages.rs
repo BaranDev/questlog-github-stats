@@ -1,6 +1,5 @@
-//! /languages, the Spellbook: up to five languages, each with its rune in its (readable) language color, its name,
-//! its share and a bar scaled to the top language. Sparkles drift up from the runes. Runes and bars keep their
-//! colors at night: they glow.
+//! /languages, the Spellbook: up to five languages, each with a rune in its readable language color, name, share and
+//! a bar scaled to the top language. Sparkles drift up from the runes; runes and bars keep their colors at night.
 use crate::canvas::{Image, Rgb};
 use crate::card::{Card, LINE};
 use crate::stats::UserStats;
@@ -62,17 +61,18 @@ pub fn rune_colors() -> Vec<Rgb> {
     LANGS.iter().map(|&(_, c, _)| readable(c)).chain([readable(OTHER.0)]).collect()
 }
 
-/// A rune mask in `color` with a 1 px outline in the title edge ink, drawn unscaled with its top left at (x, y).
-fn rune(c: &mut Card, mask: &Image, x: i64, y: i64, color: Rgb) {
-    let edge = mask.map_colors(|_| c.ink("title_edge"));
+/// A rune mask in `color` with a 1 px outline in the title edge ink, unscaled, top left at (x, y) on `layer`. The
+/// outline skips the row below the rune so runes stacked one row apart keep a 1 px gap.
+fn rune(layer: &mut Image, edge_ink: Rgb, mask: &Image, x: i64, y: i64, color: Rgb) {
+    let edge = mask.map_colors(|_| edge_ink);
     for dx in -1..=1 {
-        for dy in -1..=1 {
+        for dy in -1..=0 {
             if (dx, dy) != (0, 0) {
-                c.layer.alpha_composite(&edge, x + dx, y + dy);
+                layer.alpha_composite(&edge, x + dx, y + dy);
             }
         }
     }
-    c.layer.alpha_composite(&mask.map_colors(|_| color), x, y);
+    layer.alpha_composite(&mask.map_colors(|_| color), x, y);
 }
 
 pub fn render(c: &mut Card, look: &Look, s: &UserStats) -> Vec<Image> {
@@ -92,11 +92,14 @@ pub fn render(c: &mut Card, look: &Look, s: &UserStats) -> Vec<Image> {
     }
     let top = langs[0].1.max(f64::EPSILON);
     let mut runes = Vec::new();
+    // the runes on their own layer, laid over the sparkles in every frame, so a sparkle never covers a rune
+    let mut rune_layer = Image::new(c.layer.w, c.layer.h);
+    let edge_ink = c.ink("title_edge");
     for (i, (name, share)) in langs.iter().enumerate() {
         let y = list.y + i as i64 * ROW;
         let (color, rune_name) = rune_of(name);
         let mask = scene.sprites.get(&format!("rune-{rune_name}")).unwrap_or(&scene.sprites["rune-othala"]);
-        rune(c, mask, list.x + 1, y, color);
+        rune(&mut rune_layer, edge_ink, mask, list.x + 1, y, color);
         runes.push((list.x + 3, y - 1));
         let key = name.to_lowercase();
         let pct = look.value(&key, format!("{}{}", (share * 100.0).round() as u64, look.word("percent", "%")));
@@ -114,6 +117,7 @@ pub fn render(c: &mut Card, look: &Look, s: &UserStats) -> Vec<Image> {
                 let sx = x + if (f + i) % 2 == 0 { -2 } else { 2 };
                 c.layer.fill_rect(sx, y - 2 - rise, sx + 1, y - 1 - rise, spark);
             }
+            c.layer.alpha_composite(&rune_layer, 0, 0);
             c.frame()
         })
         .collect()

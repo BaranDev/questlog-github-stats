@@ -1,5 +1,4 @@
-//! Overlay-scale frames → lossless WebP at ×scale; several frames → animated WebP, looping forever. libwebp's
-//! animation encoder keeps only what changes between frames, which keeps animated cards small. A title layer at
+//! Overlay-scale frames → lossless WebP at ×scale, animated and looping when there are several. A title layer at
 //! twice the frames' resolution is laid over every frame as it is scaled up.
 use crate::BoxError;
 use crate::canvas::Image;

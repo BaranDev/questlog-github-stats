@@ -84,6 +84,11 @@ pub fn parse(widget: Widget, q: &HashMap<String, String>, scenes: &[&str]) -> Re
         Some("night") => look.night = true,
         Some(t) => fail(format!("Unknown time '{}' (use day or night)", clip(t))),
     }
+    match q.get("pixels").map(String::as_str) {
+        None | Some("fine") => {}
+        Some("chunky") => look.chunky = true,
+        Some(p) => fail(format!("Unknown pixels '{}' (use fine or chunky)", clip(p))),
+    }
     match q.get("fire").map(String::as_str) {
         None | Some("classic") => {}
         Some("themed") => look.themed = true,
@@ -186,6 +191,9 @@ mod tests {
         assert!(!ok(&[("user", "a"), ("truncate", "false")]).look.truncate);
         assert!(!ok(&[("user", "a"), ("truncate", "0")]).look.truncate);
         assert!(err(&[("user", "a"), ("truncate", "no")]).message.starts_with("Unknown truncate 'no'"));
+        assert!(ok(&[("user", "a"), ("pixels", "chunky")]).look.chunky);
+        assert!(!ok(&[("user", "a"), ("pixels", "fine")]).look.chunky);
+        assert!(err(&[("user", "a"), ("pixels", "big")]).message.starts_with("Unknown pixels 'big'"));
     }
 
     #[test]

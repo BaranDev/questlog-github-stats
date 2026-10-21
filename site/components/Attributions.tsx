@@ -60,7 +60,7 @@ const ATTRIBUTIONS: [string, ReactNode][] = [
   ],
 ];
 
-/** The attributions button and its modal. A native dialog: Escape closes it, and so does a click outside it. */
+/** A native dialog: Escape or a click outside closes it. */
 export default function Attributions() {
   const ref = useRef<HTMLDialogElement>(null);
   return (

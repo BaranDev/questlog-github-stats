@@ -1,6 +1,6 @@
-//! GitHub GraphQL client: a paged profile query and one aliased query for every contribution year, turned into
-//! derived stats for the queue. Finished years are kept on disk per login, so a refresh asks only for the current
-//! year (a full read every 30 days catches late changes to old years).
+//! GitHub GraphQL client: a paged profile query plus aliased per-year contribution queries, turned into stats.
+//! Finished years are kept on disk per login, so a refresh asks only for the current year (a full read every 30
+//! days catches late changes to old years).
 use crate::BoxError;
 use crate::dates::{civil_from_days, day_of, now_secs, parse_date, parse_utc};
 use crate::queue::{FetchError, Fetched, Fetcher, Quota};
@@ -386,7 +386,7 @@ mod tests {
         }
     }
 
-    /// Manual:`GITHUB_TOKEN=$(gh auth token) cargo test --lib github -- --ignored`
+    /// Run by hand: `GITHUB_TOKEN=$(gh auth token) cargo test --lib github -- --ignored`
     #[tokio::test]
     #[ignore]
     async fn live_barandev() {

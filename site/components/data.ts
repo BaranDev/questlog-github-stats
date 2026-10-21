@@ -78,10 +78,9 @@ export function card(w: Widget, scene: string, extra = ""): string {
   return `/${w}?user=${DEMO_USER}&scene=${scene}${extra}`;
 }
 
-/** The site's own copy of a card: drawn once by scripts/snap_cards.py and shipped as a WebP file, so showing the
- * site never asks the card server for a drawing. "/stats?user=x&scene=y" is cards/stats.user=x,scene=y.webp, and a
- * character a file name can't hold becomes ~ and its hex bytes (":" is ~3A). The version changes whenever the copies
- * are drawn again, so browsers and Cloudflare fetch the new ones. */
+/** The site's own WebP copy of a card, drawn by scripts/snap_cards.py so the site never asks the card server for one.
+ * "/stats?user=x&scene=y" is cards/stats.user=x,scene=y.webp; a character a file name can't hold becomes ~ and its hex
+ * bytes (":" is ~3A). The version changes on every redraw so browsers and Cloudflare fetch the new files. */
 export function snap(url: string): string {
   const [path, query = ""] = url.slice(1).split(/\?(.*)/s);
   const safe = (part: string) =>

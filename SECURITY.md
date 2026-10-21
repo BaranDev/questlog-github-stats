@@ -11,7 +11,7 @@ Say what you found, how to reproduce it, and what someone could do with it. You 
 
 ## What counts
 
-The hosted service at questlog.cc and the code in this repository: for example a way to read data that is not public, to make the server fetch or show something it should not, to use the server against someone else, or to take it down with little effort.
+The hosted service at questlog.cc and the code in this repository: for example a way to read data that is not public, to make the server fetch or show something it should not, to use the server against someone else, or to take it down with little effort. The admin pages (`/admin/status`, `/admin/health`) are meant to open only for the owner's Cloudflare Access login; any way in without it counts.
 
 Things that are not security problems: the public stats a card shows (they come from public GitHub data), and the per-IP limit on new drawings answering "busy".
 

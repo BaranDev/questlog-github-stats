@@ -42,6 +42,31 @@ impl Image {
         out
     }
 
+    /// pixels=chunky: the image in 2x2 blocks, each the average of its four pixels moved to the nearest color the
+    /// image already has, so the painting keeps its own palette at half the resolution.
+    pub fn chunky(&self) -> Image {
+        let mut colors: Vec<[u8; 4]> = self.px.clone();
+        colors.sort_unstable();
+        colors.dedup();
+        let mut out = self.clone();
+        for by in (0..self.h).step_by(2) {
+            for bx in (0..self.w).step_by(2) {
+                let cells: Vec<usize> = [(0, 0), (1, 0), (0, 1), (1, 1)]
+                    .iter()
+                    .filter(|(dx, dy)| bx + dx < self.w && by + dy < self.h)
+                    .map(|(dx, dy)| (by + dy) * self.w + bx + dx)
+                    .collect();
+                let n = cells.len() as u32;
+                let avg: [u32; 4] =
+                    std::array::from_fn(|c| (cells.iter().map(|&i| self.px[i][c] as u32).sum::<u32>() + n / 2) / n);
+                let dist = |p: &[u8; 4]| (0..4).map(|c| (p[c] as i32 - avg[c] as i32).pow(2)).sum::<i32>();
+                let best = *colors.iter().min_by_key(|p| dist(p)).unwrap_or(&[0; 4]);
+                cells.iter().for_each(|&i| out.px[i] = best);
+            }
+        }
+        out
+    }
+
     /// Nearest-neighbour upscale by an integer factor.
     pub fn scaled(&self, k: usize) -> Image {
         let mut out = Image::new(self.w * k, self.h * k);
@@ -105,6 +130,17 @@ pub fn over(s: [u8; 4], d: [u8; 4]) -> [u8; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chunky_keeps_the_palette_in_2x2_blocks() {
+        let mut img = Image::new(4, 2);
+        img.px = vec![[10, 0, 0, 255], [12, 0, 0, 255], [200, 0, 0, 255], [200, 0, 0, 255],
+                      [10, 0, 0, 255], [12, 0, 0, 255], [190, 0, 0, 255], [200, 0, 0, 255]];
+        let c = img.chunky();
+        assert!(c.px.iter().all(|p| img.px.contains(p)), "only colors the image has");
+        assert!(c.px[0] == c.px[1] && c.px[0] == c.px[4] && c.px[0] == c.px[5], "one color per block");
+        assert_eq!(c.px[2], [200, 0, 0, 255]);
+    }
 
     #[test]
     fn over_matches_pillow() {

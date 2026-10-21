@@ -1,7 +1,6 @@
-//! The admin pages, /admin/status and /admin/health, for the service's owner. Two locks: Cloudflare Access asks
-//! for the login at the edge, and every request here must also carry the token Access signs
-//! (`Cf-Access-Jwt-Assertion`), checked against Access's public keys, this app's audience tag and the allowed
-//! emails. Without the ACCESS_* settings only a local run can open them, never a request through Cloudflare.
+//! The owner's admin pages, /admin/status and /admin/health. Cloudflare Access asks for the login at the edge, and
+//! every request must also carry a valid Access token (`Cf-Access-Jwt-Assertion`); without the ACCESS_* settings
+//! only a local run can open them.
 use super::*;
 use crate::BoxError;
 use axum::extract::ConnectInfo;
@@ -113,8 +112,8 @@ impl Access {
     }
 }
 
-/// Whether this request may open the admin pages. A local run (a loopback client, no Cloudflare) may; anything
-/// else needs a valid Access login. Every refusal is logged with its reason.
+/// A local run (a loopback client, no Cloudflare header) may open the admin pages; anything else needs a valid
+/// Access login.
 async fn allowed<F: Fetcher>(app: &App<F>, req: axum::extract::Request) -> bool {
     let loopback = req.extensions().get::<ConnectInfo<SocketAddr>>().is_some_and(|c| c.0.ip().is_loopback());
     let (uri, h) = (req.uri().to_string().chars().take(300).collect::<String>(), req.headers().clone());
@@ -166,8 +165,7 @@ fn private(mut r: Response) -> Response {
     r
 }
 
-/// Everything, for /admin/status: counts, capacities, quota, cache, renderer, users, memory, the last hour's
-/// traffic by minute and the latest log lines.
+/// The full health for /admin/status, with the capacities and counts the public /health leaves out.
 fn full_health<F: Fetcher>(app: &App<F>, (disk_bytes, saved): (Option<u64>, Option<usize>)) -> Json<serde_json::Value> {
     let now = now_secs();
     let (entries, bytes, hits, misses) = app.cache.stats();

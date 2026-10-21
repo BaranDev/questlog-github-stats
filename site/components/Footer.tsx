@@ -17,7 +17,8 @@ export default function Footer() {
         </nav>
       </div>
       <p className="footer-fine">
-        Code under the <a href={`${REPO}/blob/main/LICENSE`}>MIT license</a>, paintings under{" "}
+        <a href="https://questlog.cc">questlog</a> by Cevdet Baran Oral. Code under the{" "}
+        <a href={`${REPO}/blob/main/LICENSE`}>MIT license</a>, paintings under{" "}
         <a href={`${REPO}/blob/main/ART-LICENSE.md`}>CC BY-NC 4.0</a> (commercial use needs permission).
       </p>
       <Attributions />

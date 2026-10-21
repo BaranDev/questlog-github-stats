@@ -1,7 +1,6 @@
-//! The fetch queue: logins waiting for GitHub, de-duplicated and bounded, drained by a few workers that respect
-//! GitHub's quota, retry with backoff and hand results to the store. Two lanes: new logins (first come, first
-//! served, capped per IP and per hour) always go first; refreshes of known logins wait in their own lane, the most
-//! requested first, and only spend quota above a reserve kept for new logins.
+//! The fetch queue: de-duplicated, bounded, drained by a few workers that respect GitHub's quota and retry with
+//! backoff. New logins (capped per IP and per hour) always go first; refreshes of known logins wait in their own
+//! lane, most requested first, and only spend quota above a reserve kept for new logins.
 use crate::dates::now_secs;
 use crate::stats::UserStats;
 use crate::store::Store;
@@ -145,8 +144,8 @@ impl<F: Fetcher> Queue<F> {
         self.inner.state.lock().unwrap().refresh.len()
     }
 
-    /// A known login's stats went stale: queue a refresh in the refresh lane. Never counts against an IP or the
-    /// hourly cap for new logins; each request while it waits moves it up.
+    /// Queues a refresh for a stale known login. Never counts against an IP or the new-login cap; each request
+    /// while it waits moves it up.
     pub fn refresh(&self, login: &str) {
         let mut s = self.inner.state.lock().unwrap();
         if s.active.contains(login) || s.failed.get(login).is_some_and(|&until| Instant::now() < until) {
@@ -175,8 +174,7 @@ impl<F: Fetcher> Queue<F> {
         self.inner.state.lock().unwrap().quota
     }
 
-    /// The queue's side of /health: GitHub's quota and when it refills, new logins this hour against the cap,
-    /// and how full each lane is.
+    /// The queue's side of /health.
     pub fn health(&self) -> serde_json::Value {
         let now = Instant::now();
         let cfg = &self.inner.cfg;
@@ -422,8 +420,7 @@ fn paused(s: &State, now: Instant) -> bool {
     s.paused_until.is_some_and(|p| p > now)
 }
 
-/// Seconds until position `pos` is fetched: whole rounds of the workers at the average fetch time, plus any quota
-/// pause, rounded up to 5 s.
+/// Seconds until position `pos` is fetched, rounded up to 5 s.
 fn eta(s: &State, cfg: &QueueConfig, pos: usize, now: Instant) -> u64 {
     let rounds = (pos / cfg.workers.max(1) + 1) as f64; // tests run with 0 workers
     let pause = s.paused_until.map_or(0.0, |p| p.saturating_duration_since(now).as_secs_f64());

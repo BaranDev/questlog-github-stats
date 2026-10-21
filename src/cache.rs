@@ -1,6 +1,6 @@
-//! Guards for the renderer: finished PNGs kept by what they show, in memory and on disk, so a card asked for again
-//! (another Cloudflare data center, the old host, a junk query parameter, a refreshed edge cache, a restart) costs
-//! no render; and a per-IP budget of fresh renders, so one client can't keep the renderer busy for everyone.
+//! Renderer guards: finished cards kept by what they show, in memory and on disk, so a card asked for again
+//! (another Cloudflare data center, a junk query parameter, a restart) costs no render; and a per-IP budget of
+//! fresh renders, so one client can't keep the renderer busy for everyone.
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -17,9 +17,8 @@ pub fn key(parts: &[&str]) -> u64 {
     h.finish()
 }
 
-/// Least recently used PNGs up to a byte budget in memory, and every card also saved as <disk>/<key>.png, so it
-/// is drawn once per build. Eviction drops the oldest tenth at once, so it runs rarely; the disk is trimmed by
-/// trim_disk().
+/// An LRU up to a byte budget in memory, and every card also saved on disk, so it is drawn once per build.
+/// Eviction drops the oldest tenth at once, so it runs rarely.
 pub struct RenderCache {
     budget: usize,
     inner: Mutex<Lru>,
@@ -95,8 +94,7 @@ impl RenderCache {
         }
     }
 
-    /// A newly drawn card: kept in memory and saved on disk (written aside, then renamed in, so a reader never
-    /// sees half a file).
+    /// Written aside, then renamed in, so a reader never sees half a file.
     pub fn put(&self, key: u64, bytes: Arc<Vec<u8>>) {
         if let Some(f) = self.file(key) {
             let tmp = f.with_extension("tmp");
@@ -113,8 +111,8 @@ impl RenderCache {
         Some(dir.flatten().filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum())
     }
 
-    /// Deletes the least recently used saved cards (by modification time) until the disk holds at most `budget`
-    /// bytes. Returns how many it deleted.
+    /// Deletes the oldest saved cards (by modification time) until the disk holds at most `budget` bytes; returns
+    /// how many it deleted.
     pub fn trim_disk(&self, budget: u64) -> usize {
         let Some(dir) = &self.disk else { return 0 };
         let Ok(entries) = std::fs::read_dir(dir) else { return 0 };

@@ -246,7 +246,6 @@ pre {
   }
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -348,7 +347,6 @@ pre {
   white-space: nowrap;
 }
 
-/* Footer */
 .footer {
   width: min(100% - 2 * var(--gutter), var(--wide));
   margin: 0 auto;
@@ -399,7 +397,6 @@ pre {
   color: var(--muted);
 }
 
-/* Attributions: a button at the foot of every page that opens the full list of credits in a modal. */
 .attributions-open {
   min-height: 2.75rem;
   margin-top: 1.75rem;

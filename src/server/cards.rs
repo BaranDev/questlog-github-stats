@@ -63,8 +63,8 @@ pub(super) async fn serve_card<F: Fetcher>(
     }
 }
 
-/// The built-in adventurer, with an optional `streak=N` (0-9999) for showing the fire tiers. Never touches the
-/// store or the queue.
+/// The built-in adventurer, with an optional `streak=N` (0-9999) to show the fire tiers. Never touches the store
+/// or the queue.
 pub(super) async fn demo_card<F: Fetcher>(
     State(app): State<Arc<App<F>>>,
     Path(path): Path<String>,
@@ -130,7 +130,6 @@ pub(super) async fn demo_message<F: Fetcher>(
     message_cached(&app, w, look, text, kind, DEMO, ip).await
 }
 
-/// The placeholder line: a quota pause says why and counts in minutes, a normal wait counts in seconds.
 pub(super) fn placeholder_text(eta_secs: u64, paused: bool) -> String {
     if paused {
         let mins = eta_secs.div_ceil(60).max(1);
@@ -149,8 +148,8 @@ pub(super) fn image(bytes: Vec<u8>, cache: &'static str, kind: &'static str) -> 
     (headers, bytes).into_response()
 }
 
-/// A render or encode failure still answers 200 with an image, because anything else is a broken image on GitHub.
-/// The body is a plain dark panel that does not depend on the renderer.
+/// A render or encode failure still answers 200 with an image (anything else is a broken image on GitHub): a
+/// plain dark panel that does not depend on the renderer.
 pub(super) fn failed() -> Response {
     static FALLBACK: OnceLock<Vec<u8>> = OnceLock::new();
     let bytes = FALLBACK.get_or_init(|| {
@@ -182,9 +181,8 @@ pub(super) fn look_key(look: &Look) -> String {
     format!("{rest:?}{labels:?}{values:?}{hide:?}")
 }
 
-/// The busy card, drawn once at start, for a request the renderer can't take now. `cache` is SHED for an overload
-/// (everyone's problem for a minute) and NO_CACHE for a used-up IP budget (that client's problem only: an edge
-/// cache must not hand it to everyone).
+/// The busy card, drawn once at start. `cache` is SHED for an overload (everyone's problem for a minute) and
+/// NO_CACHE for a used-up IP budget (that client's problem only, so an edge must not hand it to everyone).
 pub(super) fn shed<F: Fetcher>(app: &App<F>, w: Widget, cache: &'static str) -> Response {
     match app.shed.get(&w) {
         Some(bytes) => image(bytes.clone(), cache, "busy"),
@@ -192,10 +190,8 @@ pub(super) fn shed<F: Fetcher>(app: &App<F>, w: Widget, cache: &'static str) -> 
     }
 }
 
-/// A card from the render cache, or rendered on the blocking pool and kept. A fresh render first takes one from
-/// the client's per-IP budget and waits at most SHED_AFTER for a slot; either failing answers the busy card. The
-/// permit moves into the closure, so the 2-render cap holds until the render really ends, even when the client
-/// has already gone away.
+/// A card from the render cache, or rendered on the blocking pool and kept. The permit moves into the closure, so
+/// the render cap holds until the render really ends, even when the client has already gone away.
 pub(super) async fn render_image<F: Fetcher>(
     app: &Arc<App<F>>,
     key: u64,

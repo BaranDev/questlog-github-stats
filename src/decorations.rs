@@ -8,7 +8,7 @@ use crate::scene::{Align, Assets};
 use crate::widgets::Drawn;
 use std::collections::HashMap;
 
-pub const OPTIONS: [&str; 7] = ["title", "title_color", "outline_color", "truncate", "animate", "scale", "time"];
+pub const OPTIONS: [&str; 8] = ["title", "title_color", "outline_color", "truncate", "animate", "scale", "time", "pixels"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Options {
@@ -20,11 +20,13 @@ pub struct Options {
     pub scale: u8,
     /// `time=night`: the night painting, for a dark theme.
     pub night: bool,
+    /// `pixels=chunky`: the painting in pixels twice as big.
+    pub chunky: bool,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { title: String::new(), title_color: None, outline_color: None, truncate: true, animate: true, scale: 5, night: false }
+        Options { title: String::new(), title_color: None, outline_color: None, truncate: true, animate: true, scale: 5, night: false, chunky: false }
     }
 }
 
@@ -44,6 +46,11 @@ pub fn parse(q: &HashMap<String, String>) -> Result<Options, String> {
         None | Some("day") => false,
         Some("night") => true,
         Some(t) => return Err(format!("Unknown time '{}' (use day or night)", clip(t))),
+    };
+    o.chunky = match q.get("pixels").map(String::as_str) {
+        None | Some("fine") => false,
+        Some("chunky") => true,
+        Some(p) => return Err(format!("Unknown pixels '{}' (use fine or chunky)", clip(p))),
     };
     o.truncate = switch("truncate")?;
     o.animate = switch("animate")?;
@@ -67,6 +74,9 @@ pub fn render(assets: &Assets, name: &str, o: &Options) -> Option<(Drawn, u16)> 
     let d = assets.decorations.get(name)?;
     let painting = if o.night && !d.night.is_empty() { &d.night } else { &d.frames };
     let mut frames = if o.animate { painting.clone() } else { painting[..1].to_vec() };
+    if o.chunky {
+        frames = frames.iter().map(Image::chunky).collect();
+    }
     let (w, h) = (frames[0].w, frames[0].h);
     let mut title = (o.scale >= 2).then(|| Image::new(2 * w, 2 * h));
     let line = if o.truncate { fit(&assets.title_font, &o.title, d.title.w) } else { o.title.clone() };
@@ -108,6 +118,8 @@ mod tests {
         assert!(parse(&q(&[("outline_color", "red")])).unwrap_err().starts_with("Bad outline_color"));
         assert!(parse(&q(&[("time", "night")])).unwrap().night);
         assert!(parse(&q(&[("time", "noon")])).unwrap_err().starts_with("Unknown time 'noon'"));
+        assert!(parse(&q(&[("pixels", "chunky")])).unwrap().chunky);
+        assert!(parse(&q(&[("pixels", "huge")])).unwrap_err().starts_with("Unknown pixels 'huge'"));
     }
 
     #[test]
