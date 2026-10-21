@@ -100,6 +100,8 @@ struct DecorationFile {
 /// and in which inks.
 pub struct Decoration {
     pub frames: Vec<Image>,
+    /// `<i>-night.png`, the same frames at night; empty when the decoration has no night painting yet.
+    pub night: Vec<Image>,
     pub frame_ms: u16,
     pub title: DecorationTitle,
     pub title_ink: Rgb,
@@ -238,26 +240,34 @@ fn painting_image(path: &str, png: &[u8]) -> Result<Image, BoxError> {
     }
 }
 
-/// decorations/<name>/decoration.json with its frames decorations/<name>/0.png, 1.png and so on.
+/// decorations/<name>/decoration.json with its frames decorations/<name>/0.png, 1.png and so on, and the night
+/// frames 0-night.png, 1-night.png, one for each day frame.
 fn decorations(files: &[(&str, &'static [u8])]) -> Result<HashMap<String, Decoration>, BoxError> {
     let mut out = HashMap::new();
     for (path, bytes) in files {
         let Some(name) = path.strip_prefix("decorations/").and_then(|p| p.strip_suffix("/decoration.json")) else { continue };
         let df: DecorationFile = serde_json::from_slice(bytes)?;
         let ink = |k: &str| df.ink.get(k).ok_or(format!("{path}: ink {k:?} missing")).map(|v| hex(v));
-        let mut frames = Vec::new();
-        while let Some((_, b)) = files.iter().find(|(p, _)| *p == format!("decorations/{name}/{}.png", frames.len())) {
-            let img = Image::decode(b)?;
-            if img.w != OW || frames.first().is_some_and(|f: &Image| f.h != img.h) {
-                return Err(format!("{path}: frames must be {OW} wide and all the same height").into());
+        let load = |suffix: &str| -> Result<Vec<Image>, BoxError> {
+            let mut frames = Vec::new();
+            while let Some((_, b)) = files.iter().find(|(p, _)| *p == format!("decorations/{name}/{}{suffix}.png", frames.len())) {
+                let img = Image::decode(b)?;
+                if img.w != OW || frames.first().is_some_and(|f: &Image| f.h != img.h) {
+                    return Err(format!("{path}: frames must be {OW} wide and all the same height").into());
+                }
+                frames.push(img);
             }
-            frames.push(img);
-        }
+            Ok(frames)
+        };
+        let (frames, night) = (load("")?, load("-night")?);
         if frames.is_empty() {
             return Err(format!("{path}: no frames (0.png)").into());
         }
+        if !night.is_empty() && (night.len() != frames.len() || night[0].h != frames[0].h) {
+            return Err(format!("{path}: night frames must match the day frames in number and size").into());
+        }
         let (title_ink, title_edge) = (ink("title")??, ink("title_edge")??);
-        out.insert(name.to_string(), Decoration { frames, frame_ms: df.frame_ms, title: df.title, title_ink, title_edge });
+        out.insert(name.to_string(), Decoration { frames, night, frame_ms: df.frame_ms, title: df.title, title_ink, title_edge });
     }
     Ok(out)
 }

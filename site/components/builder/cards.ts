@@ -52,8 +52,8 @@ export const sceneLabel = sceneName;
 export const kindName = (c: Card) => (c.widget === "decorations" ? decorationLabel(c.scene) : cardName(c.widget, c.scene));
 
 /** A decoration's small picture, without a title. */
-export const decorationThumb = (name: string) => snap(decorationThumbUrl(name));
-const decorationThumbUrl = (name: string) => `/decorations/${name}?scale=2&animate=false`;
+export const decorationThumb = (name: string, night = false) => snap(decorationThumbUrl(name, night));
+const decorationThumbUrl = (name: string, night = false) => `/decorations/${name}?scale=2&animate=false${night ? "&time=night" : ""}`;
 
 /** The demo card a picker shows as a small picture: the site's own copy, at scale 2. */
 export function thumb(w: Widget, scene: string, night = false, fire = "") {
@@ -68,7 +68,7 @@ export const THUMBS = [
   ...WIDGETS.flatMap((w) =>
     SCENES.flatMap((sc) => [false, true].flatMap((night) => (w === "streak" ? ["themed", ""] : [""]).map((f) => thumbUrl(w, sc, night, f)))),
   ),
-  ...DECORATIONS.map((d) => decorationThumbUrl(d.name)),
+  ...DECORATIONS.flatMap((d) => [decorationThumbUrl(d.name), decorationThumbUrl(d.name, true)]),
 ];
 
 /** A card address, or null for anything that is not one. Reads the short form /user/card/scene/time and the long
@@ -89,7 +89,8 @@ export function parseCard(src: string, ownHost = ""): Card | null {
   }
   const q = u.searchParams;
   if (parts.length === 2 && parts[0] === "decorations") {
-    return { origin: u.origin, user: "", widget: "decorations", scene: parts[1], night: false, params: [...q.entries()], hash: u.hash };
+    const params = [...q.entries()].filter(([k]) => k !== "time");
+    return { origin: u.origin, user: "", widget: "decorations", scene: parts[1], night: q.get("time") === "night", params, hash: u.hash };
   }
   let user: string | null;
   let widget: string;
@@ -125,7 +126,7 @@ export function enc(v: string) {
 /** The short address: the scene and night as path parts when they differ from the defaults, the rest as a query. */
 export function writeCard(c: Card, night = c.night): string {
   if (c.widget === "decorations") {
-    const query = c.params.map(([k, v]) => `${k}=${enc(v)}`).join("&");
+    const query = [...c.params, ...(night ? [["time", "night"]] : [])].map(([k, v]) => `${k}=${enc(v)}`).join("&");
     return `${c.origin}/decorations/${enc(c.scene)}${query ? `?${query}` : ""}${c.hash}`;
   }
   const path = night ? `/${c.scene}/night` : c.scene !== "forest" ? `/${c.scene}` : "";

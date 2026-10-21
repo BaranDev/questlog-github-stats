@@ -103,26 +103,51 @@ function Foot({ onRemove, onClose }: Pick<Props, "onRemove" | "onClose">) {
   );
 }
 
-/** A decoration has no stats and no night: the painting, its title and the title's colors. */
+/** A decoration has no stats: the painting, day or night, its title and the title's colors. */
 function DecorationOptions({ spot, index, count, onChange, onRemove, onClose, onStep }: Props) {
   const c = spot.card;
-  const set = (key: string, value: string, typing = true) => onChange(setParam(c, key, value), "single", typing);
+  const mode: Mode = spot.kind === "picture" && spot.dark ? "auto" : "single";
+  const time: Time = mode === "auto" ? "auto" : c.night ? "night" : "day";
+  const set = (key: string, value: string, typing = true) => onChange(setParam(c, key, value), mode, typing);
+  const setTime = (t: Time) => onChange({ ...c, night: t === "night" }, t === "auto" ? "auto" : "single");
   const title = getParam(c, "title");
   return (
     <div className={s.opts}>
-      <Head name="Decoration" sub={decorationLabel(c.scene)} index={index} count={count} onStep={onStep} onClose={onClose} />
+      <Head
+        name="Decoration"
+        sub={`${decorationLabel(c.scene)}, ${time === "auto" ? "switches with dark mode" : time === "night" ? "by night" : "by day"}`}
+        index={index}
+        count={count}
+        onStep={onStep}
+        onClose={onClose}
+      />
       <fieldset className={s.group}>
         <legend className={s.label}>Painting</legend>
         <div className={`${s.thumbs} ${s.c3}`}>
           {DECORATIONS.map((d) => (
             <label key={d.name} className={s.thumb}>
-              <input type="radio" name={`deco-${index}`} checked={c.scene === d.name} onChange={() => onChange({ ...c, scene: d.name }, "single")} />
-              <img className="pix" src={decorationThumb(d.name)} width={640} height={d.h * 2} alt="" loading="lazy" />
+              <input type="radio" name={`deco-${index}`} checked={c.scene === d.name} onChange={() => onChange({ ...c, scene: d.name }, mode)} />
+              <img className="pix" src={decorationThumb(d.name, time === "night")} width={640} height={d.h * 2} alt="" loading="lazy" />
               <span className={s.thumbScene}>{d.label}</span>
             </label>
           ))}
         </div>
       </fieldset>
+      <Segmented<Time>
+        label="Time of day"
+        value={time}
+        onChange={setTime}
+        options={[
+          { value: "day", label: "Day", icon: <Sun aria-hidden="true" /> },
+          { value: "night", label: "Night", icon: <Moon aria-hidden="true" /> },
+          { value: "auto", label: "Switch with dark mode", icon: <SunMoon aria-hidden="true" /> },
+        ]}
+        help={
+          time === "auto"
+            ? "Readers who use GitHub in dark mode see the night painting, everyone else the day one."
+            : "Pick Switch with dark mode to show night to readers who use GitHub in dark mode."
+        }
+      />
       <Field label="Title" value={title} onChange={(v) => set("title", v)} help="Empty: the painting alone. Example: About Me" />
       <details className={s.more}>
         <summary>

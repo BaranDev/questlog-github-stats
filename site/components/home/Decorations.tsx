@@ -12,12 +12,14 @@ export default function Decorations() {
         </h2>
         <p className="lede">
           Painted banners to head the sections of your README, or to divide them. Write any title you like, or none.
+          Each one is painted by day and by night, and switches with the reader&apos;s theme like the cards.
         </p>
       </div>
       <div className={s.grid}>
         {DECORATIONS.map((d) => (
           <figure key={d.name} className={d.h < 128 ? `${s.shot} ${s.wide}` : s.shot}>
-            <div className={s.frame}>
+            <picture className={s.frame}>
+              <source media="(prefers-color-scheme: dark)" srcSet={snap(`${address(d.name, d.title)}${d.title ? "&" : "?"}scale=2&time=night`)} />
               <img
                 className="pix"
                 src={snap(`${address(d.name, d.title)}${d.title ? "&" : "?"}scale=2`)}
@@ -26,7 +28,7 @@ export default function Decorations() {
                 loading="lazy"
                 alt={d.title ? `The ${d.label} decoration titled ${d.title}` : `The ${d.label} decoration`}
               />
-            </div>
+            </picture>
             <figcaption>
               <strong className="display">{d.label}</strong>
               <code>{address(d.name, d.title).replace(/%20/g, " ")}</code>

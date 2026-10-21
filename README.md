@@ -31,7 +31,7 @@ To switch to the night painting for readers in dark mode, use GitHub's `<picture
 </picture>
 ```
 
-The first time a card is requested you'll see a "the scribe is inking your sheet" card for a few seconds while your stats are fetched. Refresh and it's there. Cards update every 12 hours. If GitHub's hourly limit is ever reached, the card says how many minutes the wait is.
+The first time a card is requested you'll see a "the scribe is inking your sheet" card for a few seconds while your stats are fetched. Refresh and it's there. Cards update every 12 hours. If GitHub's hourly limit is ever reached, the card says how many minutes the wait is. [questlog.cc/status](https://questlog.cc/status) shows whether the service is up and letting new users in.
 
 ## Scenes
 
@@ -50,10 +50,21 @@ The gallery shows each scene's Character Sheet in the order of the table.
 
 ## Decorations
 
-Painted banners to head a section of your README or divide two, with an optional title in the card title style. They show no stats, so they need no login.
+Painted banners to head a section of your README or divide two, with an optional title in the card title style. They show no stats, so they need no login. Like the cards, each one is painted by day and by night.
+
+![The seven decorations, by day on the left and by night on the right](assets/readme/decorations.png)
 
 ```md
 ![About Me](https://questlog.cc/decorations/reading-nook?title=About%20Me)
+```
+
+To switch to the night painting for readers in dark mode, add `time=night` to the dark source:
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://questlog.cc/decorations/reading-nook?title=About%20Me&time=night">
+  <img alt="About Me" src="https://questlog.cc/decorations/reading-nook?title=About%20Me">
+</picture>
 ```
 
 | Decoration | Painting |
@@ -66,7 +77,7 @@ Painted banners to head a section of your README or divide two, with an optional
 | `forest-divider` | a mossy log, lower than the others; no title unless you give one |
 | `forest-footer` | glowing mushrooms and ferns, as low as the divider; for the end of a README |
 
-Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate` and `scale`; any other option draws an error card.
+Decorations take only `title`, `title_color`, `outline_color`, `truncate`, `animate`, `scale` and `time` (`time=night` for the night painting); any other option draws an error card.
 
 ## Options
 
