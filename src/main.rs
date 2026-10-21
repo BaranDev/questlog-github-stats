@@ -22,6 +22,7 @@ async fn main() -> Result<(), questlog::BoxError> {
     if let Some(n) = std::env::var("NEW_LOGINS_PER_HOUR").ok().and_then(|v| v.parse().ok()) {
         cfg.new_per_hour = n;
     }
+    let new_per_hour = cfg.new_per_hour;
     let queue = Queue::new(github, store.clone(), cfg);
     queue.start();
     let sweeper = store.clone();
@@ -31,15 +32,17 @@ async fn main() -> Result<(), questlog::BoxError> {
             tick.tick().await;
             match sweeper.sweep(now_secs()) {
                 Ok(0) => {}
-                Ok(n) => eprintln!("sweep: removed {n} users"),
-                Err(e) => eprintln!("sweep: {e}"),
+                Ok(n) => questlog::info!("cache", "hourly sweep removed {n} users nobody asked for in a long time"),
+                Err(e) => questlog::error!("cache", "hourly sweep of saved users failed: {e}"),
             }
         }
     });
 
     let cache = questlog::cache::RenderCache::new(questlog::server::CACHE_BYTES)
         .with_disk(std::path::Path::new(&data).join("renders"), env!("RENDER_VERSION"));
-    let app = Arc::new(App::with_cache(Arc::new(Assets::embedded()?), store, queue, cache));
+    let access = questlog::server::Access::from_env();
+    let admin = if access.is_some() { "admin pages open to ADMIN_EMAILS through Cloudflare Access" } else { "admin pages local only" };
+    let app = Arc::new(App::with_cache(Arc::new(Assets::embedded()?), store, queue, cache).with_access(access));
     let trim = app.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(3600));
@@ -48,15 +51,30 @@ async fn main() -> Result<(), questlog::BoxError> {
             let t = trim.clone();
             let n = tokio::task::spawn_blocking(move || t.cache.trim_disk(questlog::server::DISK_BYTES)).await.unwrap_or(0);
             if n > 0 {
-                eprintln!("renders: trimmed {n} saved cards");
+                questlog::info!("cache", "disk over its budget: removed the {n} least recently used saved cards");
             }
+        }
+    });
+    let status = app.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(900));
+        tick.tick().await; // the first tick is immediate; the start line already says the state
+        loop {
+            tick.tick().await;
+            questlog::server::log_status(&status);
         }
     });
     // HOST=127.0.0.1 keeps a local run off the network; the container needs the default.
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
-    eprintln!("questlog listening on {host}:{port}");
-    axum::serve(listener, router(app)).with_graceful_shutdown(shutdown()).await?;
+    questlog::info!(
+        "start",
+        "questlog {} (render version {}) listening on {host}:{port} | data in {data} | up to {new_per_hour} new users an hour | {admin}",
+        env!("CARGO_PKG_VERSION"),
+        env!("RENDER_VERSION")
+    );
+    let service = router(app).into_make_service_with_connect_info::<std::net::SocketAddr>();
+    axum::serve(listener, service).with_graceful_shutdown(shutdown()).await?;
     Ok(())
 }
 

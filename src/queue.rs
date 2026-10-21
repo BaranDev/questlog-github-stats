@@ -13,6 +13,7 @@ use tokio::sync::Notify;
 use tokio::time::Instant;
 
 pub struct Quota {
+    pub limit: u64, // points an hour for this token
     pub remaining: u64,
     pub reset_at: u64, // unix seconds
 }
@@ -86,6 +87,7 @@ struct State {
     paused_until: Option<Instant>,
     next_sweep: Instant,
     quota: Option<u64>,
+    quota_limit: u64,
     quota_reset: u64,              // unix seconds when the quota last seen refills
     refresh: HashMap<String, u64>, // the refresh lane: login -> requests while it waited
 }
@@ -121,6 +123,7 @@ impl<F: Fetcher> Queue<F> {
             paused_until: None,
             next_sweep: Instant::now(),
             quota: None,
+            quota_limit: 5000,
             quota_reset: 0,
             refresh: HashMap::new(),
         };
@@ -155,7 +158,9 @@ impl<F: Fetcher> Queue<F> {
         }
         if s.refresh.len() < self.inner.cfg.refresh_capacity {
             s.refresh.insert(login.to_string(), 1);
+            let waiting = s.refresh.len();
             drop(s);
+            crate::info!("queue", "{login} has stale stats: refresh queued ({waiting} refreshes waiting)");
             self.inner.notify.notify_one();
         }
     }
@@ -170,12 +175,41 @@ impl<F: Fetcher> Queue<F> {
         self.inner.state.lock().unwrap().quota
     }
 
+    /// The queue's side of /health: GitHub's quota and when it refills, new logins this hour against the cap,
+    /// and how full each lane is.
+    pub fn health(&self) -> serde_json::Value {
+        let now = Instant::now();
+        let cfg = &self.inner.cfg;
+        let mut s = self.inner.state.lock().unwrap();
+        while s.new_log.front().is_some_and(|&t| now.duration_since(t) >= HOUR) {
+            s.new_log.pop_front();
+        }
+        let next_new = s.new_log.front().map(|&t| (HOUR - now.duration_since(t)).as_secs());
+        let paused_secs = s.paused_until.map_or(0, |p| p.saturating_duration_since(now).as_secs());
+        serde_json::json!({
+            "github": {
+                "remaining": s.quota,
+                "limit": s.quota_limit,
+                "resets_at": (s.quota_reset > 0).then_some(s.quota_reset),
+                "paused_secs": paused_secs,
+            },
+            "new_users": {
+                "this_hour": s.new_log.len(),
+                "per_hour": cfg.new_per_hour,
+                "oldest_frees_in_secs": next_new,
+            },
+            "held": s.failed.values().filter(|&&until| until > now).count(),
+            "waiting": {"new": s.pending.len(), "new_capacity": cfg.capacity, "refresh": s.refresh.len(), "refresh_capacity": cfg.refresh_capacity},
+        })
+    }
+
     pub fn enqueue(&self, login: &str, ip: Option<&str>) -> Enqueued {
         let now = Instant::now();
         let cfg = &self.inner.cfg;
         let mut s = self.inner.state.lock().unwrap();
         if let Some(&until) = s.failed.get(login) {
             if now < until {
+                crate::info!("queue", "{login} not queued: its last GitHub fetches failed, held for {} s more", (until - now).as_secs());
                 return Enqueued::Failed;
             }
             s.failed.remove(login);
@@ -194,12 +228,18 @@ impl<F: Fetcher> Queue<F> {
             return Enqueued::Waiting { eta_secs: eta(&s, cfg, pos, now), paused: paused(&s, now) };
         }
         if s.pending.len() >= cfg.capacity {
+            crate::warn!("queue", "{login} turned away with the busy card: the queue is full ({} new users waiting)", cfg.capacity);
             return Enqueued::Full;
         }
         while s.new_log.front().is_some_and(|&t| now.duration_since(t) >= HOUR) {
             s.new_log.pop_front();
         }
         if s.new_log.len() >= cfg.new_per_hour {
+            crate::warn!(
+                "queue",
+                "{login} turned away with the busy card: {} new users were already queued this hour (NEW_LOGINS_PER_HOUR)",
+                cfg.new_per_hour
+            );
             return Enqueued::Full;
         }
         if let Some(ip) = ip {
@@ -208,6 +248,7 @@ impl<F: Fetcher> Queue<F> {
                 log.pop_front();
             }
             if log.len() >= cfg.per_ip_per_hour {
+                crate::warn!("queue", "{login} turned away with the busy card: this visitor asked for {} new users this hour", cfg.per_ip_per_hour);
                 return Enqueued::IpLimited;
             }
             log.push_back(now);
@@ -217,7 +258,13 @@ impl<F: Fetcher> Queue<F> {
         s.active.insert(login.to_string());
         let wait = eta(&s, cfg, s.pending.len() - 1, now);
         let is_paused = paused(&s, now);
+        let ahead = s.pending.len() - 1;
         drop(s);
+        crate::info!(
+            "queue",
+            "{login} is new: queued for its first GitHub fetch, {ahead} ahead, ready in about {wait} s{}",
+            if is_paused { " (fetching is paused for GitHub's quota)" } else { "" }
+        );
         self.inner.notify.notify_one();
         Enqueued::Waiting { eta_secs: wait, paused: is_paused }
     }
@@ -284,11 +331,12 @@ impl<F: Fetcher> Queue<F> {
             Ok(mut f) => {
                 f.stats.login = login.to_string(); // keyed by the requested login, or a renamed account refetches forever
                 if let Err(e) = self.inner.store.put(f.stats.clone()) {
-                    eprintln!("store {login}: {e}");
+                    crate::error!("github", "fetched {login} but saving the stats failed: {e}");
                 }
                 Ok(f)
             }
             Err(FetchError::NotFound) => {
+                crate::info!("github", "{login} is not a GitHub user: remembered as unknown, its cards say so");
                 self.inner.store.forget(login);
                 self.inner.store.mark_unknown(login, now_secs());
                 Err(FetchError::NotFound)
@@ -299,10 +347,21 @@ impl<F: Fetcher> Queue<F> {
         match result {
             Ok(f) => {
                 s.avg_secs = 0.8 * s.avg_secs + 0.2 * took.as_secs_f64();
+                let quota = f.quota.as_ref().map_or(String::new(), |q| {
+                    format!(" | quota {} left, refills at {}", q.remaining, crate::log::clock(q.reset_at))
+                });
+                crate::info!("github", "fetched {login} in {:.1} s{quota}", took.as_secs_f64());
                 if let Some(q) = f.quota {
                     s.quota = Some(q.remaining);
+                    s.quota_limit = q.limit;
                     s.quota_reset = q.reset_at;
                     if q.remaining < cfg.min_quota {
+                        crate::warn!(
+                            "github",
+                            "quota below {}: fetching paused until it refills at {}, new users see a wait message",
+                            cfg.min_quota,
+                            crate::log::clock(q.reset_at)
+                        );
                         pause(&mut s, now + Duration::from_secs(q.reset_at.saturating_sub(now_secs())));
                     }
                 }
@@ -314,24 +373,35 @@ impl<F: Fetcher> Queue<F> {
                 s.attempts.remove(login);
             }
             Err(FetchError::RateLimited { reset_at }) => {
+                crate::warn!(
+                    "github",
+                    "GitHub rate limited the fetch of {login}: fetching paused until {}, {login} goes back to the front",
+                    crate::log::clock(reset_at)
+                );
                 pause(&mut s, now + Duration::from_secs(reset_at.saturating_sub(now_secs()).max(1)));
                 s.pending.push_front(login.to_string());
                 drop(s);
                 self.inner.notify.notify_one();
             }
             Err(FetchError::Transient(e)) => {
-                eprintln!("fetch {login}: {e}");
                 let tries = {
                     let a = s.attempts.entry(login.to_string()).or_default();
                     *a += 1;
                     *a
                 };
                 if tries > cfg.backoff.len() {
+                    crate::error!(
+                        "github",
+                        "fetching {login} failed {tries} times, giving up for {} min (its cards say the road is closed): {e}",
+                        cfg.fail_hold.as_secs() / 60
+                    );
                     s.active.remove(login);
                     s.attempts.remove(login);
                     s.failed.insert(login.to_string(), now + cfg.fail_hold);
                 } else {
-                    let (q, login, wait) = (self.clone(), login.to_string(), cfg.backoff[tries - 1]);
+                    let wait = cfg.backoff[tries - 1];
+                    crate::warn!("github", "fetching {login} failed (try {tries}), trying again in {} s: {e}", wait.as_secs());
+                    let (q, login) = (self.clone(), login.to_string());
                     tokio::spawn(async move {
                         tokio::time::sleep(wait).await;
                         q.inner.state.lock().unwrap().pending.push_back(login);
@@ -448,7 +518,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn refreshes_keep_a_quota_reserve_for_new_logins() {
-        let low = Some(Quota { remaining: 1000, reset_at: now_secs() + 3600 });
+        let low = Some(Quota { limit: 5000, remaining: 1000, reset_at: now_secs() + 3600 });
         let (q, mock, _) = setup("q-reserve", QueueConfig::default(), vec![("a", ok("a", low)), ("b", ok("b", None))]);
         q.enqueue("a", Some("ip"));
         q.start();
@@ -540,7 +610,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn low_quota_pauses_then_resumes() {
-        let low = Quota { remaining: 10, reset_at: now_secs() + 100 };
+        let low = Quota { limit: 5000, remaining: 10, reset_at: now_secs() + 100 };
         let (q, mock, _) = setup("q-quota", QueueConfig::default(), vec![("a", ok("a", Some(low))), ("b", ok("b", None))]);
         q.start();
         q.enqueue("a", None);
@@ -557,7 +627,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn waiting_says_whether_the_queue_is_paused() {
-        let low = Quota { remaining: 10, reset_at: now_secs() + 100 };
+        let low = Quota { limit: 5000, remaining: 10, reset_at: now_secs() + 100 };
         let (q, _, _) = setup("q-paused-flag", QueueConfig::default(), vec![("a", ok("a", Some(low))), ("b", ok("b", None))]);
         q.start();
         let Enqueued::Waiting { paused, .. } = q.enqueue("a", None) else { panic!("a should queue") };
@@ -595,8 +665,8 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn a_pause_is_never_shortened() {
-        let long = Quota { remaining: 1, reset_at: now_secs() + 500 };
-        let short = Quota { remaining: 1, reset_at: now_secs() + 50 };
+        let long = Quota { limit: 5000, remaining: 1, reset_at: now_secs() + 500 };
+        let short = Quota { limit: 5000, remaining: 1, reset_at: now_secs() + 50 };
         let (q, mock, _) = setup("q-pause", QueueConfig::default(), vec![
             ("a", ok("a", Some(long))), ("b", ok("b", Some(short))), ("c", ok("c", None)),
         ]);

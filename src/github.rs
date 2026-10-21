@@ -27,7 +27,7 @@ pub trait Transport: Send + Sync + 'static {
 }
 
 const PROFILE: &str = "query($login: String!, $after: String) {
-  rateLimit { remaining resetAt }
+  rateLimit { limit remaining resetAt }
   user(login: $login) {
     login createdAt
     followers { totalCount } pullRequests { totalCount } issues { totalCount }
@@ -52,7 +52,7 @@ fn years_query(first: i64, last: i64) -> String {
             )
         })
         .collect();
-    format!("query($login: String!) {{ rateLimit {{ remaining resetAt }} user(login: $login) {{\n{parts}}} }}")
+    format!("query($login: String!) {{ rateLimit {{ limit remaining resetAt }} user(login: $login) {{\n{parts}}} }}")
 }
 
 pub struct GitHub<T> {
@@ -206,7 +206,11 @@ fn year(c: &Value) -> RawYear {
 
 fn quota(body: &Value) -> Option<Quota> {
     let r = &body["data"]["rateLimit"];
-    Some(Quota { remaining: r["remaining"].as_u64()?, reset_at: parse_utc(r["resetAt"].as_str()?)? })
+    Some(Quota {
+        limit: r["limit"].as_u64().unwrap_or(5000),
+        remaining: r["remaining"].as_u64()?,
+        reset_at: parse_utc(r["resetAt"].as_str()?)?,
+    })
 }
 
 /// The real transport. The token goes only into the Authorization header and is never logged.
