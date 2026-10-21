@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { m, rich } from "@/i18n";
 import { MousePointerClick, Pencil } from "lucide-react";
 import "github-markdown-css/github-markdown.css";
 import { render, morph, type Theme } from "./render";
@@ -34,6 +35,7 @@ export default function ProfilePreview({
   flash,
   onPick,
   empty,
+  plain = false,
 }: {
   text: string;
   spots: Spot[];
@@ -45,6 +47,8 @@ export default function ProfilePreview({
   flash: number | null;
   onPick: (i: number) => void;
   empty: React.ReactNode;
+  /** Not for a GitHub profile: the page alone, without GitHub's profile header around it. */
+  plain?: boolean;
 }) {
   const article = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -116,33 +120,37 @@ export default function ProfilePreview({
   const avatar = profile.avatar || `https://github.com/${profile.login}.png?size=128`;
   return (
     <div className={`${s.gh} ${theme === "dark" ? gh.dark : gh.light}`} data-theme={theme}>
-      <div className={s.ghBar}>
-        <Mark />
-        <b>{profile.login}</b>
-      </div>
-      <div className={s.ghTabs} aria-hidden="true">
-        <span className={s.ghOn}>Overview</span>
-        <span>Repositories</span>
-        <span>Projects</span>
-        <span>Packages</span>
-        <span>Stars</span>
-      </div>
-      <div className={s.ghBody}>
-        <div className={s.ghWho}>
-          <img className={s.ghAvatar} src={avatar} width={64} height={64} alt="" />
-          <div>
-            <div className={s.ghName}>{profile.name}</div>
-            <div className={s.ghLogin}>{profile.login}</div>
+      {!plain && (
+        <>
+          <div className={s.ghBar}>
+            <Mark />
+            <b>{profile.login}</b>
           </div>
-          <span className={s.ghFollow} aria-hidden="true">
-            Follow
-          </span>
-        </div>
+          <div className={s.ghTabs} aria-hidden="true">
+            <span className={s.ghOn}>{m.builderParts.preview.tabs[0]}</span>
+            <span>{m.builderParts.preview.tabs[1]}</span>
+            <span>{m.builderParts.preview.tabs[2]}</span>
+            <span>{m.builderParts.preview.tabs[3]}</span>
+            <span>{m.builderParts.preview.tabs[4]}</span>
+          </div>
+        </>
+      )}
+      <div className={s.ghBody}>
+        {!plain && (
+        <div className={s.ghWho}>
+            <img className={s.ghAvatar} src={avatar} width={64} height={64} alt="" />
+            <div>
+              <div className={s.ghName}>{profile.name}</div>
+              <div className={s.ghLogin}>{profile.login}</div>
+            </div>
+            <span className={s.ghFollow} aria-hidden="true">
+              {m.builderParts.preview.follow}
+            </span>
+          </div>
+        )}
         <div className={s.ghReadme}>
           <div className={s.ghReadmeHead}>
-            <span>
-              <b>{profile.login}</b> / README.md
-            </span>
+            <span>{plain ? <b>{m.builderParts.preview.yourPage}</b> : rich(m.builderParts.preview.readmeHead(profile.login), { b: (c) => <b>{c}</b> })}</span>
             <Pencil aria-hidden="true" />
           </div>
           <div
@@ -169,7 +177,7 @@ export default function ProfilePreview({
                 aria-hidden="true"
               >
                 {t.kind === "sel" ? <Pencil /> : <MousePointerClick />}
-                {t.kind === "sel" ? "Changing this card" : touch ? "Tap to change" : "Click to change"}
+                {t.kind === "sel" ? m.builderParts.preview.changing : touch ? m.builderParts.preview.tap : m.builderParts.preview.click}
               </span>
             ))}
           </div>

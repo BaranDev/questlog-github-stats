@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import Health from "@/components/Health";
+import { m } from "@/i18n";
 
 // Behind Cloudflare Access; not indexed or linked from the site.
 export const metadata: Metadata = {
-  title: "questlog health, every number",
+  title: m.meta.adminStatus.title,
   robots: { index: false, follow: false },
 };
 

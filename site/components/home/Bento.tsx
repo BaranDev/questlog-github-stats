@@ -1,5 +1,6 @@
 import { SCENES, card, snap } from "../data";
 import s from "./Bento.module.css";
+import { m, rich } from "@/i18n";
 
 const FAN = (["stats", "languages", "streak"] as const).map((w) => snap(card(w, "castle-aurora", "&time=night&scale=2")));
 
@@ -8,12 +9,9 @@ export default function Bento() {
     <section className="section" id="features" aria-labelledby="features-title">
       <div className="section-head">
         <h2 className="h2" id="features-title">
-          How it works
+          {m.home.bento.title}
         </h2>
-        <p className="lede">
-          Your README links to an image. questlog draws it on its own server, so there is nothing to install or keep
-          running.
-        </p>
+        <p className="lede">{m.home.bento.lede}</p>
       </div>
 
       <div className={s.grid}>
@@ -24,19 +22,17 @@ export default function Bento() {
             ))}
           </div>
           <div className={s.copy}>
-            <p className={s.big}>16</p>
-            <h3 className={s.title}>painted scenes</h3>
-            <p className={s.text}>
-              Forests, castles, cozy places and old halls. Every scene has all three cards.
-            </p>
+            <p className={s.big}>{m.home.bento.scenesBig}</p>
+            <h3 className={s.title}>{m.home.bento.scenesTitle}</h3>
+            <p className={s.text}>{m.home.bento.scenesText}</p>
           </div>
         </article>
 
         <article className={`${s.card} ${s.setup}`}>
           <h3 className={s.words}>
-            <span>Nothing to set up</span>
+            <span>{m.home.bento.setupTitle}</span>
           </h3>
-          <p className={s.text}>GitHub loads a public image. No token, no workflow, no Action to schedule.</p>
+          <p className={s.text}>{m.home.bento.setupText}</p>
         </article>
 
         <article className={`${s.card} ${s.daynight}`}>
@@ -45,17 +41,15 @@ export default function Bento() {
             <img className={s.night} src="/art/rose-garden/streak-night.png" width={320} height={128} alt="" loading="lazy" />
           </div>
           <div className={s.copy}>
-            <h3 className={s.title}>Day and night</h3>
-            <p className={s.text}>
-              Readers on a dark theme get the night painting, through a plain <code>&lt;picture&gt;</code> tag.
-            </p>
+            <h3 className={s.title}>{m.home.bento.dayNightTitle}</h3>
+            <p className={s.text}>{rich(m.home.bento.dayNightText, { code: (c) => <code>{c}</code> })}</p>
           </div>
         </article>
 
         <article className={`${s.card} ${s.three}`}>
           <div className={s.copy}>
-            <h3 className={s.title}>Three cards</h3>
-            <p className={s.text}>A Character Sheet of your stats, a Spellbook of your top languages and a fire that grows with your streak.</p>
+            <h3 className={s.title}>{m.home.bento.threeTitle}</h3>
+            <p className={s.text}>{m.home.bento.threeText}</p>
           </div>
           <div className={`${s.fan} pix`} aria-hidden="true">
             {FAN.map((src) => (

@@ -1,5 +1,6 @@
 // Reading and writing questlog card addresses inside a README.
 
+import { m } from "@/i18n";
 import { DECORATIONS, THEMES, SCENES, cardName, decorationLabel, sceneName, snap, type Widget } from "../data";
 
 export const WIDGETS: Widget[] = ["stats", "languages", "streak"];
@@ -178,7 +179,7 @@ export function writePairs(m: Map<string, string>) {
 /** The alt text a card gets when it is added; also what counts as "not written by hand" when the card changes. */
 export function autoAlt(c: Card) {
   if (c.widget === "decorations") return getParam(c, "title") || decorationLabel(c.scene);
-  return `${c.user}'s ${cardName(c.widget, c.scene)}`;
+  return m.builderParts.cards.alt(c.user, cardName(c.widget, c.scene));
 }
 
 function isAutoAlt(alt: string, c: Card) {
@@ -186,7 +187,7 @@ function isAutoAlt(alt: string, c: Card) {
   if (c.widget === "decorations") return a === "" || a === autoAlt(c).toLowerCase() || DECORATIONS.some((d) => a === d.label.toLowerCase());
   const w = c.widget;
   const names = [w, cardName(w, c.scene), ...SCENES.map((s) => cardName(w, s))];
-  return a === "" || names.some((n) => a === `${c.user}'s ${n}`.toLowerCase());
+  return a === "" || names.some((n) => a === m.builderParts.cards.alt(c.user, n).toLowerCase());
 }
 
 /** The alt text after a card changes: kept when written by hand, renamed when it was the automatic one. */

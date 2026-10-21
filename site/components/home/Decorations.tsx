@@ -1,5 +1,6 @@
 import { DECORATIONS, snap } from "../data";
 import s from "./Decorations.module.css";
+import { m } from "@/i18n";
 
 const address = (name: string, title: string) => `/decorations/${name}${title ? `?title=${encodeURIComponent(title)}` : ""}`;
 
@@ -8,12 +9,9 @@ export default function Decorations() {
     <section className="section" aria-labelledby="decorations-title">
       <div className="section-head">
         <h2 className="h2" id="decorations-title">
-          Decorations
+          {m.home.decorations.title}
         </h2>
-        <p className="lede">
-          Painted banners to head the sections of your README, or to divide them. Write any title you like, or none.
-          Each one is painted by day and by night, and switches with the reader&apos;s theme like the cards.
-        </p>
+        <p className="lede">{m.home.decorations.lede}</p>
       </div>
       <div className={s.grid}>
         {DECORATIONS.map((d) => (
@@ -26,7 +24,7 @@ export default function Decorations() {
                 width={640}
                 height={d.h * 2}
                 loading="lazy"
-                alt={d.title ? `The ${d.label} decoration titled ${d.title}` : `The ${d.label} decoration`}
+                alt={m.home.decorations.alt(d.label, d.title)}
               />
             </picture>
             <figcaption>
@@ -38,7 +36,7 @@ export default function Decorations() {
       </div>
       <p className={s.more}>
         <a className="btn btn-ghost" href="/builder">
-          Add one in the profile builder
+          {m.home.decorations.more}
         </a>
       </p>
     </section>
