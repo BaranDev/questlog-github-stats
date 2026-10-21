@@ -10,7 +10,9 @@ export default function Nav({ still = false }: { still?: boolean }) {
         questlog
       </a>
       <nav aria-label={m.site.nav.label}>
-        <a href="/builder">{m.site.nav.makeCards}</a>
+        <a href="/builder" className="nav-builder" data-label={m.site.nav.makeCards}>
+          {m.site.nav.makeCards}
+        </a>
         <a className="nav-more" href="/#scenes">
           {m.site.nav.scenes}
         </a>

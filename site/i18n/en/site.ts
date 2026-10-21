@@ -6,7 +6,7 @@ export const site = {
   nav: {
     home: "questlog home",
     label: "Main",
-    makeCards: "Make cards",
+    makeCards: "Profile builder",
     scenes: "Scenes",
     allCards: "All cards",
     wiki: "Wiki",
@@ -14,7 +14,7 @@ export const site = {
   },
   footer: {
     label: "Footer",
-    makeCards: "Make my cards",
+    makeCards: "Profile builder",
     scenes: "Scenes",
     allCards: "All cards",
     wiki: "Wiki",
@@ -68,7 +68,7 @@ export const home = {
   hero: {
     title: "Pixel art cards for your GitHub profile",
     line: "Your stats, your top languages and your streak, drawn in one of 16 painted scenes. Add them to your README with one line: no token, no setup.",
-    make: "Make my cards",
+    make: "Build my profile",
     wiki: "Read the wiki",
     alt: (user: string) => `${user}'s Character Sheet in the castle scene`,
   },

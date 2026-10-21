@@ -132,6 +132,7 @@
 
 /* Live card that links to its full size */
 .shot {
+  position: relative;
   display: block;
   overflow: hidden;
   border-radius: 12px;

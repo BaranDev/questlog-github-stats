@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { m, rich } from "@/i18n";
-import { Check, ChevronLeft, ChevronRight, Copy, ExternalLink, X } from "lucide-react";
+import { m } from "@/i18n";
+import { Check, Copy } from "lucide-react";
+import Preview, { PreviewHint, itemOf } from "./Preview";
 import { DECORATIONS, HOST, THEMES, card, sceneName, snap } from "./data";
 import { DECORATION_GROUPS, LOOKS, address, groups, stillOf, type Group, type Look } from "./combos";
 import s from "./AllCards.module.css";
@@ -92,24 +93,10 @@ function Header() {
   );
 }
 
-/** One card on the page, as the preview needs it. */
-type Item = { address: string; name: string; look: Look; h: number; night: string; day: string };
-
 /** A scene (or the decorations): a jump list, then one block per kind of card, one row per variant, one column per look. */
 function Combos({ title, list }: { title: string; list: Group[] }) {
   const count = list.reduce((n, g) => n + g.rows.length, 0) * LOOKS.length;
-  const items: Item[] = list.flatMap((g) =>
-    g.rows.flatMap((r) =>
-      LOOKS.map((l) => ({
-        address: address(r, l),
-        name: r.name,
-        look: l,
-        h: r.h,
-        day: address(r, { ...l, time: "day" } as Look),
-        night: address(r, { ...l, time: "night" } as Look),
-      })),
-    ),
-  );
+  const items = list.flatMap((g) => g.rows.flatMap((r) => LOOKS.map((l) => itemOf(address(r, l), r.name, title, r.h))));
   const [open, setOpen] = useState<number | null>(null);
   const id = (g: Group) => `group-${g.title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
   return (
@@ -156,132 +143,9 @@ function Combos({ title, list }: { title: string; list: Group[] }) {
         </div>
       ))}
       {open !== null && items[open] && (
-        <Preview item={items[open]} place={title} index={open} count={items.length} onMove={setOpen} onClose={() => setOpen(null)} />
+        <Preview items={items} index={open} onMove={setOpen} onClose={() => setOpen(null)} demo />
       )}
     </section>
-  );
-}
-
-/** Copies text and says so only once the browser confirms it. */
-function useCopy(): [string, (key: string, text: string) => void] {
-  const [done, setDone] = useState("");
-  const timer = useRef(0);
-  const copy = async (key: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setDone(key);
-    } catch {
-      setDone(`fail:${key}`);
-    }
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setDone(""), 2200);
-  };
-  return [done, copy];
-}
-
-/** The card big and live (animated), with what you can do with it, and Previous and Next through the page's cards. */
-function Preview({ item, place, index, count, onMove, onClose }: {
-  item: Item;
-  place: string;
-  index: number;
-  count: number;
-  onMove: (i: number) => void;
-  onClose: () => void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [done, copy] = useCopy();
-  useEffect(() => {
-    const d = dialog.current;
-    if (d && !d.open) d.showModal();
-    return () => d?.close();
-  }, []);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" && index < count - 1) onMove(index + 1);
-      if (e.key === "ArrowLeft" && index > 0) onMove(index - 1);
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [index, count, onMove]);
-
-  const url = HOST + item.address;
-  const md = `![${item.name}](${url})`;
-  const picture = [
-    "<picture>",
-    `  <source media="(prefers-color-scheme: dark)" srcset="${HOST + item.night}">`,
-    `  <img alt="${item.name.replace(/"/g, "&quot;")}" src="${HOST + item.day}">`,
-    "</picture>",
-  ].join("\n");
-  const label = (key: string, text: string) => (done === key ? A.copied : done === `fail:${key}` ? A.copyFailed : text);
-  const icon = (key: string) => (done === key ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />);
-
-  return (
-    <dialog
-      ref={dialog}
-      className={s.preview}
-      aria-labelledby="preview-title"
-      onClose={onClose}
-      onClick={(e) => e.target === dialog.current && onClose()}
-    >
-      <div className={s.previewBox}>
-        <div className={s.previewHead}>
-          <div>
-            <h2 id="preview-title" className={s.previewTitle}>
-              {item.name}
-            </h2>
-            <p className={s.previewSub}>
-              {A.previewSub(place, item.look.label, index + 1, count)}
-            </p>
-          </div>
-          <button type="button" className={s.previewClose} onClick={onClose} aria-label={A.close}>
-            <X aria-hidden="true" />
-          </button>
-        </div>
-        <div className={s.previewStage}>
-          <button
-            type="button"
-            className={s.previewArrow}
-            onClick={() => onMove(index - 1)}
-            disabled={index === 0}
-            aria-label={A.previous}
-          >
-            <ChevronLeft aria-hidden="true" />
-          </button>
-          <img key={item.address} className="pix" src={`${item.address}&scale=4`} width={1280} height={item.h * 4} alt={A.liveAlt(item.name, item.look.label)} />
-          <button
-            type="button"
-            className={s.previewArrow}
-            onClick={() => onMove(index + 1)}
-            disabled={index === count - 1}
-            aria-label={A.next}
-          >
-            <ChevronRight aria-hidden="true" />
-          </button>
-        </div>
-        <code className={s.previewUrl}>{url}</code>
-        <div className={s.previewActions}>
-          <button type="button" className="btn btn-primary" onClick={() => copy("url", url)}>
-            {icon("url")}
-            {label("url", A.copyAddress)}
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={() => copy("md", md)}>
-            {icon("md")}
-            {label("md", A.copyMarkdown)}
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={() => copy("pic", picture)}>
-            {icon("pic")}
-            {label("pic", A.copyDark)}
-          </button>
-          <a className="btn btn-ghost" href={item.address} target="_blank" rel="noopener">
-            <ExternalLink aria-hidden="true" />
-            {A.openLive}
-          </a>
-        </div>
-        <p className={s.previewHelp}>
-          {rich(A.help, { code: (c) => <code>{c}</code>, a: (c) => <a href="/builder">{c}</a> })}
-        </p>
-      </div>
-    </dialog>
   );
 }
 
@@ -301,6 +165,7 @@ function Tile({ address, look, alt, h, onOpen }: { address: string; look: Look; 
     <figure className={s.tile}>
       <button type="button" className={s.shot} onClick={onOpen} aria-label={A.previewLabel(alt)}>
         <img className="pix" src={snap(stillOf(address))} width={640} height={h * 2} alt="" loading="lazy" />
+        <PreviewHint />
       </button>
       <figcaption className={s.cap}>
         <span className={s.look}>{look.label}</span>

@@ -19,6 +19,8 @@ export type Purpose = "profile" | "other";
 
 /** The first text for a page that is not a GitHub profile. */
 export const otherTemplate = () => tx.otherTemplate;
+/** The first text without a login, where there are no stats to talk about. */
+export const plainTemplate = () => tx.plainTemplate;
 
 /** The account's display name and avatar; ok is false when GitHub has no such account and null when it could not
  * say (offline, or its hourly limit for this reader). */
@@ -47,10 +49,10 @@ async function profileReadme(login: string): Promise<string | null> {
   return null;
 }
 
-export function TourSteps() {
+export function TourSteps({ other = false }: { other?: boolean }) {
   return (
     <ol className={s.tourList}>
-      {tx.tourSteps.map((step) => (
+      {(other ? tx.tourStepsOther : tx.tourSteps).map((step) => (
         <li key={step}>{rich(step, { b: (c) => <b>{c}</b> })}</li>
       ))}
     </ol>
@@ -179,6 +181,19 @@ export default function LoginStep({
                     {tx.cancel}
                   </button>
                 )}
+                {other && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    title={tx.noLoginHelp}
+                    onClick={() => {
+                      run.current++; // a lookup still on its way must not land after this
+                      onDone({ login: "", name: "", avatar: "" }, keepable ? null : plainTemplate(), keepable ? "keep" : "fresh");
+                    }}
+                  >
+                    {tx.noLogin}
+                  </button>
+                )}
                 <button type="button" className="btn btn-primary" onClick={next} disabled={phase === "checking"}>
                   {phase === "checking" ? (
                     <>
@@ -252,8 +267,8 @@ export default function LoginStep({
             <span className={s.label}>{tx.tourNew}</span>
             <CloseButton onClick={onTourDone} label={tx.tourClose} />
           </div>
-          <p className={s.tourTitle}>{tx.tourTitle}</p>
-          <TourSteps />
+          <p className={s.tourTitle}>{other ? tx.tourTitleOther : tx.tourTitle}</p>
+          <TourSteps other={other} />
           <button type="button" className="btn btn-ghost" onClick={onTourDone}>
             {tx.tourGotIt}
           </button>

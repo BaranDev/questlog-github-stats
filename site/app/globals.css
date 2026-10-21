@@ -503,3 +503,34 @@ img[src*="/streak"] {
   height: 1.05em;
   flex: none;
 }
+
+/* The profile builder link glows softly: a brighter copy of its words fades in and out over them (opacity only). */
+.nav nav a.nav-builder {
+  position: relative;
+  color: var(--gold);
+}
+
+.nav-builder::after {
+  content: attr(data-label);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff6dc;
+  text-shadow: 0 0 10px rgba(245, 222, 160, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  animation: builder-glow 3.6s ease-in-out infinite;
+}
+
+@keyframes builder-glow {
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-builder::after {
+    animation: none;
+  }
+}
