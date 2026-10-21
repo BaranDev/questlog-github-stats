@@ -115,6 +115,10 @@ export const builder = {
         bodyOther: "This is the text you will paste into your page. Type anything you like; the lines with questlog in them are your cards.",
         bodyProfile: "This is the text GitHub shows on your profile. Type anything you like; the lines with questlog in them are your cards.",
       },
+      templates: {
+        title: "Try a template",
+        body: "Not sure where to start? Templates fill in a whole page, from simple to every card and decoration. Undo brings your text back, and if you started from your README, Back to my README is always there.",
+      },
       more: {
         title: "More cards and banners",
         body: "Add a card puts a new card, or a painted decoration banner, where your cursor is in the text.",
@@ -129,6 +133,41 @@ export const builder = {
   },
   editor: {
     label: "Your README, in Markdown",
+  },
+  templates: {
+    button: "Templates",
+    title: "Start from a template",
+    sub: "A template replaces your text. Undo brings it back.",
+    names: { simple: "Simple", details: "Some details", everything: "The most detailed" } as Record<string, string>,
+    describe: {
+      simple: "A banner, a line about you, your Character Sheet and a footer.",
+      details: "Banners for each section, with your Character Sheet, Spellbook and Campfire.",
+      everything: "Every card and all seven decorations, section by section.",
+    } as Record<string, string>,
+    describeNoLogin: {
+      simple: "A banner, a line about you and a footer.",
+      details: "A banner for each section, with a line or two under each.",
+      everything: "All seven decorations, section by section.",
+    } as Record<string, string>,
+    use: "Use this",
+    applied: (name: string) => `${name} template in place. Change anything you like, or Undo to go back.`,
+    backToReadme: "Back to my README",
+    backToReadmeHelp: "Your profile README as it was on GitHub when you started here.",
+    restored: "Your README from GitHub is back.",
+    about: "About Me",
+    skills: "Technical Skills",
+    learning: "Learning Focus",
+    projects: "Projects",
+    contact: "Get In Touch",
+    banner: "Banner",
+    alt: (login: string, widget: string) =>
+      `${login}'s ${widget === "stats" ? "Character Sheet" : widget === "languages" ? "Spellbook" : "Campfire"}`,
+    intro: (name: string) => `# Hi, I'm ${name}\n\nA line or two about you: what you build, what you're learning, how to reach you.`,
+    introOther: "## A heading for your page\n\nA line or two about it.",
+    skillsText: "- The languages and tools you use most",
+    learningText: "- What you are learning right now\n- What you want to learn next",
+    projectsText: "- **A project:** what it does, and a link\n- **Another project:** what it does, and a link",
+    contactText: "- Where people can reach you",
   },
   addCard: {
     title: "Add a card",

@@ -13,6 +13,8 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  LayoutTemplate,
+  FileText,
   Sun,
   TriangleAlert,
   Undo2,
@@ -20,6 +22,7 @@ import {
 import { DECORATIONS, HOST, cardName, type Widget } from "../data";
 import { HOSTS, autoAlt, findSpots, getParam, insertAt, kindName, removeSpot, renameUser, replaceSpot, setParam, writeSpot, type Card, type Spot } from "./cards";
 import Coach, { type CoachStep } from "./Coach";
+import { TEMPLATES, template, type TemplateKind } from "./templates";
 import CardOptions, { type Mode } from "./CardOptions";
 import AddCard from "./AddCard";
 import CopyHelp, { AnywhereHelp } from "./CopyHelp";
@@ -45,6 +48,8 @@ type Saved = {
   tour: boolean;
   coached: boolean;
   purpose: Purpose;
+  /** The profile README as it came from GitHub, for Back to my README. */
+  original: string | null;
   changed: boolean;
   copied: boolean;
 };
@@ -65,6 +70,7 @@ function restore(): Partial<Saved> & { oldLogin?: string } {
         tour: v.tour !== false,
         coached: v.coached === true,
         purpose: v.purpose === "other" ? "other" : "profile",
+        original: typeof v.original === "string" ? v.original : null,
         changed: v.changed === true,
         copied: v.copied === true,
       };
@@ -181,6 +187,7 @@ function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void, noLo
       title: other ? words.editor.titleOther : words.editor.titleProfile,
       body: other ? words.editor.bodyOther : words.editor.bodyProfile,
     },
+    { target: '[data-coach="templates"]', tab: "write", title: words.templates.title, body: words.templates.body },
     ...(empty
       ? []
       : [
@@ -284,6 +291,8 @@ export default function ProfileBuilder() {
   const [adding, setAdding] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [original, setOriginal] = useState<string | null>(null);
   const [tab, setTab] = useState<"write" | "preview">("preview");
   const [status, setStatus] = useState<Status>("checking");
   const [retry, setRetry] = useState(0);
@@ -312,6 +321,7 @@ export default function ProfileBuilder() {
     setTour(r.tour ?? true);
     setCoached(r.coached ?? false);
     setPurpose(r.purpose ?? "profile");
+    setOriginal(r.original ?? null);
     setChanged(r.changed ?? false);
     setCopied(r.copied ?? false);
     // cards name questlog.cc; only a self-hosted copy on its own domain names itself
@@ -325,14 +335,14 @@ export default function ProfileBuilder() {
     if (!ready) return;
     const t = window.setTimeout(() => {
       try {
-        const saved: Saved = { profile, text, theme, tour, coached, purpose, changed, copied };
+        const saved: Saved = { profile, text, theme, tour, coached, purpose, original, changed, copied };
         localStorage.setItem(KEY, JSON.stringify(saved));
       } catch {
         // storage can be unavailable (private mode); the work then lasts for this visit
       }
     }, 400);
     return () => window.clearTimeout(t);
-  }, [ready, profile, text, theme, tour, coached, purpose, changed, copied]);
+  }, [ready, profile, text, theme, tour, coached, purpose, original, changed, copied]);
 
   // typing settles for a moment before the preview redraws, so cards are not asked for on every key
   useEffect(() => {
@@ -481,7 +491,10 @@ export default function ProfileBuilder() {
       setChanged(false);
       setCopied(false);
     }
-    if (start === "github") say(m.builder.profile.loadedReadme);
+    if (start === "github") {
+      setOriginal(t);
+      say(m.builder.profile.loadedReadme);
+    } else if (start === "fresh") setOriginal(null);
   };
 
   const change = (card: Card, mode: Mode, typing = false) => {
@@ -548,6 +561,26 @@ export default function ProfileBuilder() {
     setAdding(false);
     if (narrow) setTab("preview");
     say(m.builder.profile.addedDecoration(d?.label ?? name, narrow));
+  };
+
+  const applyTemplate = (kind: TemplateKind) => {
+    if (!profile) return;
+    const next = template(kind, { origin: env.origin, login: profile.login, name: profile.name, other });
+    edit(next, { now: true });
+    cursor.current = null;
+    setSel(null);
+    setTemplatesOpen(false);
+    setChanged(true);
+    if (narrow) setTab("preview");
+    say(m.builder.templates.applied(m.builder.templates.names[kind]), { undo: true });
+  };
+  const backToReadme = () => {
+    if (original === null) return;
+    edit(original, { now: true });
+    cursor.current = null;
+    setSel(null);
+    setTemplatesOpen(false);
+    say(m.builder.templates.restored, { undo: true });
   };
 
   const copy = async () => {
@@ -855,6 +888,10 @@ export default function ProfileBuilder() {
                   {other ? m.builder.profile.yourText : m.builder.profile.yourReadme}
                 </span>
                 <span className={s.paneTools}>
+                  <button type="button" className={`btn ${s.quiet}`} onClick={() => setTemplatesOpen(true)} data-coach="templates">
+                    <LayoutTemplate aria-hidden="true" />
+                    {m.builder.templates.button}
+                  </button>
                   <button type="button" className={`btn ${s.quiet}`} onClick={() => setResetOpen(true)}>
                     <RotateCcw aria-hidden="true" />
                     {m.builder.profile.reset}
@@ -989,6 +1026,32 @@ export default function ProfileBuilder() {
         </div>
       )}
 
+      <Sheet open={templatesOpen} onClose={() => setTemplatesOpen(false)} label={m.builder.templates.title}>
+        <div className={s.opts}>
+          <h3 className={`display ${s.optsName}`}>{m.builder.templates.title}</h3>
+          <p className={s.help}>{m.builder.templates.sub}</p>
+          <div className={s.choices}>
+            {original !== null && (
+              <button type="button" className={s.choice} onClick={backToReadme}>
+                <FileText aria-hidden="true" />
+                <span>
+                  <b>{m.builder.templates.backToReadme}</b>
+                  <small>{m.builder.templates.backToReadmeHelp}</small>
+                </span>
+              </button>
+            )}
+            {TEMPLATES.map((k) => (
+              <button key={k} type="button" className={s.choice} onClick={() => applyTemplate(k)}>
+                <LayoutTemplate aria-hidden="true" />
+                <span>
+                  <b>{m.builder.templates.names[k]}</b>
+                  <small>{(noLogin ? m.builder.templates.describeNoLogin : m.builder.templates.describe)[k]}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Sheet>
       <Sheet open={resetOpen} onClose={() => setResetOpen(false)} label={m.builder.profile.resetTitle}>
         <div className={s.opts}>
           <h3 className={`display ${s.optsName}`}>{m.builder.profile.resetTitle}</h3>

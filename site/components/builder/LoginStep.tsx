@@ -19,6 +19,8 @@ export type Purpose = "profile" | "other";
 
 /** The first text for a page that is not a GitHub profile. */
 export const otherTemplate = () => tx.otherTemplate;
+/** The first text without a login, where there are no stats to talk about. */
+export const plainTemplate = () => tx.plainTemplate;
 
 /** The account's display name and avatar; ok is false when GitHub has no such account and null when it could not
  * say (offline, or its hourly limit for this reader). */
@@ -186,7 +188,7 @@ export default function LoginStep({
                     title={tx.noLoginHelp}
                     onClick={() => {
                       run.current++; // a lookup still on its way must not land after this
-                      onDone({ login: "", name: "", avatar: "" }, keepable ? null : otherTemplate(), keepable ? "keep" : "fresh");
+                      onDone({ login: "", name: "", avatar: "" }, keepable ? null : plainTemplate(), keepable ? "keep" : "fresh");
                     }}
                   >
                     {tx.noLogin}

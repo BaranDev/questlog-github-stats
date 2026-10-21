@@ -149,6 +149,7 @@ export const builderParts = {
     template: (name: string) =>
       `# Hi, I'm ${name}\n\nA line or two about you: what you build, what you're learning, how to reach you.\n`,
     otherTemplate: `## My coding stats\n\nA line about the cards below.\n`,
+    plainTemplate: `## A heading for your page\n\nA line or two about it.\n`,
     tourStepsOther: [
       "<b>Give a GitHub login, or skip it.</b> Without one you can use the painted decorations, which show no stats.",
       "<b>Add cards or decorations.</b> Pick what goes on your page.",
