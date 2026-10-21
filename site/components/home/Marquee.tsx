@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Rune from "../Rune";
 import { RUNES } from "../data";
 import s from "./Marquee.module.css";
+import { m } from "@/i18n";
 
 function Row({ hidden }: { hidden?: boolean }) {
   return (
@@ -33,12 +34,9 @@ export default function Marquee() {
       <div className={`section ${s.head}`}>
         <div className="section-head">
           <h2 className="h2" id="runes-title">
-            Language runes
+            {m.home.runes.title}
           </h2>
-          <p className="lede">
-            The Spellbook marks each of your top five languages with a rune in that language&apos;s color. There are
-            30 runes, and othala for every other language.
-          </p>
+          <p className="lede">{m.home.runes.lede}</p>
         </div>
       </div>
       <div ref={box} className={s.marquee}>

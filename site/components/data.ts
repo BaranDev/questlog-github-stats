@@ -1,5 +1,6 @@
 export const REPO = "https://github.com/BaranDev/questlog-github-stats";
 import snapped from "./snapped.json";
+import { m } from "@/i18n";
 
 export const DEMO_USER = "BaranDev";
 /** The primary host; questlog.cevdetbaran.com still answers too. */
@@ -9,27 +10,31 @@ export type Widget = "stats" | "languages" | "streak";
 
 export const THEMES = [
   {
-    name: "Forest",
+    id: "forest",
+    name: m.catalog.themes.forest.name,
     cover: "forest",
-    blurb: "Campfires under old trees, in summer green, autumn, mist and moonlight.",
+    blurb: m.catalog.themes.forest.blurb,
     scenes: ["forest", "forest-autumn", "forest-misty", "forest-moonlit"],
   },
   {
-    name: "Castle",
+    id: "castle",
+    name: m.catalog.themes.castle.name,
     cover: "castle-aurora",
-    blurb: "Braziers on the walls at sunset, under the aurora, in the sky and in the storm.",
+    blurb: m.catalog.themes.castle.blurb,
     scenes: ["castle", "castle-aurora", "castle-sky", "castle-storm"],
   },
   {
-    name: "Cozy",
+    id: "cozy",
+    name: m.catalog.themes.cozy.name,
     cover: "witch-cottage",
-    blurb: "A fairy ring, a witch's hearth, a kingdom on the clouds and a rose garden.",
+    blurb: m.catalog.themes.cozy.blurb,
     scenes: ["fairy-garden", "witch-cottage", "cloud-kingdom", "rose-garden"],
   },
   {
-    name: "Scholarly",
+    id: "scholarly",
+    name: m.catalog.themes.scholarly.name,
     cover: "observatory",
-    blurb: "A royal library, a war room, a guild hall and an observatory full of brass.",
+    blurb: m.catalog.themes.scholarly.blurb,
     scenes: ["royal-library", "war-room", "guild-hall", "observatory"],
   },
 ];
@@ -37,24 +42,26 @@ export const THEMES = [
 export const SCENES = THEMES.flatMap((t) => t.scenes);
 
 
-const FIRE: Record<string, string> = {
-  forest: "Campfire", "forest-autumn": "Campfire", "forest-misty": "Campfire", "forest-moonlit": "Campfire",
-  "fairy-garden": "Campfire",
-  castle: "Brazier", "castle-aurora": "Brazier", "castle-sky": "Brazier", "castle-storm": "Brazier", "war-room": "Brazier",
-  "witch-cottage": "Hearth", "royal-library": "Hearth", "guild-hall": "Hearth",
-  "cloud-kingdom": "Lantern", observatory: "Lantern",
-  "rose-garden": "Fire Bowl",
+const FIRE: Record<string, keyof typeof m.catalog.fires> = {
+  forest: "campfire", "forest-autumn": "campfire", "forest-misty": "campfire", "forest-moonlit": "campfire",
+  "fairy-garden": "campfire",
+  castle: "brazier", "castle-aurora": "brazier", "castle-sky": "brazier", "castle-storm": "brazier", "war-room": "brazier",
+  "witch-cottage": "hearth", "royal-library": "hearth", "guild-hall": "hearth",
+  "cloud-kingdom": "lantern", observatory: "lantern",
+  "rose-garden": "fireBowl",
 };
 
 /** The card's title in a scene: the streak card's fire changes with the scene. */
 export function cardName(w: Widget, scene: string): string {
-  if (w === "stats") return "Character Sheet";
-  if (w === "languages") return "Spellbook";
-  return FIRE[scene] ?? "Campfire";
+  if (w === "stats") return m.catalog.cards.stats;
+  if (w === "languages") return m.catalog.cards.languages;
+  return m.catalog.fires[FIRE[scene] ?? "campfire"];
 }
 
-/** "forest-autumn" -> "Forest autumn" */
+/** A scene's name: "forest-autumn" is "Forest autumn". A scene the dictionary does not know is named after its id. */
 export function sceneName(scene: string): string {
+  const known = (m.catalog.scenes as Record<string, string>)[scene];
+  if (known) return known;
   const s = scene.replace(/-/g, " ");
   return s[0].toUpperCase() + s.slice(1);
 }
@@ -62,13 +69,13 @@ export function sceneName(scene: string): string {
 /** The painted banners at /decorations/<name>: an example title (the divider has none) and the painting's height
  * on the 320-wide card grid. */
 export const DECORATIONS = [
-  { name: "reading-nook", label: "Reading nook", title: "About Me", h: 128 },
-  { name: "workbench", label: "Workbench", title: "Technical Skills", h: 128 },
-  { name: "raven-moon", label: "Raven and moon", title: "Projects", h: 128 },
-  { name: "enchanted-clearing", label: "Enchanted clearing", title: "Get In Touch", h: 128 },
-  { name: "crystal-owl", label: "Crystal owl", title: "Learning Focus", h: 128 },
-  { name: "forest-divider", label: "Forest divider", title: "", h: 80 },
-  { name: "forest-footer", label: "Forest footer", title: "", h: 80 },
+  { name: "reading-nook", label: m.catalog.decorations["reading-nook"], title: "About Me", h: 128 },
+  { name: "workbench", label: m.catalog.decorations["workbench"], title: "Technical Skills", h: 128 },
+  { name: "raven-moon", label: m.catalog.decorations["raven-moon"], title: "Projects", h: 128 },
+  { name: "enchanted-clearing", label: m.catalog.decorations["enchanted-clearing"], title: "Get In Touch", h: 128 },
+  { name: "crystal-owl", label: m.catalog.decorations["crystal-owl"], title: "Learning Focus", h: 128 },
+  { name: "forest-divider", label: m.catalog.decorations["forest-divider"], title: "", h: 80 },
+  { name: "forest-footer", label: m.catalog.decorations["forest-footer"], title: "", h: 80 },
 ] as const;
 
 export const decorationLabel = (name: string) => DECORATIONS.find((d) => d.name === name)?.label ?? name;
@@ -121,5 +128,5 @@ export const RUNES = [
   { lang: "Haskell", rune: "mannaz", color: "#8B80A7", d: "M0 0h1v1h-1zM4 0h1v1h-1zM0 1h2v1h-2zM3 1h2v1h-2zM0 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM0 3h2v1h-2zM3 3h2v1h-2zM0 4h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM4 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1z" },
   { lang: "Elixir", rune: "ehwaz", color: "#967CA2", d: "M0 0h1v1h-1zM4 0h1v1h-1zM0 1h2v1h-2zM3 1h2v1h-2zM0 2h2v1h-2zM3 2h2v1h-2zM0 3h1v1h-1zM2 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM4 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1z" },
   { lang: "Dockerfile", rune: "cealc", color: "#859296", d: "M2 0h1v1h-1zM2 1h1v1h-1zM2 2h1v1h-1zM1 3h3v1h-3zM1 4h3v1h-3zM0 5h1v1h-1zM2 5h1v1h-1zM4 5h1v1h-1zM1 6h3v1h-3zM1 7h3v1h-3zM0 8h1v1h-1zM2 8h1v1h-1zM4 8h1v1h-1z" },
-  { lang: "Anything else", rune: "othala", color: "#C89B3C", d: "M2 0h1v1h-1zM1 1h1v1h-1zM3 1h1v1h-1zM1 2h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM4 3h1v1h-1zM1 4h1v1h-1zM3 4h1v1h-1zM2 5h1v1h-1zM2 6h1v1h-1zM1 7h1v1h-1zM3 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1z" },
+  { lang: m.catalog.otherLanguage, rune: "othala", color: "#C89B3C", d: "M2 0h1v1h-1zM1 1h1v1h-1zM3 1h1v1h-1zM1 2h1v1h-1zM3 2h1v1h-1zM0 3h1v1h-1zM4 3h1v1h-1zM1 4h1v1h-1zM3 4h1v1h-1zM2 5h1v1h-1zM2 6h1v1h-1zM1 7h1v1h-1zM3 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1z" },
 ];

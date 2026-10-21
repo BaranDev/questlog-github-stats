@@ -1992,3 +1992,54 @@
     transition: none;
   }
 }
+
+/* Step 1: what the reader is making */
+.purpose {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  border: 0;
+}
+
+.purpose legend {
+  margin-bottom: 0.5rem;
+}
+
+.purpose label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(242, 230, 201, 0.18);
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.purpose label:has(input:checked) {
+  border-color: var(--gold);
+  background: rgba(245, 222, 160, 0.07);
+}
+
+.purpose input {
+  margin-top: 0.25rem;
+  accent-color: var(--gold);
+}
+
+.purpose span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.purpose small {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 520px) {
+  .purpose {
+    grid-template-columns: 1fr;
+  }
+}

@@ -68,6 +68,27 @@ impl Image {
     }
 
     /// Nearest-neighbour upscale by an integer factor.
+    /// Twice the size with Eagle: a corner takes the color its three outer neighbours share, which rounds shapes off.
+    pub fn eagle(&self) -> Image {
+        let at = |x: i64, y: i64| self.px[(y.clamp(0, self.h as i64 - 1) as usize) * self.w + x.clamp(0, self.w as i64 - 1) as usize];
+        let mut out = Image::new(self.w * 2, self.h * 2);
+        for y in 0..self.h as i64 {
+            for x in 0..self.w as i64 {
+                let p = at(x, y);
+                let corner = |dx: i64, dy: i64| {
+                    let (h, v, d) = (at(x + dx, y), at(x, y + dy), at(x + dx, y + dy));
+                    if h == v && v == d { h } else { p }
+                };
+                let e = [corner(-1, -1), corner(1, -1), corner(-1, 1), corner(1, 1)];
+                for (i, px) in e.into_iter().enumerate() {
+                    let (ox, oy) = (2 * x as usize + i % 2, 2 * y as usize + i / 2);
+                    out.px[oy * out.w + ox] = px;
+                }
+            }
+        }
+        out
+    }
+
     pub fn scaled(&self, k: usize) -> Image {
         let mut out = Image::new(self.w * k, self.h * k);
         for (i, p) in out.px.iter_mut().enumerate() {
@@ -130,6 +151,18 @@ pub fn over(s: [u8; 4], d: [u8; 4]) -> [u8; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn eagle_doubles_with_the_same_colors_and_rounds_corners() {
+        let (o, x) = ([0, 0, 0, 0], [200, 80, 20, 255]);
+        let mut img = Image::new(3, 3);
+        img.px = vec![o, o, o, o, x, x, o, x, x];
+        let e = img.eagle();
+        assert_eq!((e.w, e.h), (6, 6));
+        assert!(e.px.iter().all(|p| img.px.contains(p)), "no new colors");
+        assert_eq!(e.px[2 * 6 + 2], o, "the outer corner of the shape is rounded off");
+        assert_eq!(e.px[3 * 6 + 3], x, "its inside stays filled");
+    }
 
     #[test]
     fn chunky_keeps_the_palette_in_2x2_blocks() {

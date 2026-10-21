@@ -156,9 +156,11 @@ impl<'a> Card<'a> {
         }
     }
 
-    /// An art-scale sprite standing on `ground`, centered on `cx`, night-toned. Returns its top y.
+    /// An art-scale sprite standing on `ground`, centered on `cx`, night-toned. Returns its top y. It is drawn twice its
+    /// size: with Eagle on fine cards, so its pixels match the painting's, and pixel for pixel on chunky ones.
     pub fn sprite(&mut self, img: &Image, cx: i64, ground: i64) -> i64 {
-        let big = self.scene.tint(img, self.night).scaled(2);
+        let small = self.scene.tint(img, self.night);
+        let big = if self.chunky { small.scaled(2) } else { small.eagle() };
         let (x, y) = (cx - (big.w as i64 / 2 / 2 * 2), ground - big.h as i64);
         self.layer.alpha_composite(&big, x, y);
         y

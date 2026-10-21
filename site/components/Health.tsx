@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { m, rich } from "@/i18n";
 import s from "./Health.module.css";
 
 /** What the public /health answers: no counts or capacities, only states and times. */
@@ -38,25 +39,24 @@ type Minute = { minute: number; cache: number; drawn: number; busy: number; erro
 const EVERY = 30; // seconds between automatic checks
 const REST = 10; // seconds the Refresh button rests after a press
 
-const utc = (secs: number) => new Date(secs * 1000).toISOString().slice(11, 16) + " UTC";
-const clockUtc = (d: Date) => d.toISOString().slice(11, 19) + " UTC";
-const mins = (secs: number) => {
-  const m = Math.max(1, Math.ceil(secs / 60));
-  return m === 1 ? "1 minute" : `${m} minutes`;
-};
+const H = m.health;
+
+const utc = (secs: number) => H.utc(new Date(secs * 1000).toISOString().slice(11, 16));
+const clockUtc = (d: Date) => H.utc(d.toISOString().slice(11, 19));
+const mins = (secs: number) => H.minutes(Math.max(1, Math.ceil(secs / 60)));
 const num = (n: number) => n.toLocaleString("en-US");
 const mb = (b: number) =>
   b >= 1073741824
-    ? `${+(b / 1073741824).toFixed(1)} GB`
-    : b < 1048576 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1048576).toFixed(b < 10485760 ? 1 : 0)} MB`;
+    ? H.gb(+(b / 1073741824).toFixed(1))
+    : b < 1048576 ? H.kb(Math.max(1, Math.round(b / 1024))) : H.mb((b / 1048576).toFixed(b < 10485760 ? 1 : 0));
 
 function since(secs: number) {
   const d = Math.floor(secs / 86400);
   const h = Math.floor((secs % 86400) / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (d > 0) return `${d} day${d === 1 ? "" : "s"} ${h} h`;
-  if (h > 0) return `${h} h ${m} min`;
-  return `${Math.max(1, m)} min`;
+  const mi = Math.floor((secs % 3600) / 60);
+  if (d > 0) return H.sinceDays(d, h);
+  if (h > 0) return H.sinceHours(h, mi);
+  return H.sinceMinutes(Math.max(1, mi));
 }
 
 type Tone = "good" | "watch" | "bad";
@@ -81,7 +81,7 @@ function Panel({ title, tone, value, of, meter, children }: {
   meter?: { share: number; label: string };
   children: React.ReactNode;
 }) {
-  const word = { good: "Fine", watch: "Busy", bad: "Needs attention" }[tone];
+  const word = H.tone[tone];
   return (
     <section className={s.panel} aria-label={title}>
       <header className={s.panelHead}>
@@ -166,20 +166,20 @@ export default function Health({ full = false }: { full?: boolean }) {
   const calm = data && "fetching" in data ? !data.fetching.paused && data.new_users.open : true;
   const headline = !data
     ? down
-      ? "The service is not answering"
-      : "Checking the service"
+      ? H.headline.down
+      : H.headline.checking
     : failedAt
-      ? "The service stopped answering"
+      ? H.headline.stopped
       : !data.ok
-        ? "Something is wrong"
+        ? H.headline.wrong
         : calm
-          ? "All is well"
-          : "Running, but busy";
+          ? H.headline.well
+          : H.headline.busy;
 
   return (
     <div className={s.page}>
       <header className={s.header}>
-        <p className={s.eyebrow}>Service health</p>
+        <p className={s.eyebrow}>{H.eyebrow}</p>
         <div className={s.titleRow}>
           <h1 className={s.h1}>
             <span
@@ -191,23 +191,22 @@ export default function Health({ full = false }: { full?: boolean }) {
           </h1>
           <button type="button" className={`btn btn-ghost ${s.refresh}`} onClick={refresh} disabled={rest > 0 || asking}>
             <RefreshCw aria-hidden="true" className={asking ? s.spin : undefined} />
-            {asking ? "Updating" : rest > 0 ? `Refresh in ${rest} s` : "Refresh"}
+            {asking ? H.updating : rest > 0 ? H.refreshIn(rest) : H.refresh}
           </button>
         </div>
         <p className={s.updated} aria-live="polite">
-          {at ? `Updated at ${clockUtc(at)}. Checks again every ${EVERY} seconds by itself.` : "Asking the server for its numbers."}
+          {at ? H.updated(clockUtc(at), EVERY) : H.asking}
           {failedAt && (
             <span className={s.failed}>
               {" "}
-              The check at {clockUtc(failedAt)} got no answer{data ? ", so these are the last numbers that came in" : ""}. The page
-              keeps trying.
+              {H.failed(clockUtc(failedAt), !!data)}
             </span>
           )}
         </p>
       </header>
 
       {!data ? (
-        <div className={s.grid} aria-busy={!down} aria-label="Loading">
+        <div className={s.grid} aria-busy={!down} aria-label={H.loading}>
           {Array.from({ length: full ? 6 : 3 }, (_, i) => (
             <div key={i} className={`${s.panel} ${s.shimmer}`} />
           ))}
@@ -219,50 +218,45 @@ export default function Health({ full = false }: { full?: boolean }) {
       )}
 
       <p className={s.raw}>
-        The same as JSON{full ? "" : ", for scripts and uptime monitors"}: <a href={url}>{url}</a>. Times are in UTC.
+        {rich(H.raw(!full), { a: () => <a href={url}>{url}</a> })}
       </p>
     </div>
   );
 }
 
 function PublicPanels({ d, now }: { d: PublicData; now: number }) {
+  const P = H.pub;
   const back = d.fetching.back_in_secs;
   const next = d.new_users.next_opening_secs;
   return (
     <div className={s.grid}>
-      <Panel title="Cards" tone={d.ok ? "good" : "bad"} value={d.ok ? "Up" : "Down"} of={`for ${since(now - d.started_at)}`}>
-        <p>Cards are being drawn and served. Cards already on a profile keep showing even while the service restarts.</p>
+      <Panel title={P.cards.title} tone={d.ok ? "good" : "bad"} value={d.ok ? P.cards.up : P.cards.down} of={P.cards.for(since(now - d.started_at))}>
+        <p>{P.cards.note}</p>
       </Panel>
 
       <Panel
-        title="Reading from GitHub"
+        title={P.reading.title}
         tone={d.fetching.paused ? "watch" : "good"}
-        value={d.fetching.paused ? "Paused" : "Running"}
-        of={d.fetching.paused ? undefined : "stats arrive as usual"}
+        value={d.fetching.paused ? P.reading.paused : P.reading.running}
+        of={d.fetching.paused ? undefined : P.reading.runningOf}
       >
         {d.fetching.paused && back ? (
-          <p>
-            GitHub asks us to slow down. Reading starts again in <strong>{mins(back)}</strong>, at <strong>{utc(now + back)}</strong>.
-            Until then cards show the last stats they had.
-          </p>
+          <p>{rich(P.reading.pausedNote(mins(back), utc(now + back)), { strong: (c) => <strong>{c}</strong> })}</p>
         ) : (
-          <p>When a card gets old, its stats are read from GitHub again, so every card stays close to current.</p>
+          <p>{P.reading.note}</p>
         )}
       </Panel>
 
       <Panel
-        title="New users"
+        title={P.newUsers.title}
         tone={d.new_users.open ? "good" : "watch"}
-        value={d.new_users.open ? "Welcome" : "Busy"}
-        of={d.new_users.open ? "first cards in seconds" : undefined}
+        value={d.new_users.open ? P.newUsers.welcome : P.newUsers.busy}
+        of={d.new_users.open ? P.newUsers.welcomeOf : undefined}
       >
         {!d.new_users.open && next ? (
-          <p>
-            Many people are trying questlog right now. A new user sees the busy card and gets in at the next opening, in{" "}
-            <strong>{mins(next)}</strong>, at <strong>{utc(now + next)}</strong>.
-          </p>
+          <p>{rich(P.newUsers.busyNote(mins(next), utc(now + next)), { strong: (c) => <strong>{c}</strong> })}</p>
         ) : (
-          <p>A new user&apos;s first card shows a short wait message, then the real card a few seconds later.</p>
+          <p>{P.newUsers.note}</p>
         )}
       </Panel>
     </div>
@@ -293,122 +287,102 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
     <>
     <div className={s.grid}>
       <Panel
-        title="GitHub quota"
+        title={H.quota.title}
         tone={quotaTone}
-        value={left === null ? "Not used yet" : num(left)}
-        of={left === null ? undefined : `of ${num(g.limit)} points left this hour`}
-        meter={left === null ? undefined : { share: left / g.limit, label: `${num(left)} of ${num(g.limit)} points left` }}
+        value={left === null ? H.quota.unused : num(left)}
+        of={left === null ? undefined : H.quota.of(num(g.limit))}
+        meter={left === null ? undefined : { share: left / g.limit, label: H.quota.meter(num(left), num(g.limit)) }}
       >
         {resetIn !== null && resetIn > 0 ? (
-          <p>
-            Refills in <strong>{mins(resetIn)}</strong>, at <strong>{utc(g.resets_at!)}</strong>.
-          </p>
+          <p>{rich(H.quota.refills(mins(resetIn), utc(g.resets_at!)), { strong: (c) => <strong>{c}</strong> })}</p>
         ) : (
-          <p>GitHub reports the quota with each fetch; nothing has been fetched since the last start.</p>
+          <p>{H.quota.none}</p>
         )}
         {g.paused_secs > 0 && (
           <p className={s.warn}>
-            Fetching is paused for {mins(g.paused_secs)} to save the quota. New users see a wait message until then.
+            {H.quota.paused(mins(g.paused_secs))}
           </p>
         )}
-        <p>Each new or refreshed user costs a few points. Cards already drawn cost nothing.</p>
+        <p>{H.quota.cost}</p>
       </Panel>
 
       <Panel
-        title="New users this hour"
+        title={H.hour.title}
         tone={nuTone}
         value={num(nu.this_hour)}
-        of={`of ${num(nu.per_hour)} allowed`}
-        meter={{ share: nu.this_hour / nu.per_hour, label: `${nu.this_hour} of ${nu.per_hour} new users this hour` }}
+        of={H.hour.of(num(nu.per_hour))}
+        meter={{ share: nu.this_hour / nu.per_hour, label: H.hour.meter(nu.this_hour, nu.per_hour) }}
       >
         <p>
-          {num(Math.max(0, nu.per_hour - nu.this_hour))} more first-time users can come in this hour.
+          {H.hour.more(num(Math.max(0, nu.per_hour - nu.this_hour)))}
         </p>
         {freeIn !== null && freeIn > 0 && (
-          <p>
-            The hour slides: the next place frees in <strong>{mins(freeIn)}</strong>, at <strong>{utc(now + freeIn)}</strong>.
-          </p>
+          <p>{rich(H.hour.slides(mins(freeIn), utc(now + freeIn)), { strong: (c) => <strong>{c}</strong> })}</p>
         )}
-        <p>Past the cap a new user sees the busy card and gets in a little later. People already on the list are never held back.</p>
+        <p>{H.hour.cap}</p>
       </Panel>
 
       <Panel
-        title="Waiting lines"
+        title={H.lines.title}
         tone={lineTone}
         value={num(w.new)}
-        of={w.new === 1 ? "new user waiting" : "new users waiting"}
-        meter={{ share: w.new / w.new_capacity, label: `${w.new} of ${w.new_capacity} places in the line for new users` }}
+        of={H.lines.of(w.new)}
+        meter={{ share: w.new / w.new_capacity, label: H.lines.meter(w.new, w.new_capacity) }}
       >
-        <p>
-          The line for new users holds {num(w.new_capacity)}. Refreshes of known users wait in their own line:{" "}
-          <strong>{num(w.refresh)}</strong> of {num(w.refresh_capacity)}.
-        </p>
-        <p>While a refresh waits, its card keeps showing the last stats.</p>
+        <p>{rich(H.lines.note(num(w.new_capacity), num(w.refresh), num(w.refresh_capacity)), { strong: (c) => <strong>{c}</strong> })}</p>
+        <p>{H.lines.keeps}</p>
       </Panel>
 
       <Panel
-        title="Renderer"
+        title={H.renderer.title}
         tone={renderTone}
-        value={`${r.busy} of ${r.slots}`}
-        of="drawing slots in use"
-        meter={{ share: r.busy / r.slots, label: `${r.busy} of ${r.slots} drawing slots in use` }}
+        value={H.renderer.value(r.busy, r.slots)}
+        of={H.renderer.of}
+        meter={{ share: r.busy / r.slots, label: H.renderer.meter(r.busy, r.slots) }}
       >
-        <p>
-          A card that is not in the cache takes a slot for a moment. When both are taken, a request waits up to 2 seconds, then
-          gets the busy card for a minute.
-        </p>
+        <p>{H.renderer.note}</p>
       </Panel>
 
       <Panel
-        title="Card cache"
+        title={H.cache.title}
         tone="good"
         value={num(c.entries)}
-        of={c.entries === 1 ? "card ready in memory" : "cards ready in memory"}
-        meter={{ share: c.bytes / c.budget, label: `${mb(c.bytes)} of ${mb(c.budget)} used` }}
+        of={H.cache.of(c.entries)}
+        meter={{ share: c.bytes / c.budget, label: H.cache.meter(mb(c.bytes), mb(c.budget)) }}
       >
-        <p>
-          {mb(c.bytes)} of {mb(c.budget)} used. Since the last start <strong>{rate}%</strong> of cards came from the cache (
-          {num(c.hits)} found, {num(c.misses)} drawn).
-        </p>
-        <p>Every drawn card is also saved on disk, so it is drawn once per version.</p>
+        <p>{rich(H.cache.note(mb(c.bytes), mb(c.budget), rate, num(c.hits), num(c.misses)), { strong: (c) => <strong>{c}</strong> })}</p>
+        <p>{H.cache.disk}</p>
       </Panel>
 
-      <Panel title="Running" tone={d.ok ? "good" : "bad"} value={since(now - d.started_at)} of="since the last start">
+      <Panel title={H.running.title} tone={d.ok ? "good" : "bad"} value={since(now - d.started_at)} of={H.running.of}>
         <p>
-          Version <strong>{d.version}</strong>, started at {utc(d.started_at)} on{" "}
-          {new Date(d.started_at * 1000).toISOString().slice(0, 10)}, with {d.scenes.length} scenes.
+          {rich(H.running.note(d.version, utc(d.started_at), new Date(d.started_at * 1000).toISOString().slice(0, 10), d.scenes.length), { strong: (c) => <strong>{c}</strong> })}
         </p>
-        <p>A start clears the in-memory cache; cards saved on disk come back at once.</p>
+        <p>{H.running.restart}</p>
       </Panel>
 
       <Panel
-        title="Users"
+        title={H.users.title}
         tone={d.held > 0 ? "watch" : "good"}
         value={d.users.saved === null ? num(d.users.in_memory) : num(d.users.saved)}
-        of={d.users.saved === null ? "users in memory" : "users saved"}
+        of={d.users.saved === null ? H.users.inMemory : H.users.saved}
       >
-        <p>
-          <strong>{num(d.users.in_memory)}</strong> of them asked for since the last start. <strong>{num(d.users.unknown)}</strong>{" "}
-          {d.users.unknown === 1 ? "name was" : "names were"} not on GitHub in the last hour.
-        </p>
+        <p>{rich(H.users.note(num(d.users.in_memory), d.users.unknown, num(d.users.unknown)), { strong: (c) => <strong>{c}</strong> })}</p>
         <p>
           {d.held > 0
-            ? `${num(d.held)} held after failed GitHub fetches; their cards say the road is closed for 10 minutes.`
-            : "No user is held after failed fetches."}
+            ? H.users.held(num(d.held))
+            : H.users.noneHeld}
         </p>
       </Panel>
 
       <Panel
-        title="Server"
+        title={H.server.title}
         tone={memTone(d.memory)}
-        value={d.memory.used === null ? "Unknown" : mb(d.memory.used)}
-        of={d.memory.limit ? `of ${mb(d.memory.limit)} memory` : "memory in use"}
-        meter={d.memory.used && d.memory.limit ? { share: d.memory.used / d.memory.limit, label: `${mb(d.memory.used)} of ${mb(d.memory.limit)} memory` } : undefined}
+        value={d.memory.used === null ? H.server.unknown : mb(d.memory.used)}
+        of={d.memory.limit ? H.server.of(mb(d.memory.limit)) : H.server.inUse}
+        meter={d.memory.used && d.memory.limit ? { share: d.memory.used / d.memory.limit, label: H.server.meter(mb(d.memory.used), mb(d.memory.limit)) } : undefined}
       >
-        <p>
-          Saved cards on disk: <strong>{d.cache.disk_bytes === null ? "none" : mb(d.cache.disk_bytes)}</strong> of{" "}
-          {mb(d.cache.disk_budget)}. Past that, the hourly trim removes the least recently used.
-        </p>
+        <p>{rich(H.server.note(d.cache.disk_bytes === null ? H.server.none : mb(d.cache.disk_bytes), mb(d.cache.disk_budget)), { strong: (c) => <strong>{c}</strong> })}</p>
       </Panel>
     </div>
 
@@ -422,11 +396,11 @@ const memTone = (m: { used: number | null; limit: number | null }): Tone =>
   m.used && m.limit ? toneOfUsed(m.used / m.limit) : "good";
 
 const KINDS = [
-  { key: "cache", label: "From the cache" },
-  { key: "drawn", label: "Drawn" },
-  { key: "busy", label: "Busy" },
-  { key: "error", label: "Errors" },
-  { key: "other", label: "Pages and files" },
+  { key: "cache", label: H.kinds.cache },
+  { key: "drawn", label: H.kinds.drawn },
+  { key: "busy", label: H.kinds.busy },
+  { key: "error", label: H.kinds.error },
+  { key: "other", label: H.kinds.other },
 ] as const;
 
 /** Requests per minute for the last hour, stacked by what they were answered with. */
@@ -435,16 +409,16 @@ function Traffic({ minutes }: { minutes: Minute[] }) {
   const peak = Math.max(1, ...minutes.map(total));
   const sums = KINDS.map((k) => minutes.reduce((n, m) => n + m[k.key], 0));
   const all = sums.reduce((a, b) => a + b, 0);
-  const summary = `${num(all)} requests in the last hour: ` + KINDS.map((k, i) => `${num(sums[i])} ${k.label.toLowerCase()}`).join(", ");
+  const summary = H.traffic.summary(num(all), KINDS.map((k, i) => H.traffic.part(num(sums[i]), k.label)));
   return (
-    <section className={`${s.panel} ${s.wide}`} aria-label="Traffic in the last hour">
+    <section className={`${s.panel} ${s.wide}`} aria-label={H.traffic.aria}>
       <header className={s.panelHead}>
-        <h2>Traffic, last hour</h2>
-        <span className={s.peak}>busiest minute: {num(peak === 1 && all === 0 ? 0 : peak)}</span>
+        <h2>{H.traffic.title}</h2>
+        <span className={s.peak}>{H.traffic.peak(num(peak === 1 && all === 0 ? 0 : peak))}</span>
       </header>
       <div className={s.chart} role="img" aria-label={summary}>
         {minutes.map((m) => (
-          <div key={m.minute} className={s.col} title={`${utc(m.minute)}: ${num(total(m))} requests`}>
+          <div key={m.minute} className={s.col} title={H.traffic.column(utc(m.minute), num(total(m)))}>
             {KINDS.map((k) =>
               m[k.key] ? <span key={k.key} data-kind={k.key} style={{ height: `${(m[k.key] / peak) * 100}%` }} /> : null,
             )}
@@ -453,7 +427,7 @@ function Traffic({ minutes }: { minutes: Minute[] }) {
       </div>
       <div className={s.axis} aria-hidden="true">
         <span>{minutes[0] ? utc(minutes[0].minute) : ""}</span>
-        <span>now</span>
+        <span>{H.traffic.now}</span>
       </div>
       <ul className={s.legend}>
         {KINDS.map((k, i) => (
@@ -463,7 +437,7 @@ function Traffic({ minutes }: { minutes: Minute[] }) {
           </li>
         ))}
       </ul>
-      <p className={s.notes}>Requests Cloudflare answers from its own cache never reach the server, so they are not counted here.</p>
+      <p className={s.notes}>{H.traffic.note}</p>
     </section>
   );
 }
@@ -477,23 +451,21 @@ function Log({ lines }: { lines: string[] }) {
     .reverse()
     .filter((l) => (!only || / (WARN|ERROR) /.test(l)) && (!find || l.toLowerCase().includes(find.toLowerCase())));
   return (
-    <section className={`${s.panel} ${s.wide}`} aria-label="Recent log lines">
+    <section className={`${s.panel} ${s.wide}`} aria-label={H.log.aria}>
       <header className={s.panelHead}>
-        <h2>Recent log</h2>
+        <h2>{H.log.title}</h2>
         <div className={s.tools}>
           <button type="button" className={s.toggle} aria-pressed={only} onClick={() => setOnly((o) => !o)}>
-            Warnings and errors only
+            {H.log.only}
           </button>
           <label className={s.search}>
-            <span className="visually-hidden">Search the log</span>
-            <input id="log-search" type="search" placeholder="Search, e.g. a username" value={find} onChange={(e) => setFind(e.target.value)} />
+            <span className="visually-hidden">{H.log.searchLabel}</span>
+            <input id="log-search" type="search" placeholder={H.log.placeholder} value={find} onChange={(e) => setFind(e.target.value)} />
           </label>
         </div>
       </header>
       <div className={s.notes}>
-        <p>
-          The last {num(lines.length)} lines since the start, newest first. The full log is in Portainer or <code>docker logs questlog</code>.
-        </p>
+        <p>{rich(H.log.intro(num(lines.length)), { code: (c) => <code>{c}</code> })}</p>
       </div>
       {shown.length ? (
         <ol className={s.log}>
@@ -507,7 +479,7 @@ function Log({ lines }: { lines: string[] }) {
           })}
         </ol>
       ) : (
-        <p className={s.notes}>{lines.length ? "No line matches. Clear the search or the filter." : "Nothing logged yet."}</p>
+        <p className={s.notes}>{lines.length ? H.log.noMatch : H.log.empty}</p>
       )}
     </section>
   );

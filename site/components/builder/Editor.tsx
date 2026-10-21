@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { m } from "@/i18n";
 import s from "./builder.module.css";
 
 /** The README text. A layer behind the textarea marks the card being changed; both wrap the same way. */
@@ -66,7 +67,7 @@ export default function Editor({
         spellCheck={false}
         autoCapitalize="off"
         autoComplete="off"
-        aria-label="Your README, in Markdown"
+        aria-label={m.builder.editor.label}
       />
     </div>
   );

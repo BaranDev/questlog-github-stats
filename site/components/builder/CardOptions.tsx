@@ -1,5 +1,6 @@
 "use client";
 
+import { m } from "@/i18n";
 import { Check, ChevronLeft, ChevronRight, Moon, Sun, SunMoon, Trash2 } from "lucide-react";
 import { DECORATIONS, THEMES, cardName, decorationLabel, type Widget } from "../data";
 import { WIDGETS, decorationThumb, getParam, readPairs, sceneLabel, setParam, themeOf, thumb, writePairs, type Card, type Spot } from "./cards";
@@ -9,37 +10,16 @@ import s from "./builder.module.css";
 export type Mode = "single" | "auto";
 type Time = "day" | "night" | "auto";
 
-const STATS_ROWS = [
-  ["level", "Level"],
-  ["commits", "Commits"],
-  ["prs", "PRs"],
-  ["repos", "Repos"],
-  ["stars", "Stars"],
-  ["issues", "Issues"],
-  ["reviews", "Reviews"],
-  ["followers", "Followers"],
-  ["contributions", "Contributions"],
-];
-const STREAK_ROWS = [
-  ["current", "Current"],
-  ["best", "Best"],
-  ["total", "Total"],
-  ["days", "Unit after the numbers (days)"],
-];
-const VALUES_EXAMPLE: Record<Widget, string> = {
-  stats: "level:Archmage",
-  languages: "typescript:Master",
-  streak: "current:Forever",
-};
+const tx = m.builderParts.cardOptions;
+const STATS_ROWS = (["level", "commits", "prs", "repos", "stars", "issues", "reviews", "followers", "contributions"] as const).map(
+  (k) => [k, tx.statsRows[k]],
+);
+const STREAK_ROWS = (["current", "best", "total", "days"] as const).map((k) => [k, tx.streakRows[k]]);
+const VALUES_EXAMPLE: Record<Widget, string> = tx.valuesExample;
 /** Options that only mean something on one card, dropped when the card type changes. */
 const OWN: Record<string, Widget | "none"> = { fire: "streak", langs: "languages", labels: "none", values: "none", hide: "none" };
 
-const DESCRIBE: Record<Widget, string> = {
-  stats: "Level, commits, pull requests, stars and more",
-  languages: "Your top languages, each with its rune",
-  streak: "Your contribution streak as a fire",
-};
-export const describe = (w: Widget) => DESCRIBE[w];
+export const describe = (w: Widget) => tx.describe[w];
 
 export const sceneGroups = THEMES.map((t) => ({ label: t.name, options: t.scenes.map((sc) => ({ value: sc, label: sceneLabel(sc) })) }));
 
@@ -69,21 +49,21 @@ function Head({ name, sub, index, count, onStep, onClose }: { name: string; sub:
         <div className={s.optsNav}>
           {count > 1 && (
             <>
-              <button type="button" className={s.navBtn} onClick={() => onStep(-1)} aria-label="Previous card">
+              <button type="button" className={s.navBtn} onClick={() => onStep(-1)} aria-label={tx.previousCard}>
                 <ChevronLeft aria-hidden="true" />
               </button>
               <span className={s.label}>
-                Card {index + 1} of {count}
+                {tx.cardOf(index + 1, count)}
               </span>
-              <button type="button" className={s.navBtn} onClick={() => onStep(1)} aria-label="Next card">
+              <button type="button" className={s.navBtn} onClick={() => onStep(1)} aria-label={tx.nextCard}>
                 <ChevronRight aria-hidden="true" />
               </button>
             </>
           )}
-          <CloseButton onClick={onClose} label="Close the card options" />
+          <CloseButton onClick={onClose} label={tx.closeOptions} />
         </div>
       </div>
-      <p className={s.optsHint}>Every change goes straight into your README.</p>
+      <p className={s.optsHint}>{tx.liveHint}</p>
     </>
   );
 }
@@ -93,11 +73,11 @@ function Foot({ onRemove, onClose }: Pick<Props, "onRemove" | "onClose">) {
     <div className={s.optsFoot}>
       <button type="button" className={`btn ${s.remove}`} onClick={onRemove}>
         <Trash2 aria-hidden="true" />
-        Remove this card
+        {tx.remove}
       </button>
       <button type="button" className="btn btn-primary" onClick={onClose}>
         <Check aria-hidden="true" />
-        Done
+        {tx.done}
       </button>
     </div>
   );
@@ -114,15 +94,15 @@ function DecorationOptions({ spot, index, count, onChange, onRemove, onClose, on
   return (
     <div className={s.opts}>
       <Head
-        name="Decoration"
-        sub={`${decorationLabel(c.scene)}, ${time === "auto" ? "switches with dark mode" : time === "night" ? "by night" : "by day"}`}
+        name={tx.decoration}
+        sub={tx.sub(decorationLabel(c.scene), time)}
         index={index}
         count={count}
         onStep={onStep}
         onClose={onClose}
       />
       <fieldset className={s.group}>
-        <legend className={s.label}>Painting</legend>
+        <legend className={s.label}>{tx.painting}</legend>
         <div className={`${s.thumbs} ${s.c3}`}>
           {DECORATIONS.map((d) => (
             <label key={d.name} className={s.thumb}>
@@ -134,50 +114,50 @@ function DecorationOptions({ spot, index, count, onChange, onRemove, onClose, on
         </div>
       </fieldset>
       <Segmented<Time>
-        label="Time of day"
+        label={tx.timeOfDay}
         value={time}
         onChange={setTime}
         options={[
-          { value: "day", label: "Day", icon: <Sun aria-hidden="true" /> },
-          { value: "night", label: "Night", icon: <Moon aria-hidden="true" /> },
-          { value: "auto", label: "Switch with dark mode", icon: <SunMoon aria-hidden="true" /> },
+          { value: "day", label: tx.times.day, icon: <Sun aria-hidden="true" /> },
+          { value: "night", label: tx.times.night, icon: <Moon aria-hidden="true" /> },
+          { value: "auto", label: tx.times.auto, icon: <SunMoon aria-hidden="true" /> },
         ]}
         help={
           time === "auto"
-            ? "Readers who use GitHub in dark mode see the night painting, everyone else the day one."
-            : "Pick Switch with dark mode to show night to readers who use GitHub in dark mode."
+            ? tx.timeHelpAuto
+            : tx.timeHelpOther
         }
       />
       <Segmented<"fine" | "chunky">
-        label="Pixels"
+        label={tx.pixels}
         value={getParam(c, "pixels") === "chunky" ? "chunky" : "fine"}
         onChange={(v) => set("pixels", v === "chunky" ? "chunky" : "", false)}
         options={[
-          { value: "fine", label: "Fine" },
-          { value: "chunky", label: "Chunky" },
+          { value: "fine", label: tx.pixelOptions.fine },
+          { value: "chunky", label: tx.pixelOptions.chunky },
         ]}
-        help="Chunky draws the painting in pixels twice as big; the words stay sharp. The switch above the preview sets every card at once."
+        help={tx.pixelsHelp}
       />
-      <Field label="Title" value={title} onChange={(v) => set("title", v)} help="Empty: the painting alone. Example: About Me" />
+      <Field label={tx.title} value={title} onChange={(v) => set("title", v)} help={tx.decorationTitleHelp} />
       <details className={s.more}>
         <summary>
-          More options: colors, animation
+          {tx.moreDecoration}
           <ChevronRight className={s.moreChev} aria-hidden="true" />
         </summary>
         <div className={s.moreBody}>
           <fieldset className={s.group}>
-            <legend className={s.label}>Colors</legend>
+            <legend className={s.label}>{tx.colors}</legend>
             <div className={s.colors}>
-              <ColorField label="Title color" value={getParam(c, "title_color")} onChange={(v) => set("title_color", v)} />
-              <ColorField label="Outline color" value={getParam(c, "outline_color")} onChange={(v) => set("outline_color", v)} />
+              <ColorField label={tx.titleColor} value={getParam(c, "title_color")} onChange={(v) => set("title_color", v)} />
+              <ColorField label={tx.outlineColor} value={getParam(c, "outline_color")} onChange={(v) => set("outline_color", v)} />
             </div>
           </fieldset>
           <Toggle checked={getParam(c, "animate") !== "false"} onChange={(on) => set("animate", on ? "" : "false", false)}>
-            Animate the candles and lights
+            {tx.animateDecoration}
           </Toggle>
           {title && (
             <Toggle checked={getParam(c, "truncate") === "false"} onChange={(on) => set("truncate", on ? "false" : "", false)}>
-              Show a long title whole (it may run past its place)
+              {tx.showTitleWhole}
             </Toggle>
           )}
         </div>
@@ -222,7 +202,7 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
     <div className={s.opts}>
       <Head
         name={name}
-        sub={`${sceneLabel(c.scene)}, ${time === "auto" ? "switches with dark mode" : night ? "by night" : "by day"}`}
+        sub={tx.sub(sceneLabel(c.scene), time)}
         index={index}
         count={count}
         onStep={onStep}
@@ -230,7 +210,7 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
       />
 
       <fieldset className={s.group}>
-        <legend className={s.label}>Card</legend>
+        <legend className={s.label}>{tx.card}</legend>
         <div className={`${s.thumbs} ${s.c3}`}>
           {WIDGETS.map((w) => (
             <label key={w} className={s.thumb}>
@@ -243,7 +223,7 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
       </fieldset>
 
       <fieldset className={s.group}>
-        <legend className={s.label}>Scenes like this one</legend>
+        <legend className={s.label}>{tx.scenesLikeThis}</legend>
         <div className={`${s.thumbs} ${s.c4}`}>
           {theme.scenes.map((sc) => (
             <label key={sc} className={s.thumb}>
@@ -254,7 +234,7 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
           ))}
         </div>
         <SelectField
-          label="Or pick any of the 16 scenes"
+          label={tx.pickAnyScene}
           value={c.scene}
           onChange={(sc) => onChange({ ...c, scene: sc }, mode)}
           groups={sceneGroups}
@@ -262,89 +242,89 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
       </fieldset>
 
       <Segmented<Time>
-        label="Time of day"
+        label={tx.timeOfDay}
         value={time}
         onChange={setTime}
         options={[
-          { value: "day", label: "Day", icon: <Sun aria-hidden="true" /> },
-          { value: "night", label: "Night", icon: <Moon aria-hidden="true" /> },
-          { value: "auto", label: "Switch with dark mode", icon: <SunMoon aria-hidden="true" /> },
+          { value: "day", label: tx.times.day, icon: <Sun aria-hidden="true" /> },
+          { value: "night", label: tx.times.night, icon: <Moon aria-hidden="true" /> },
+          { value: "auto", label: tx.times.auto, icon: <SunMoon aria-hidden="true" /> },
         ]}
         help={
           time === "auto"
-            ? "Readers who use GitHub in dark mode see the night painting, everyone else the day one."
-            : "Pick Switch with dark mode to show night to readers who use GitHub in dark mode."
+            ? tx.timeHelpAuto
+            : tx.timeHelpOther
         }
       />
 
       <Segmented<"fine" | "chunky">
-        label="Pixels"
+        label={tx.pixels}
         value={getParam(c, "pixels") === "chunky" ? "chunky" : "fine"}
         onChange={(v) => set("pixels", v === "chunky" ? "chunky" : "", false)}
         options={[
-          { value: "fine", label: "Fine" },
-          { value: "chunky", label: "Chunky" },
+          { value: "fine", label: tx.pixelOptions.fine },
+          { value: "chunky", label: tx.pixelOptions.chunky },
         ]}
-        help="Chunky draws the painting in pixels twice as big; the words stay sharp. The switch above the preview sets every card at once."
+        help={tx.pixelsHelp}
       />
       {c.widget === "streak" && (
         <Segmented
-          label="Fire"
+          label={tx.fire}
           value={fire}
           onChange={(f) => set("fire", f === "themed" ? "themed" : "", false)}
           options={[
-            { value: "themed", label: "Themed" },
-            { value: "classic", label: "Classic" },
+            { value: "themed", label: tx.fireOptions.themed },
+            { value: "classic", label: tx.fireOptions.classic },
           ]}
-          help="Themed takes the scene's colors. Classic is the original orange flame."
+          help={tx.fireHelp}
         />
       )}
       {c.widget === "languages" && (
         <Segmented
-          label="How many languages"
+          label={tx.howManyLanguages}
           value={getParam(c, "langs") === "3" ? "3" : "5"}
           onChange={(n) => set("langs", n === "3" ? "3" : "", false)}
           options={[
-            { value: "5", label: "Top 5" },
-            { value: "3", label: "Top 3" },
+            { value: "5", label: tx.languageCounts.top5 },
+            { value: "3", label: tx.languageCounts.top3 },
           ]}
         />
       )}
 
       <div className={s.pair}>
-        <Field label="Title" value={getParam(c, "title")} onChange={(v) => set("title", v)} help={`Empty: "${name}".`} />
+        <Field label={tx.title} value={getParam(c, "title")} onChange={(v) => set("title", v)} help={tx.titleHelp(name)} />
         <Field
-          label="Subtitle"
+          label={tx.subtitle}
           value={getParam(c, "subtitle")}
           onChange={(v) => set("subtitle", v)}
-          help={c.widget === "stats" ? "Empty: a class from your top language." : "Empty: no subtitle."}
+          help={c.widget === "stats" ? tx.subtitleHelpStats : tx.subtitleHelpNone}
         />
       </div>
 
       <details className={s.more}>
         <summary>
-          More options: note, words, colors
+          {tx.moreWidget}
           <ChevronRight className={s.moreChev} aria-hidden="true" />
         </summary>
         <div className={s.moreBody}>
           <Field
-            label="Note"
+            label={tx.note}
             value={getParam(c, "note")}
             onChange={(v) => set("note", v)}
             maxLength={121}
-            help="Up to two lines, split with |. Example: Open to work|DMs open"
+            help={tx.noteHelp}
           />
 
           {c.widget === "stats" && (
             <fieldset className={s.group}>
-              <legend className={s.label}>Rows</legend>
-              <p className={s.help}>Rename a row, or untick it to hide it. Empty names keep the scene&apos;s words.</p>
+              <legend className={s.label}>{tx.rows}</legend>
+              <p className={s.help}>{tx.rowsHelp}</p>
               <div className={s.rows}>
                 {STATS_ROWS.map(([k, label]) => (
                   <div key={k} className={s.rowItem}>
                     <label className={s.check}>
                       <input type="checkbox" checked={!hidden.includes(k)} onChange={(e) => setShown(k, e.target.checked)} />
-                      <span className="visually-hidden">Show {label}</span>
+                      <span className="visually-hidden">{tx.showRow(label)}</span>
                     </label>
                     <Field label={label} value={labels.get(k) ?? ""} onChange={(v) => setLabel(k, v)} />
                   </div>
@@ -354,8 +334,8 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
           )}
           {c.widget === "streak" && (
             <fieldset className={s.group}>
-              <legend className={s.label}>Words</legend>
-              <p className={s.help}>Rename the parts of the card. Empty keeps the scene&apos;s words.</p>
+              <legend className={s.label}>{tx.words}</legend>
+              <p className={s.help}>{tx.wordsHelp}</p>
               <div className={s.rowsPlain}>
                 {STREAK_ROWS.map(([k, label]) => (
                   <Field key={k} label={label} value={labels.get(k) ?? ""} onChange={(v) => setLabel(k, v)} />
@@ -366,44 +346,44 @@ function WidgetOptions({ spot, index, count, onChange, onRemove, onClose, onStep
           {c.widget === "languages" && (
             <>
               <Field
-                label="Hide languages"
+                label={tx.hideLanguages}
                 value={getParam(c, "hide")}
                 onChange={(v) => set("hide", v)}
                 maxLength={120}
-                help="Names split with commas. Example: html,css"
+                help={tx.hideLanguagesHelp}
               />
               <Field
-                label="Rename languages"
+                label={tx.renameLanguages}
                 value={getParam(c, "labels")}
                 onChange={(v) => set("labels", v)}
                 maxLength={240}
-                help="language:New name, split with commas. Example: typescript:TS,python:Py"
+                help={tx.renameLanguagesHelp}
               />
             </>
           )}
           <Field
-            label="Replace values"
+            label={tx.replaceValues}
             value={getParam(c, "values")}
             onChange={(v) => set("values", v)}
             maxLength={240}
-            help={`Shows your own words instead of a number; bars and fires still follow your real numbers. Example: ${VALUES_EXAMPLE[c.widget]}`}
+            help={tx.replaceValuesHelp(VALUES_EXAMPLE[c.widget])}
           />
 
           <fieldset className={s.group}>
-            <legend className={s.label}>Colors</legend>
+            <legend className={s.label}>{tx.colors}</legend>
             <div className={s.colors}>
-              <ColorField label="Title color" value={getParam(c, "title_color")} onChange={(v) => set("title_color", v)} />
-              <ColorField label="Text color" value={getParam(c, "text_color")} onChange={(v) => set("text_color", v)} />
-              <ColorField label="Outline color" value={getParam(c, "outline_color")} onChange={(v) => set("outline_color", v)} />
+              <ColorField label={tx.titleColor} value={getParam(c, "title_color")} onChange={(v) => set("title_color", v)} />
+              <ColorField label={tx.textColor} value={getParam(c, "text_color")} onChange={(v) => set("text_color", v)} />
+              <ColorField label={tx.outlineColor} value={getParam(c, "outline_color")} onChange={(v) => set("outline_color", v)} />
             </div>
           </fieldset>
 
           <Toggle checked={getParam(c, "animate") !== "false"} onChange={(on) => set("animate", on ? "" : "false", false)}>
-            Animate the flames and sparkles
+            {tx.animateWidget}
           </Toggle>
           {getParam(c, "subtitle") && (
             <Toggle checked={getParam(c, "truncate") === "false"} onChange={(on) => set("truncate", on ? "false" : "", false)}>
-              Show a long subtitle whole (it may run past the painting)
+              {tx.showSubtitleWhole}
             </Toggle>
           )}
         </div>

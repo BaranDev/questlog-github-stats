@@ -1,63 +1,22 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useRef } from "react";
+import { m, rich, type Tags } from "@/i18n";
 import { REPO } from "./data";
 
 const OFL = "https://openfontlicense.org";
 
-const ATTRIBUTIONS: [string, ReactNode][] = [
-  [
-    "Paintings and sprites",
-    <>
-      © Cevdet Baran Oral, under <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>. Credit as
-      &quot;questlog-github-stats art by Cevdet Baran Oral&quot;; linking the cards to the repository counts. Commercial use
-      needs written permission: contact@cevdetbaran.com.
-    </>,
-  ],
-  [
-    "Code",
-    <>
-      questlog, under the <a href={`${REPO}/blob/main/LICENSE`}>MIT license</a>.
-    </>,
-  ],
-  [
-    "Nodesto Caps Condensed",
-    <>
-      By Solbera, under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. The card titles.
-    </>,
-  ],
-  [
-    "Tiny5",
-    <>
-      By Stefan Schmidt, under the <a href={OFL}>SIL Open Font License 1.1</a>. The card text.
-    </>,
-  ],
-  [
-    "Outfit",
-    <>
-      By the Outfit Project Authors, under the <a href={OFL}>SIL Open Font License 1.1</a>. The site text.
-    </>,
-  ],
-  [
-    "Silkscreen",
-    <>
-      By Jason Kottke and the Silkscreen Project Authors, under the <a href={OFL}>SIL Open Font License 1.1</a>. The
-      questlog logo.
-    </>,
-  ],
-  [
-    "Language colors",
-    <>
-      Adapted from <a href="https://github.com/github-linguist/linguist">GitHub Linguist</a> (MIT).
-    </>,
-  ],
-  [
-    "Software",
-    <>
-      The card server uses axum, tokio, reqwest, serde, png and skrifa (MIT or Apache 2.0). The site uses Next.js and
-      React (MIT) and GSAP (<a href="https://gsap.com/standard-license">GSAP Standard License</a>).
-    </>,
-  ],
+const A = m.attributions;
+
+const ATTRIBUTIONS: [string, string, Tags][] = [
+  [A.art.what, A.art.credit, { ccbync: (c) => <a href="https://creativecommons.org/licenses/by-nc/4.0/">{c}</a> }],
+  [A.code.what, A.code.credit, { mit: (c) => <a href={`${REPO}/blob/main/LICENSE`}>{c}</a> }],
+  [A.nodesto.what, A.nodesto.credit, { ccbysa: (c) => <a href="https://creativecommons.org/licenses/by-sa/4.0/">{c}</a> }],
+  [A.tiny5.what, A.tiny5.credit, { ofl: (c) => <a href={OFL}>{c}</a> }],
+  [A.outfit.what, A.outfit.credit, { ofl: (c) => <a href={OFL}>{c}</a> }],
+  [A.silkscreen.what, A.silkscreen.credit, { ofl: (c) => <a href={OFL}>{c}</a> }],
+  [A.colors.what, A.colors.credit, { linguist: (c) => <a href="https://github.com/github-linguist/linguist">{c}</a> }],
+  [A.software.what, A.software.credit, { gsap: (c) => <a href="https://gsap.com/standard-license">{c}</a> }],
 ];
 
 /** A native dialog: Escape or a click outside closes it. */
@@ -66,7 +25,7 @@ export default function Attributions() {
   return (
     <>
       <button type="button" className="btn btn-ghost attributions-open" onClick={() => ref.current?.showModal()}>
-        Attributions
+        {A.open}
       </button>
       <dialog
         ref={ref}
@@ -78,16 +37,16 @@ export default function Attributions() {
       >
         <div className="attributions-body">
           <header>
-            <h2 id="attributions-title">Attributions</h2>
+            <h2 id="attributions-title">{A.title}</h2>
             <button type="button" className="btn btn-ghost" onClick={() => ref.current?.close()}>
-              Close
+              {A.close}
             </button>
           </header>
           <dl>
-            {ATTRIBUTIONS.map(([what, credit]) => (
+            {ATTRIBUTIONS.map(([what, credit, tags]) => (
               <div key={what}>
                 <dt>{what}</dt>
-                <dd>{credit}</dd>
+                <dd>{rich(credit, tags)}</dd>
               </div>
             ))}
           </dl>

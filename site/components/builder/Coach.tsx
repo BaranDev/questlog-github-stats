@@ -1,12 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { m } from "@/i18n";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import s from "./builder.module.css";
 
 /** One step of the tour: what to point at (a CSS selector; the first visible match), which phone tab shows it, and
  * what to say. */
-export type CoachStep = { target?: string; tab?: "write" | "preview"; title: string; body: string };
+export type CoachStep = {
+  target?: string;
+  tab?: "write" | "preview";
+  title: string;
+  body: string;
+  /** Done for the reader by the main button, before the tour moves on (like adding a first card). */
+  action?: { label: string; run: () => void };
+};
 
 const PAD = 8;
 
@@ -106,9 +114,9 @@ export default function Coach({
       >
         <div className={s.coachHead}>
           <span className={s.label}>
-            Tip {i + 1} of {steps.length}
+            {m.builderParts.coach.tip(i + 1, steps.length)}
           </span>
-          <button type="button" className={s.coachClose} onClick={() => onDone(false)} aria-label="Skip the tour">
+          <button type="button" className={s.coachClose} onClick={() => onDone(false)} aria-label={m.builderParts.coach.skip}>
             <X aria-hidden="true" />
           </button>
         </div>
@@ -125,18 +133,28 @@ export default function Coach({
         </div>
         <div className={s.coachFoot}>
           <button type="button" className={s.linkBtn} onClick={() => onDone(false)}>
-            Skip the tour
+            {m.builderParts.coach.skip}
           </button>
           <span className={s.coachNav}>
             {i > 0 && (
               <button type="button" className={`btn btn-ghost ${s.small}`} onClick={() => setI(i - 1)}>
                 <ArrowLeft aria-hidden="true" />
-                Back
+                {m.builderParts.coach.back}
               </button>
             )}
-            <button type="button" className={`btn btn-primary ${s.small}`} onClick={() => (last ? onDone(true) : setI(i + 1))}>
-              {last ? "Start building" : "Next"}
-              {!last && <ArrowRight aria-hidden="true" />}
+            <button
+              type="button"
+              className={`btn btn-primary ${s.small}`}
+              onClick={() => {
+                if (step.action) {
+                  step.action.run();
+                  window.setTimeout(() => setI(i + 1), 450); // the new card needs a moment to appear
+                } else if (last) onDone(true);
+                else setI(i + 1);
+              }}
+            >
+              {step.action ? step.action.label : last ? m.builderParts.coach.start : m.builderParts.coach.next}
+              {!last && !step.action && <ArrowRight aria-hidden="true" />}
             </button>
           </span>
         </div>

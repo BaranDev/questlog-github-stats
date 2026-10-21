@@ -4,15 +4,16 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { card, snap } from "../data";
+import { DEMO_USER, card, cardName, snap } from "../data";
 import s from "./CardStack.module.css";
+import { m } from "@/i18n";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const CARDS = [
-  { name: "Character Sheet", src: snap(card("stats", "forest", "&scale=2")), caption: "Your level from lifetime contributions, with commits, PRs, stars, reviews and a class." },
-  { name: "Spellbook", src: snap(card("languages", "forest", "&scale=2")), caption: "Your top five languages by code, each marked with its own rune." },
-  { name: "Campfire", src: snap(card("streak", "forest", "&scale=2")), caption: "Your current and best streak. Keep it going and the fire grows." },
+  { name: cardName("stats", "forest"), src: snap(card("stats", "forest", "&scale=2")), caption: m.home.stack.stats },
+  { name: cardName("languages", "forest"), src: snap(card("languages", "forest", "&scale=2")), caption: m.home.stack.languages },
+  { name: cardName("streak", "forest"), src: snap(card("streak", "forest", "&scale=2")), caption: m.home.stack.streak },
 ];
 
 export default function CardStack() {
@@ -49,14 +50,14 @@ export default function CardStack() {
       <div className={s.inner}>
         <div className={s.copy}>
           <h2 className="h2" id="cards-title">
-            The three cards
+            {m.home.stack.title}
           </h2>
-          <p className="lede">Use one, or all three in the same scene.</p>
+          <p className="lede">{m.home.stack.lede}</p>
         </div>
         <div className={s.deck}>
           {CARDS.map((c) => (
             <figure key={c.name} className={s.card}>
-              <img className="pix" src={c.src} width={640} height={256} alt={`BaranDev's ${c.name} in the forest scene`} />
+              <img className="pix" src={c.src} width={640} height={256} alt={m.home.stack.alt(DEMO_USER, c.name)} />
               <span className={s.dim} aria-hidden="true" />
               <figcaption>
                 <strong className="display">{c.name}</strong>

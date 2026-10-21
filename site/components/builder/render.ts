@@ -3,6 +3,7 @@
 import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { parseCard, type Spot } from "./cards";
+import { m } from "@/i18n";
 
 export type Theme = "light" | "dark";
 
@@ -84,7 +85,7 @@ export function render(text: string, spots: Spot[], o: { theme: Theme; login: st
       img.setAttribute("data-spot", String(spot));
       img.setAttribute("tabindex", "0");
       img.setAttribute("role", "button");
-      img.setAttribute("aria-label", `Change this card: ${img.getAttribute("alt") || "questlog card"}`);
+      img.setAttribute("aria-label", m.builder.render.changeCard(img.getAttribute("alt") || m.builder.render.cardFallback));
     }
   }
   for (const a of root.querySelectorAll("a")) {

@@ -1,19 +1,20 @@
-import { THEMES, card, sceneName, snap } from "../data";
+import { THEMES, card, cardName, sceneName, snap } from "../data";
 import s from "./Themes.module.css";
+import { m } from "@/i18n";
 
 export default function Themes() {
   return (
     <section className="section" id="scenes" aria-labelledby="scenes-title">
       <div className="section-head">
         <h2 className="h2" id="scenes-title">
-          Scenes
+          {m.home.themes.title}
         </h2>
-        <p className="lede">16 scenes in four themes, each painted by day and by night. Open one in the wiki to see all of its cards.</p>
+        <p className="lede">{m.home.themes.lede}</p>
       </div>
 
       <div className={s.accordion}>
         {THEMES.map((t) => (
-          <article key={t.name} className={s.slice} aria-label={`${t.name} scenes`}>
+          <article key={t.name} className={s.slice} aria-label={m.home.themes.label(t.name)}>
             <div className={`${s.bg} pix`} style={{ backgroundImage: `url(/art/${t.cover}/streak.png)` }} />
             <h3 className={s.spine} aria-hidden="true">
               {t.name}
@@ -31,7 +32,7 @@ export default function Themes() {
                         width={320}
                         height={128}
                         loading="lazy"
-                        alt={`Character Sheet in the ${sceneName(scene)} scene`}
+                        alt={m.home.themes.thumbAlt(cardName("stats", scene), sceneName(scene))}
                       />
                       <span>{sceneName(scene)}</span>
                     </a>

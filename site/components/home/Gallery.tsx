@@ -4,8 +4,9 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { card, cardName, sceneName, snap, type Widget } from "../data";
+import { DEMO_USER, card, cardName, sceneName, snap, type Widget } from "../data";
 import s from "./Gallery.module.css";
+import { m } from "@/i18n";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -43,9 +44,9 @@ export default function Gallery() {
     <section ref={root} className="section" aria-labelledby="gallery-title">
       <div className="section-head">
         <h2 className="h2" id="gallery-title">
-          Day and night
+          {m.home.gallery.title}
         </h2>
-        <p className="lede">A light theme shows the day painting and a dark theme the night one. The numbers stay the same.</p>
+        <p className="lede">{m.home.gallery.lede}</p>
       </div>
       <div className={s.grid}>
         {SHOTS.map(([w, scene, time, fire]) => (
@@ -57,14 +58,14 @@ export default function Gallery() {
                 width={640}
                 height={256}
                 loading="lazy"
-                alt={`BaranDev's ${cardName(w, scene)} in the ${sceneName(scene)} scene, ${time}`}
+                alt={m.home.gallery.alt(DEMO_USER, cardName(w, scene), sceneName(scene), m.home.gallery.times[time])}
               />
             </div>
             <figcaption>
               <strong className="display">{cardName(w, scene)}</strong>
               <span>
-                {sceneName(scene)}, {time}
-                {fire && `, ${fire} fire`}
+                {sceneName(scene)}, {m.home.gallery.times[time]}
+                {fire && m.home.gallery.fire(m.home.gallery.fires[fire])}
               </span>
             </figcaption>
           </figure>
