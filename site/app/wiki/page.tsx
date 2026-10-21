@@ -29,10 +29,19 @@ const TOC = [
 const WIDGETS: Widget[] = ["stats", "languages", "streak"];
 
 
-function Shot({ src, alt, scale = 2, h = 128 }: { src: string; alt: string; scale?: number; h?: number }) {
+/** A live card that links to its full size; with `dark`, readers in dark mode see that address instead. */
+function Shot({ src, alt, scale = 2, h = 128, dark }: { src: string; alt: string; scale?: number; h?: number; dark?: string }) {
+  const img = <img className="pix" src={snap(`${src}&scale=${scale}`)} width={320 * scale} height={h * scale} alt={alt} loading="lazy" />;
   return (
     <a className={w.shot} href={src}>
-      <img className="pix" src={snap(`${src}&scale=${scale}`)} width={320 * scale} height={h * scale} alt={alt} loading="lazy" />
+      {dark ? (
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcSet={snap(`${dark}&scale=${scale}`)} />
+          {img}
+        </picture>
+      ) : (
+        img
+      )}
     </a>
   );
 }
@@ -49,6 +58,10 @@ const SNIPPET = `![My Character Sheet](${HOST}/you/stats/forest)`;
 const PICTURE = `<picture>
   <source media="(prefers-color-scheme: dark)" srcset="${HOST}/you/stats/forest/night">
   <img alt="My Character Sheet" src="${HOST}/you/stats/forest">
+</picture>`;
+const DECO_PICTURE = `<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="${HOST}/decorations/raven-moon?title=Connect&time=night">
+  <img alt="Connect" src="${HOST}/decorations/raven-moon?title=Connect">
 </picture>`;
 
 const STATS_ROWS = [
@@ -198,6 +211,8 @@ export default function Wiki() {
               <p className={w.note}>
                 Anywhere that renders HTML works the same way: a repository README, a wiki or your own site. Where only
                 Markdown images are allowed, use <code>![My stats]({HOST}/stats?user=you)</code> and pick one time.
+                Decorations switch the same way: put <code>?time=night</code> on the dark one (see{" "}
+                <a href="#decorations">Decorations</a>).
               </p>
             </section>
 
@@ -365,14 +380,29 @@ export default function Wiki() {
               <Code>{`![About Me](${HOST}/decorations/reading-nook?title=About%20Me)`}</Code>
               <p>
                 Decorations take only <code>title</code>, <code>title_color</code>, <code>outline_color</code>,{" "}
-                <code>truncate</code>, <code>animate</code> and <code>scale</code>. A title too long for its place is
-                trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.
+                <code>truncate</code>, <code>animate</code>, <code>scale</code> and <code>time</code>. A title too long
+                for its place is trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.{" "}
+                <code>time=night</code> draws the night painting. The ones below switch with your theme; to do the same in
+                your README, use a <code>&lt;picture&gt;</code> tag (the builder writes it for you when you pick Switch
+                with dark mode):
               </p>
+              <Code>{DECO_PICTURE}</Code>
+              <div className={w.pair}>
+                <figure>
+                  <Shot src="/decorations/raven-moon?title=Connect" alt="The Raven Moon decoration by day" />
+                  <figcaption>Light theme</figcaption>
+                </figure>
+                <figure>
+                  <Shot src="/decorations/raven-moon?title=Connect&time=night" alt="The Raven Moon decoration by night" />
+                  <figcaption>Dark theme</figcaption>
+                </figure>
+              </div>
               <div className={w.grid2}>
                 {DECORATIONS.map(({ name, label, title, h }) => (
                   <figure key={name}>
                     <Shot
                       src={`/decorations/${name}?title=${encodeURIComponent(title)}`}
+                      dark={`/decorations/${name}?title=${encodeURIComponent(title)}&time=night`}
                       alt={title ? `The ${label} decoration titled ${title}` : `The ${label} decoration`}
                       h={h}
                     />
