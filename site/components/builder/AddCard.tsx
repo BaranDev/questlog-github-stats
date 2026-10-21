@@ -17,6 +17,7 @@ export default function AddCard({
   onAdd,
   onAddDecoration,
   onClose,
+  noLogin = false,
 }: {
   scene: string;
   night: boolean;
@@ -24,6 +25,8 @@ export default function AddCard({
   onAdd: (w: Widget, scene: string) => void;
   onAddDecoration: (name: string) => void;
   onClose: () => void;
+  /** No GitHub login: only the decorations, which show no stats. */
+  noLogin?: boolean;
 }) {
   const [scene, setScene] = useState(first);
   return (
@@ -35,6 +38,10 @@ export default function AddCard({
         </div>
         <CloseButton onClick={onClose} label={m.builder.addCard.close} />
       </div>
+      {noLogin ? (
+        <p className={s.help}>{m.builder.addCard.needLogin}</p>
+      ) : (
+        <>
       <SelectField
         label={m.builder.addCard.scene}
         value={scene}
@@ -60,6 +67,8 @@ export default function AddCard({
           ))}
         </div>
       </div>
+        </>
+      )}
       <div className={s.group}>
         <p className={s.label}>{m.builder.addCard.orDecoration}</p>
         <p className={s.help}>{m.builder.addCard.decorationHelp}</p>

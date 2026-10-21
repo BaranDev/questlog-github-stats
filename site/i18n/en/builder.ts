@@ -10,6 +10,8 @@ export const builder = {
     change: "Change",
     addCard: "Add a card",
     undo: "Undo",
+    noLogin: "No GitHub login",
+    addLogin: "Add a login",
     reset: "Start over",
     resetTitle: "Start over?",
     resetText: "This clears the builder: your text, your cards and the login you gave. Nothing on GitHub changes. Copy your text first if you want to keep it.",
@@ -91,6 +93,7 @@ export const builder = {
         title: "Add your first card",
         body: "Add a card puts a card, or a painted decoration banner, where your cursor is in the text. Let's add a Character Sheet with your stats.",
         action: "Add one for me",
+        bodyNoLogin: "Add a card puts a painted decoration banner where your cursor is in the text. Let's add one with a title you can change.",
       },
       card: {
         title: "This is your card",
@@ -138,6 +141,7 @@ export const builder = {
     decorationHelp: "A painted banner to head a section of your README. You can give it a title after adding it.",
     forExample: (title: string) => `For example "${title}"`,
     divider: "A divider between sections",
+    needLogin: "Cards with stats show a GitHub account's numbers, so they need a login. Add one in step 1 whenever you like.",
   },
   render: {
     changeCard: (alt: string) => `Change this card: ${alt}`,

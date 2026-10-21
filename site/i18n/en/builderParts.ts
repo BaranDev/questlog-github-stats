@@ -149,6 +149,15 @@ export const builderParts = {
     template: (name: string) =>
       `# Hi, I'm ${name}\n\nA line or two about you: what you build, what you're learning, how to reach you.\n`,
     otherTemplate: `## My coding stats\n\nA line about the cards below.\n`,
+    tourStepsOther: [
+      "<b>Give a GitHub login, or skip it.</b> Without one you can use the painted decorations, which show no stats.",
+      "<b>Add cards or decorations.</b> Pick what goes on your page.",
+      "<b>Change them.</b> Click one in the preview to change it.",
+      "<b>Copy.</b> Paste the text into your page or Markdown file.",
+    ],
+    tourTitleOther: "Your page in four steps:",
+    noLogin: "Continue without a login",
+    noLoginHelp: "Without a login you get the painted decorations; cards with stats need one.",
     tourSteps: [
       "<b>Type your login.</b> Your cards show that account's numbers.",
       "<b>Add cards.</b> Pick a card and a scene.",

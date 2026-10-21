@@ -142,7 +142,7 @@ function pixelsOf(spots: Spot[]): Pixels {
 
 /** The guided tour, opened once right after the login (or from "How does this work?"), worded for a GitHub profile or
  * for any other page. With no card yet, it starts by adding one for the reader. */
-function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void): CoachStep[] {
+function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void, noLogin = false): CoachStep[] {
   const other = purpose === "other";
   const words = m.builder.profile.tour;
   const first: CoachStep[] = empty
@@ -150,7 +150,7 @@ function coachSteps(purpose: Purpose, empty: boolean, addFirst: () => void): Coa
         {
           target: '[data-coach="add"]',
           title: words.addFirst.title,
-          body: words.addFirst.body,
+          body: noLogin ? words.addFirst.bodyNoLogin : words.addFirst.body,
           action: { label: words.addFirst.action, run: addFirst },
         },
       ]
@@ -275,6 +275,8 @@ export default function ProfileBuilder() {
   const [coach, setCoach] = useState<CoachStep[]>([]);
   const [purpose, setPurpose] = useState<Purpose>("profile");
   const other = purpose === "other";
+  // "Something else" without a login: only the decorations, which need no GitHub account
+  const noLogin = profile?.login === "";
   const [changed, setChanged] = useState(false);
   const [copied, setCopied] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
@@ -340,6 +342,10 @@ export default function ProfileBuilder() {
 
   useEffect(() => {
     if (!profile) return;
+    if (!profile.login) {
+      setStatus("card"); // no login, no stats to wait for
+      return;
+    }
     let live = true;
     setStatus("checking");
     probe(profile.login).then((k) => live && setStatus(k));
@@ -429,7 +435,7 @@ export default function ProfileBuilder() {
 
   // the tour opens by itself once, right after the login; its steps are fixed when it opens
   const openCoach = () => {
-    setCoach(coachSteps(purpose, spots.length === 0, () => add("stats", "forest")));
+    setCoach(coachSteps(purpose, spots.length === 0, () => (noLogin ? addDecoration("reading-nook") : add("stats", "forest")), noLogin));
     setCoachOpen(true);
   };
   useEffect(() => {
@@ -699,8 +705,8 @@ export default function ProfileBuilder() {
 
       {narrow && (
         <span className={`${s.who} ${s.whoNarrow}`}>
-          <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
-          <b>{profile.login}</b>
+          {!noLogin && <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />}
+          <b>{noLogin ? m.builder.profile.noLogin : profile.login}</b>
           <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
             {m.builder.profile.changeLogin}
           </button>
@@ -735,13 +741,22 @@ export default function ProfileBuilder() {
               <Num n={1} state={state(0)} />
               {steps[0].title}
             </span>
-            <span className={s.who}>
-              <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
-              <b>{profile.login}</b>
-              <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
-                {m.builder.profile.change}
-              </button>
-            </span>
+            {noLogin ? (
+              <span className={s.who}>
+                <b>{m.builder.profile.noLogin}</b>
+                <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
+                  {m.builder.profile.addLogin}
+                </button>
+              </span>
+            ) : (
+              <span className={s.who}>
+                <img src={profile.avatar || `https://github.com/${profile.login}.png?size=64`} width={28} height={28} alt="" />
+                <b>{profile.login}</b>
+                <button ref={changeBtn} type="button" className={s.linkBtn} onClick={() => setAsking(true)}>
+                  {m.builder.profile.change}
+                </button>
+              </span>
+            )}
           </li>
           <li className={s.step} data-state={state(1)}>
             <span className={s.stepTitle}>
@@ -999,7 +1014,15 @@ export default function ProfileBuilder() {
         </div>
       </Sheet>
       <Sheet open={adding} onClose={() => setAdding(false)} label={m.builder.profile.addCard}>
-        <AddCard scene={lastScene} night={lastNight} where={where} onAdd={add} onAddDecoration={addDecoration} onClose={() => setAdding(false)} />
+        <AddCard
+          scene={lastScene}
+          night={lastNight}
+          where={where}
+          onAdd={add}
+          onAddDecoration={addDecoration}
+          onClose={() => setAdding(false)}
+          noLogin={noLogin}
+        />
       </Sheet>
       <Sheet open={narrow && !!options} onClose={() => setSel(null)} label={m.builder.profile.cardOptions}>
         {options}

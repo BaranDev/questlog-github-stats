@@ -47,10 +47,10 @@ async function profileReadme(login: string): Promise<string | null> {
   return null;
 }
 
-export function TourSteps() {
+export function TourSteps({ other = false }: { other?: boolean }) {
   return (
     <ol className={s.tourList}>
-      {tx.tourSteps.map((step) => (
+      {(other ? tx.tourStepsOther : tx.tourSteps).map((step) => (
         <li key={step}>{rich(step, { b: (c) => <b>{c}</b> })}</li>
       ))}
     </ol>
@@ -179,6 +179,19 @@ export default function LoginStep({
                     {tx.cancel}
                   </button>
                 )}
+                {other && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    title={tx.noLoginHelp}
+                    onClick={() => {
+                      run.current++; // a lookup still on its way must not land after this
+                      onDone({ login: "", name: "", avatar: "" }, keepable ? null : otherTemplate(), keepable ? "keep" : "fresh");
+                    }}
+                  >
+                    {tx.noLogin}
+                  </button>
+                )}
                 <button type="button" className="btn btn-primary" onClick={next} disabled={phase === "checking"}>
                   {phase === "checking" ? (
                     <>
@@ -252,8 +265,8 @@ export default function LoginStep({
             <span className={s.label}>{tx.tourNew}</span>
             <CloseButton onClick={onTourDone} label={tx.tourClose} />
           </div>
-          <p className={s.tourTitle}>{tx.tourTitle}</p>
-          <TourSteps />
+          <p className={s.tourTitle}>{other ? tx.tourTitleOther : tx.tourTitle}</p>
+          <TourSteps other={other} />
           <button type="button" className="btn btn-ghost" onClick={onTourDone}>
             {tx.tourGotIt}
           </button>
