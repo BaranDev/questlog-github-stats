@@ -8,7 +8,6 @@
   min-height: 100vh;
 }
 
-/* Page head */
 .head {
   display: flex;
   flex-wrap: wrap;
@@ -1103,7 +1102,6 @@
   outline-offset: 2px;
 }
 
-/* Switch */
 .toggle {
   position: relative;
   display: flex;

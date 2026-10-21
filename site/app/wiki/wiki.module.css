@@ -60,7 +60,6 @@
   transform: translateX(3px);
 }
 
-/* The document */
 .doc {
   min-width: 0;
   max-width: 62rem;
@@ -192,7 +191,6 @@
   margin-right: 0.35rem;
 }
 
-/* Tables */
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -279,7 +277,6 @@
   color: var(--ember);
 }
 
-/* Runes */
 .runes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));

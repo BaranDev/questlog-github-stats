@@ -90,7 +90,7 @@ impl Store {
         }
         let mut m = self.mem.lock().unwrap();
         let _ = std::fs::remove_file(self.path(login));
-        let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // github.rs
+        let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // the past years github.rs keeps
         m.users.remove(login);
         m.touched.remove(login);
     }
@@ -114,11 +114,9 @@ impl Store {
         self.mem.lock().unwrap().unknown.get(login).is_some_and(|&t| now.saturating_sub(t) < UNKNOWN_SECS)
     }
 
-    /// Deletes users nobody requested for 30 days (a user never requested since a restart counts from its fetch
-    /// time), forgets expired unknowns and persists request times. Returns how many users were deleted.
-    /// The disk work (listing every user file, reading the untouched ones, deleting, saving the request times)
-    /// runs on a copy of the request times, outside the lock: with 100,000 users it takes seconds, and every card
-    /// request needs the lock.
+    /// Deletes users nobody requested for 30 days (counted from the fetch time if not requested since a restart),
+    /// forgets expired unknowns and persists request times; returns how many users were deleted. The disk work
+    /// runs outside the lock: with 100,000 users it takes seconds, and every card request needs the lock.
     pub fn sweep(&self, now: u64) -> Result<usize, BoxError> {
         let touched = self.mem.lock().unwrap().touched.clone();
         let mut gone = Vec::new();
@@ -160,7 +158,7 @@ impl Store {
         for (login, path) in gone {
             if !keep.contains_key(&login) {
                 std::fs::remove_file(&path)?;
-                let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // github.rs
+                let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // the past years github.rs keeps
             }
         }
         std::fs::write(self.dir.join("touched.json"), snapshot)?;

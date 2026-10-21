@@ -1,6 +1,5 @@
-//! Drawing one card: the scene painting (night-toned on request) under a transparent 320×128 layer for text,
-//! bars and sprites. Every color comes from the scene, so cards obey the palette rule by construction; the only
-//! exceptions are the text colors a URL asks for, used as given day and night.
+//! One card: the scene painting (night-toned on request) under a transparent 320×128 layer for text, bars and
+//! sprites. Every color comes from the scene (palette rule) except URL text colors, used as given day and night.
 use crate::canvas::{Image, Rgb};
 use crate::fmt::{fit, wrap};
 use crate::scene::{Assets, OH, OW, Painting, Scene, Style, TITLE_SMALL_SIZE};
@@ -20,8 +19,8 @@ pub struct Card<'a> {
     pub outline_color: Option<Rgb>,
     /// truncate=false: a subtitle too long for its room is drawn whole instead of trimmed.
     pub truncate: bool,
-    /// The title at twice the card's resolution, laid over every frame when the card is encoded at scale 2 or more:
-    /// the painting's hard pixels made the big letters hard to read. None at scale 1, where the title is in `layer`.
+    /// The title at twice the card's resolution, laid over every frame at scale 2 or more so big letters stay
+    /// readable. None at scale 1, where the title is in `layer`.
     pub title_layer: Option<Image>,
     /// pixels=chunky: the painting drawn in 2x2 blocks; the text, bars and fire keep their own pixels.
     pub chunky: bool,

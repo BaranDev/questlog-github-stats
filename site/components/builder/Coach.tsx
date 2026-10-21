@@ -10,11 +10,8 @@ export type CoachStep = { target?: string; tab?: "write" | "preview"; title: str
 
 const PAD = 8;
 
-/**
- * A short guided tour over the builder: the step's target is lit and the rest dimmed, with a card that says what it
- * is for. Skip, Esc or the close button end it at any point; Back and Next move through it; the arrow keys too.
- * The page stays usable underneath, so the reader can try the thing being shown.
- */
+/** Guided tour: the target is lit and the rest dimmed. Skip, Esc or close end it; Back, Next and the arrow keys move
+ * through it. The page stays usable underneath, so the reader can try what is shown. */
 export default function Coach({
   steps,
   onTab,

@@ -21,7 +21,6 @@ export default function Editor({
   const back = useRef<HTMLDivElement>(null);
   const marked = useRef<HTMLElement>(null);
 
-  // the marked card scrolls into view in the text
   useEffect(() => {
     const t = area.current;
     const m = marked.current;

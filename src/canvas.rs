@@ -42,7 +42,6 @@ impl Image {
         out
     }
 
-    /// Nearest-neighbour upscale by an integer factor.
     /// pixels=chunky: the image in 2x2 blocks, each the average of its four pixels moved to the nearest color the
     /// image already has, so the painting keeps its own palette at half the resolution.
     pub fn chunky(&self) -> Image {
@@ -68,6 +67,7 @@ impl Image {
         out
     }
 
+    /// Nearest-neighbour upscale by an integer factor.
     pub fn scaled(&self, k: usize) -> Image {
         let mut out = Image::new(self.w * k, self.h * k);
         for (i, p) in out.px.iter_mut().enumerate() {

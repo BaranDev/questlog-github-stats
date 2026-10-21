@@ -29,8 +29,8 @@ pub fn line(level: &str, area: &str, msg: std::fmt::Arguments) {
     r.push_back(line);
 }
 
-/// One line of plain text: control characters (newlines, terminal escapes) and bidi overrides become `?`,
-/// and the text is cut at MAX_CHARS.
+/// Control characters (newlines, terminal escapes) and bidi overrides become `?`, so a request can't forge or
+/// hide log lines.
 pub fn clean(s: &str) -> String {
     let bidi = |c: char| matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}');
     let mut out: String = s.chars().take(MAX_CHARS).map(|c| if c.is_control() || bidi(c) { '?' } else { c }).collect();

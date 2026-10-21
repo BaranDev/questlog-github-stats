@@ -1,6 +1,5 @@
-//! /languages, the Spellbook: up to five languages, each with its rune in its (readable) language color, its name,
-//! its share and a bar scaled to the top language. Sparkles drift up from the runes. Runes and bars keep their
-//! colors at night: they glow.
+//! /languages, the Spellbook: up to five languages, each with a rune in its readable language color, name, share and
+//! a bar scaled to the top language. Sparkles drift up from the runes; runes and bars keep their colors at night.
 use crate::canvas::{Image, Rgb};
 use crate::card::{Card, LINE};
 use crate::stats::UserStats;
@@ -62,9 +61,8 @@ pub fn rune_colors() -> Vec<Rgb> {
     LANGS.iter().map(|&(_, c, _)| readable(c)).chain([readable(OTHER.0)]).collect()
 }
 
-/// A rune mask in `color` with a 1 px outline in the title edge ink, drawn unscaled with its top left at (x, y) onto
-/// `layer`. The outline leaves out the row below the rune, so runes stacked one row apart keep a 1 px gap instead of
-/// their outlines running together.
+/// A rune mask in `color` with a 1 px outline in the title edge ink, unscaled, top left at (x, y) on `layer`. The
+/// outline skips the row below the rune so runes stacked one row apart keep a 1 px gap.
 fn rune(layer: &mut Image, edge_ink: Rgb, mask: &Image, x: i64, y: i64, color: Rgb) {
     let edge = mask.map_colors(|_| edge_ink);
     for dx in -1..=1 {

@@ -1,5 +1,4 @@
-//! Renders every scene's three cards, day and night, from the golden fixture into target/preview/, plus a contact
-//! sheet per scene, and a second sheet per scene with a two-line note, a custom value and custom text colors. A
+//! Renders every scene's cards and contact sheets (day, night, custom words and colors) into target/preview/, for a
 //! visual check after art changes: cargo test --test preview -- --ignored
 use questlog::canvas::Image;
 use questlog::scene::Assets;

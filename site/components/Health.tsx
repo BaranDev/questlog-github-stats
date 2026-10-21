@@ -132,7 +132,6 @@ export default function Health({ full = false }: { full?: boolean }) {
     }
   }, [url]);
 
-  // checks every EVERY seconds while the tab is visible, and at once when it comes back
   useEffect(() => {
     load();
     const id = setInterval(() => document.visibilityState === "visible" && load(), EVERY * 1000);
