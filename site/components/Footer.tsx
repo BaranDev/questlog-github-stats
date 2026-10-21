@@ -12,6 +12,7 @@ export default function Footer() {
           <a href="/builder">Make my cards</a>
           <a href="/#scenes">Scenes</a>
           <a href="/wiki">Wiki</a>
+          <a href="/status">Health</a>
           <a href={REPO}>GitHub</a>
         </nav>
       </div>

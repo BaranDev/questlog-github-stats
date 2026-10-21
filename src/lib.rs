@@ -8,6 +8,7 @@ pub mod decorations;
 pub mod encode;
 pub mod fmt;
 pub mod github;
+pub mod log;
 pub mod queue;
 pub mod raster;
 pub mod scene;

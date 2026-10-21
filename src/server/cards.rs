@@ -158,7 +158,16 @@ pub(super) fn failed() -> Response {
         img.px.fill([0x1C, 0x12, 0x0A, 0xFF]);
         encode(&[img], None, 5).unwrap_or_default()
     });
-    image(bytes.clone(), NO_CACHE, "error")
+    served(image(bytes.clone(), NO_CACHE, "error"), "drawing failed, plain fallback panel".into())
+}
+
+/// How a card response was made, read by the request log.
+#[derive(Clone)]
+pub(crate) struct Served(pub String);
+
+pub(super) fn served(mut r: Response, how: String) -> Response {
+    r.extensions_mut().insert(Served(how));
+    r
 }
 
 /// A look as a cache key part: its maps sorted, so equal looks give equal keys.
@@ -196,28 +205,37 @@ pub(super) async fn render_image<F: Fetcher>(
     kind: &'static str,
     job: impl FnOnce() -> Option<Vec<u8>> + Send + 'static,
 ) -> Response {
-    if let Some(bytes) = app.cache.get(key) {
-        return image((*bytes).clone(), cache, kind);
+    if let Some((bytes, place)) = app.cache.lookup(key) {
+        let how = if place == "memory" { "from the memory cache" } else { "from the disk cache (now kept in memory too)" };
+        return served(image((*bytes).clone(), cache, kind), how.into());
     }
+    let started = std::time::Instant::now();
     if ip.is_some_and(|ip| !app.ip_renders.take(ip)) {
-        return shed(app, w, NO_CACHE);
+        return served(shed(app, w, NO_CACHE), "busy, this visitor used its renders for the minute".into());
     }
     let permit = match tokio::time::timeout(SHED_AFTER, app.renders.clone().acquire_owned()).await {
         Ok(Ok(permit)) => permit,
         Ok(Err(_)) => return failed(),
-        Err(_) => return shed(app, w, SHED),
+        Err(_) => return served(shed(app, w, SHED), "busy, both render slots stayed full for 2 s".into()),
     };
+    let waited = started.elapsed().as_millis();
     let out = tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        job()
+        let t = std::time::Instant::now();
+        job().map(|b| (b, t.elapsed().as_millis()))
     });
     match out.await.ok().flatten() {
-        Some(bytes) => {
+        Some((bytes, drew)) => {
             let bytes = Arc::new(bytes);
             app.cache.put(key, bytes.clone());
-            image((*bytes).clone(), cache, kind)
+            let wait = if waited > 0 { format!(" after {waited} ms waiting for a render slot") } else { String::new() };
+            let how = format!("not in cache, drawn in {drew} ms{wait}, saved to memory and disk");
+            served(image((*bytes).clone(), cache, kind), how)
         }
-        None => failed(),
+        None => {
+            crate::error!("cache", "drawing a {} card failed, answered the plain fallback panel", w.key());
+            failed()
+        }
     }
 }
 
