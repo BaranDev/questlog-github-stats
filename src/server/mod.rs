@@ -31,8 +31,8 @@ use tokio::sync::Semaphore;
 
 /// stale-while-revalidate: past max-age an edge serves the old card at once and fetches the new one behind it.
 pub const READY: &str = "public, max-age=43200, stale-while-revalidate=86400";
-/// Stale cards (a refresh is queued): cached for hours too. Under load most cards are stale, and a short edge
-/// cache turns every README view into a render; the refreshed card replaces it within this time.
+/// Stale cards (a refresh is queued) are cached for hours too: under load most cards are stale, and a short edge
+/// cache would turn every README view into a render.
 pub const STALE: &str = "public, max-age=21600, stale-while-revalidate=86400";
 /// A busy card answered when the renderer is overloaded or the client used its render budget.
 pub const SHED: &str = "public, max-age=60";
@@ -137,8 +137,7 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .layer(axum::middleware::from_fn(log_request))
 }
 
-/// One line per request: what was asked, what was answered and how, how long it took, and who asked (country,
-/// kind of client, Cloudflare ray id). Busy and failed answers are WARN, server errors ERROR.
+/// One log line per request. Busy and failed answers are WARN, server errors ERROR.
 async fn log_request(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
     let start = std::time::Instant::now();
     let (method, uri) = (req.method().clone(), req.uri().to_string());
@@ -188,7 +187,6 @@ async fn log_request(req: axum::extract::Request, next: axum::middleware::Next) 
     res
 }
 
-/// What the X-Questlog kind means, in words.
 fn describe(kind: &str) -> &str {
     match kind {
         "card" => "card",
@@ -201,7 +199,7 @@ fn describe(kind: &str) -> &str {
     }
 }
 
-/// Who asked, from the user agent: GitHub's image proxy, a browser, a known tool or bot, or the start of it.
+/// A short client label for the log, from the user agent.
 fn client_kind(ua: &str) -> String {
     let low = ua.to_ascii_lowercase();
     if ua.is_empty() {
@@ -234,8 +232,7 @@ pub fn log_status<F: Fetcher>(app: &App<F>) {
     );
 }
 
-/// The public health: up or not, whether GitHub fetching runs, and whether new users get in now or when they
-/// will. No capacities or counts, so it tells nobody how much load it takes to fill the service.
+/// The public health. No capacities or counts, so it tells nobody how much load it takes to fill the service.
 async fn health<F: Fetcher>(State(app): State<Arc<App<F>>>) -> Json<serde_json::Value> {
     let q = app.queue.health();
     let paused = q["github"]["paused_secs"].as_u64().unwrap_or(0);

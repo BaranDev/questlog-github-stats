@@ -102,6 +102,7 @@ const OPTIONS = [
   ["user", "your GitHub login", "required"],
   ["scene", "any of the sixteen scenes", "forest"],
   ["time", "day, night", "day"],
+  ["pixels", "fine, chunky: chunky draws the painting in pixels twice as big; the text stays sharp", "fine"],
   ["title", "any text, up to 60 characters", "the scene's title"],
   ["subtitle", "any text, up to 60 characters", "on /stats, your class; none on the others"],
   ["labels", "key:Text,key:Text, keys below", "the scene's labels"],
@@ -125,6 +126,7 @@ const EXAMPLES: [string, Widget, string, string][] = [
   ["hide=prs,stars", "stats", "&hide=prs,stars", "Leaves rows out; the others move up."],
   ["hide=html,css", "languages", "&hide=html,css", "On the Spellbook, hide takes language names; the next language takes the place."],
   ["animate=false", "streak", "&animate=false", "A still image: no flicker and no sparkles, and a smaller file."],
+  ["pixels=chunky", "stats", "&pixels=chunky", "The painting in pixels twice as big, for a bolder retro look. Text, bars and fire stay as they are."],
   ["labels=typescript:TS,python:Py", "languages", "&labels=typescript:TS,python:Py", "On the Spellbook, labels take language names too, plus percent."],
   ["values=level:Archmage,commits:Lots", "stats", "&values=level:Archmage,commits:Lots", "Draws your text in place of a number. The XP bar still follows your real level."],
   ["values=current:Forever", "streak", "&values=current:Forever", "The fire and the notches still follow your real streak."],
@@ -380,7 +382,8 @@ export default function Wiki() {
               <Code>{`![About Me](${HOST}/decorations/reading-nook?title=About%20Me)`}</Code>
               <p>
                 Decorations take only <code>title</code>, <code>title_color</code>, <code>outline_color</code>,{" "}
-                <code>truncate</code>, <code>animate</code>, <code>scale</code> and <code>time</code>. A title too long
+                <code>truncate</code>, <code>animate</code>, <code>scale</code>, <code>time</code> and{" "}
+                <code>pixels</code>. A title too long
                 for its place is trimmed with &quot;...&quot;; <code>truncate=false</code> draws it whole.{" "}
                 <code>time=night</code> draws the night painting. The ones below switch with your theme; to do the same in
                 your README, use a <code>&lt;picture&gt;</code> tag (the builder writes it for you when you pick Switch

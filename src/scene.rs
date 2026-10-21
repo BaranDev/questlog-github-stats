@@ -1,6 +1,5 @@
-//! Embedded art: per scene a palette, named inks, a night table and default words, plus each widget's painting
-//! (160×64 shown ×2, or 320×128 used as-is) with the anchors its renderer fills, and art-scale sprites. Fonts are
-//! embedded here too.
+//! Embedded art and fonts: per scene a palette, named inks, a night table, default words, each widget's painting
+//! with the anchors its renderer fills, and art-scale sprites.
 use crate::BoxError;
 use crate::canvas::{Image, Rgb};
 use crate::text::Font;
@@ -96,8 +95,7 @@ struct DecorationFile {
     ink: HashMap<String, String>,
 }
 
-/// A banner for a README section: its animation frames (320 wide, as tall as it is painted), where its title goes
-/// and in which inks.
+/// A README banner: its animation frames (320 wide, as tall as painted), title placement and title inks.
 pub struct Decoration {
     pub frames: Vec<Image>,
     /// `<i>-night.png`, the same frames at night; empty when the decoration has no night painting yet.
@@ -143,8 +141,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    /// The sprite to draw at this time of day and in this fire style: the night version when there is one, the
-    /// themed one when asked for and the scene has it, else the classic one.
+    /// The night version when there is one, the themed one when asked for and present, else the classic one.
     pub fn sprite(&self, name: &str, night: bool, themed: bool) -> Option<&Image> {
         type Sprites = HashMap<String, Image>;
         fn pick<'a>(day: &'a Sprites, nights: &'a Sprites, name: &str, night: bool) -> Option<&'a Image> {

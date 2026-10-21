@@ -1,7 +1,5 @@
-//! Pixel goldens: every widget × scene × time, plus a still, custom words, an empty account and a message card,
-//! rendered from fixed stats and compared with tests/goldens/<name>.webp (lossless; frames stacked vertically, each at ×2 with
-//! its title, 640×256).
-//! Regenerate deliberately after an art change: UPDATE_GOLDENS=1 cargo test --test goldens
+//! Pixel goldens: every widget × scene × time plus edge cases, from fixed stats, against tests/goldens/<name>.webp
+//! (lossless, frames stacked at ×2 with title). Regenerate after an art change: UPDATE_GOLDENS=1 cargo test --test goldens
 use questlog::canvas::Image;
 use questlog::scene::Assets;
 use questlog::stats::{RawUser, UserStats, derive};

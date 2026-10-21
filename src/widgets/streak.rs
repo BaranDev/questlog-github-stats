@@ -123,7 +123,7 @@ mod tests {
         for night in [false, true] {
             let (own, classic) = (draw_as("observatory", true, night), draw_as("observatory", false, night));
             assert_ne!(own, classic, "a scene with its own fire");
-            // (every scene has its own fire now; scene.rs tests the fallback to classic for one without)
+            // every scene has its own fire; scene.rs tests the fallback to classic for one without
             let look = Look { scene: "observatory".into(), themed: true, night, ..Default::default() };
             assert_scene_colors(&a, &look, &draw_as("observatory", true, night));
         }

@@ -1,6 +1,5 @@
-//! Monochrome scan converter: a port of FreeType's "black" rasterizer (src/raster/ftraster.c, 2.14),
-//! which is what Pillow's `fontmode = "1"` ends up calling. Coordinates are 26.6 fixed point like
-//! FreeType outlines; the rules for pixel centers, drop-outs and stubs follow the C code closely.
+//! Port of FreeType's "black" monochrome rasterizer (src/raster/ftraster.c, 2.14), which Pillow's `fontmode = "1"`
+//! calls. Coordinates are 26.6 fixed point; pixel-center, drop-out and stub rules follow the C code closely.
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Pt {
