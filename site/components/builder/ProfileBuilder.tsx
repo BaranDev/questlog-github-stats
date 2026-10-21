@@ -408,8 +408,19 @@ export default function ProfileBuilder() {
 
   const addDecoration = (name: string) => {
     const d = DECORATIONS.find((x) => x.name === name);
-    const card: Card = { origin: env.origin, user: "", widget: "decorations", scene: name, night: false, params: d?.title ? [["title", d.title]] : [], hash: "" };
-    const r = insertAt(text, cursor.current ?? text.length, writeSpot(card, autoAlt(card), "single"));
+    // like a card: switches with dark mode, or stays at night, when the last image in the README does
+    const last = spots[spots.length - 1];
+    const mode: Mode = last && last.kind === "picture" && last.dark ? "auto" : "single";
+    const card: Card = {
+      origin: env.origin,
+      user: "",
+      widget: "decorations",
+      scene: name,
+      night: mode === "single" && !!last?.card.night,
+      params: d?.title ? [["title", d.title]] : [],
+      hash: "",
+    };
+    const r = insertAt(text, cursor.current ?? text.length, writeSpot(card, autoAlt(card), mode));
     edit(r.text, { now: true });
     cursor.current = r.end;
     setFlash(findSpots(r.text, env.host).findIndex((x) => x.start === r.start));
