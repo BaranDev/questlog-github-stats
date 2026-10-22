@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { HOST } from "@/components/data";
+import { HOST, ogImages } from "@/components/data";
 import { lang, m } from "@/i18n";
 
 const outfit = localFont({ src: "./fonts/Outfit-Variable.ttf", weight: "100 900", variable: "--font-outfit", display: "swap" });
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     siteName: meta.siteName,
     title: meta.ogTitle,
     description: meta.ogDescription,
-    images: [{ url: "/demo/stats?scene=castle-sky", width: 1600, height: 640, alt: meta.ogImageAlt }],
+    images: ogImages("home", meta.ogImageAlt),
   },
   title: meta.title,
   description: meta.description,
