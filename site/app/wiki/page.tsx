@@ -4,7 +4,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Rune from "@/components/Rune";
 import { PreviewHint, PreviewLinks } from "@/components/Preview";
-import { RUNES, THEMES, REPO, HOST, card, cardName, DECORATIONS, sceneName, snap, type Widget } from "@/components/data";
+import { RUNES, THEMES, REPO, HOST, ogImages, card, cardName, DECORATIONS, sceneName, snap, type Widget } from "@/components/data";
 import { m, rich, type Tags } from "@/i18n";
 import w from "./wiki.module.css";
 
@@ -12,7 +12,12 @@ export const metadata: Metadata = {
   title: m.wiki.meta.title,
   description: m.wiki.meta.description,
   alternates: { canonical: "/wiki" },
-  openGraph: { url: "/wiki", title: m.wiki.meta.ogTitle, description: m.wiki.meta.ogDescription },
+  openGraph: {
+    url: "/wiki",
+    title: m.wiki.meta.ogTitle,
+    description: m.wiki.meta.ogDescription,
+    images: ogImages("wiki", m.wiki.meta.ogImageAlt),
+  },
 };
 
 const TOC = [

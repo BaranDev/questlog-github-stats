@@ -6,6 +6,9 @@ export const DEMO_USER = "BaranDev";
 /** The primary host; questlog.cevdetbaran.com still answers too. */
 export const HOST = "https://questlog.cc";
 
+/** The picture a page shows when its link is shared: its scene, the brand, the motto and a button. */
+export const ogImages = (page: string, alt: string) => [{ url: `/static/og/${page}.png`, width: 1200, height: 630, alt }];
+
 export type Widget = "stats" | "languages" | "streak";
 
 export const THEMES = [

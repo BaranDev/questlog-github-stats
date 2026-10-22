@@ -38,7 +38,7 @@ export const meta = {
     siteName: "questlog",
     ogTitle: "questlog: pixel art GitHub profile cards",
     ogDescription: "Pixel art cards for your GitHub profile README: stats, languages and streak in 16 painted scenes.",
-    ogImageAlt: "A questlog Character Sheet",
+    ogImageAlt: "questlog: pixel art cards for your GitHub profile, on a castle in the sky",
   },
   builder: {
     title: "questlog profile builder: your GitHub README with pixel art cards",
@@ -46,6 +46,7 @@ export const meta = {
       "Write your GitHub profile README, add pixel art cards for your stats, languages and streak, and see it the way GitHub will show it, in light and dark.",
     ogTitle: "questlog profile builder",
     ogDescription: "Your GitHub profile README with pixel art cards, in four steps.",
+    ogImageAlt: "questlog profile builder, in a guild hall",
   },
   cards: {
     title: "All questlog cards: every scene, time and pixel style",
@@ -53,6 +54,7 @@ export const meta = {
       "Every questlog card in one place: pick a scene and see all of its cards by day and by night, in fine and chunky pixels, with every fire and board.",
     ogTitle: "All questlog cards",
     ogDescription: "Every card in every scene, time and pixel style.",
+    ogImageAlt: "All questlog cards, in the cloud kingdom",
   },
   status: {
     title: "questlog health: is the service up, and how busy is it",
@@ -60,6 +62,7 @@ export const meta = {
       "Live health of questlog: whether cards are served, whether stats arrive from GitHub, and whether new users get in right now.",
     ogTitle: "questlog health",
     ogDescription: "Live health of the questlog card service.",
+    ogImageAlt: "questlog health, in a war room",
   },
   adminStatus: { title: "questlog health, every number" },
 };

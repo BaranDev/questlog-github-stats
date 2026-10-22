@@ -3,6 +3,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import ProfileBuilder from "@/components/builder/ProfileBuilder";
 import { m, rich } from "@/i18n";
+import { ogImages } from "@/components/data";
 
 export const metadata: Metadata = {
   title: m.meta.builder.title,
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
     url: "/builder",
     title: m.meta.builder.ogTitle,
     description: m.meta.builder.ogDescription,
+    images: ogImages("builder", m.meta.builder.ogImageAlt),
   },
 };
 
