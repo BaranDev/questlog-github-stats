@@ -3,12 +3,18 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Health from "@/components/Health";
 import { m, rich } from "@/i18n";
+import { ogImages } from "@/components/data";
 
 export const metadata: Metadata = {
   title: m.meta.status.title,
   description: m.meta.status.description,
   alternates: { canonical: "/status" },
-  openGraph: { url: "/status", title: m.meta.status.ogTitle, description: m.meta.status.ogDescription },
+  openGraph: {
+    url: "/status",
+    title: m.meta.status.ogTitle,
+    description: m.meta.status.ogDescription,
+    images: ogImages("status", m.meta.status.ogImageAlt),
+  },
 };
 
 export default function StatusPage() {

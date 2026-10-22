@@ -4,6 +4,7 @@ export const wiki = {
     description: "How questlog works: the snippet, what every number means, fire tiers, runes, all sixteen scenes, every option and the messages.",
     ogTitle: "questlog wiki",
     ogDescription: "Every card, option and scene of questlog.",
+    ogImageAlt: "questlog wiki, in a royal library",
   },
   toc: {
     gettingStarted: "Getting started",
