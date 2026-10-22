@@ -115,6 +115,8 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/builder", get(|| async { static_file("builder.html", PAGE) }))
         .route("/status", get(|| async { static_file("status.html", PAGE) }))
         .route("/cards", get(|| async { static_file("cards.html", PAGE) }))
+        .route("/robots.txt", get(|| async { static_file("robots.txt", PAGE) }))
+        .route("/sitemap.xml", get(|| async { static_file("sitemap.xml", PAGE) }))
         .route("/admin/status", get(admin_status::<F>))
         .route("/admin/health", get(admin_health::<F>))
         // the admin page's shell is only served through its guarded address
@@ -434,6 +436,12 @@ mod tests {
             assert_eq!((st, ct.as_str()), (200, "text/html; charset=utf-8"), "{path}");
             assert_eq!(cc, if path == "/static/index.html" { ASSET } else { PAGE }, "{path}");
             assert!(html && !body.is_empty());
+        }
+        for (path, ct, has) in [("/robots.txt", "text/plain; charset=utf-8", "Sitemap: https://questlog.cc/sitemap.xml"),
+            ("/sitemap.xml", "application/xml; charset=utf-8", "<loc>https://questlog.cc/wiki</loc>")] {
+            let (st, got, _, body) = raw(&format!("{base}{path}")).await;
+            assert_eq!((st, got.as_str()), (200, ct), "{path}");
+            assert!(String::from_utf8_lossy(&body).contains(has), "{path}");
         }
         for bad in ["/static/missing.css", "/static/", "/static/%2e%2e/Cargo.toml", "/static/..%2fCargo.toml", "/static/../Cargo.toml"] {
             assert_eq!(raw(&format!("{base}{bad}")).await.0, 404, "{bad}");
