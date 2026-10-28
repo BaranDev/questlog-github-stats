@@ -5,7 +5,7 @@ mod cards;
 mod pages;
 
 pub use admin::Access;
-use admin::{Outcome, admin_health, admin_status};
+use admin::{Outcome, admin_allow, admin_health, admin_remove, admin_status};
 
 use cards::*;
 use pages::*;
@@ -20,7 +20,7 @@ use crate::stats::UserStats;
 use crate::store::Store;
 use crate::widgets::{self, Look, Widget};
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, HeaderName, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -57,6 +57,7 @@ pub const ASSET: &str = "public, max-age=604800";
 const UNKNOWN: &str = "No adventurer by that name";
 const BUSY: &str = "The scriptorium is busy, try again soon";
 const FAILED: &str = "The road is closed";
+const REMOVED: &str = "Not shown, at this adventurer's request";
 
 pub struct App<F: Fetcher> {
     pub assets: Arc<Assets>,
@@ -115,10 +116,13 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/builder", get(|| async { static_file("builder.html", PAGE) }))
         .route("/status", get(|| async { static_file("status.html", PAGE) }))
         .route("/cards", get(|| async { static_file("cards.html", PAGE) }))
+        .route("/privacy", get(|| async { static_file("privacy.html", PAGE) }))
         .route("/robots.txt", get(|| async { static_file("robots.txt", PAGE) }))
         .route("/sitemap.xml", get(|| async { static_file("sitemap.xml", PAGE) }))
         .route("/admin/status", get(admin_status::<F>))
         .route("/admin/health", get(admin_health::<F>))
+        .route("/admin/people/{login}/remove", axum::routing::post(admin_remove::<F>))
+        .route("/admin/people/{login}/allow", axum::routing::post(admin_allow::<F>))
         // the admin page's shell is only served through its guarded address
         .route(
             "/static/{*path}",
@@ -198,6 +202,7 @@ fn describe(kind: &str) -> &str {
         "busy" => "busy card",
         "failed" => "\"road is closed\" (GitHub fetches for this user keep failing)",
         "error" => "error card (bad options in the address)",
+        "removed" => "\"not shown\" (removed at the person's request)",
         k => k,
     }
 }
@@ -219,6 +224,17 @@ fn client_kind(ua: &str) -> String {
     } else {
         ua.chars().take(40).collect()
     }
+}
+
+/// Whether a person asked, for the admin page's people: Some(true) for GitHub's image proxy (the card is in a
+/// README), Some(false) for a browser, None for bots and scripts, and for the admin page's own previews.
+fn person_asking(h: &HeaderMap) -> Option<bool> {
+    let hv = |k: header::HeaderName| h.get(k).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    if hv(header::REFERER).contains("/admin") {
+        return None;
+    }
+    let client = client_kind(&hv(header::USER_AGENT));
+    if client == "GitHub image proxy" { Some(true) } else { client.starts_with("browser").then_some(false) }
 }
 
 /// A status line every 15 minutes, so the log shows the service's state without opening /health.
@@ -431,7 +447,7 @@ mod tests {
     async fn pages_and_static_files() {
         let (base, _) = serve(QueueConfig::default()).await;
         assert_eq!(content_type("cards/demo_stats.scale=2.webp"), "image/webp", "the site's own card copies");
-        for (path, html) in [("/", true), ("/wiki", true), ("/builder", true), ("/static/index.html", true)] {
+        for (path, html) in [("/", true), ("/wiki", true), ("/builder", true), ("/privacy", true), ("/static/index.html", true)] {
             let (st, ct, cc, body) = raw(&format!("{base}{path}")).await;
             assert_eq!((st, ct.as_str()), (200, "text/html; charset=utf-8"), "{path}");
             assert_eq!(cc, if path == "/static/index.html" { ASSET } else { PAGE }, "{path}");
@@ -520,6 +536,57 @@ mod tests {
         let scenes = v["scenes"].as_array().unwrap();
         assert!(scenes.contains(&serde_json::json!("forest")), "{scenes:?}");
         assert!(!scenes.contains(&serde_json::json!("_shared")), "shared art is not a scene");
+    }
+
+    #[tokio::test]
+    async fn admin_health_lists_the_people_who_used_it() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        app.store.put(derive(&RawUser { login: "ana".into(), followers: 7, ..Default::default() }, 0, now_secs())).unwrap();
+        let browser = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0";
+        let asks: [(&str, &[(&str, &str)]); 7] = [
+            ("/ana/stats/forest", &[("user-agent", browser)]),
+            ("/streak?user=ana", &[("user-agent", "github-camo (abc)")]),
+            ("/ana/languages", &[("user-agent", "Mozilla/5.0 (compatible; Googlebot/2.1)")]), // a bot
+            ("/ana/streak", &[("user-agent", browser), ("referer", "https://questlog.cc/admin/status")]), // the admin page
+            ("/decorations/reading-nook?title=Hi", &[("user-agent", browser), ("referer", "https://questlog.cc/builder")]),
+            ("/decorations/reading-nook", &[("user-agent", browser), ("referer", "https://questlog.cc/wiki")]), // the site's own page
+            ("/decorations/workbench", &[("user-agent", "github-camo (abc)")]),
+        ];
+        for (path, headers) in asks {
+            get(&format!("{base}{path}"), headers).await;
+        }
+        let v: serde_json::Value = reqwest::get(format!("{base}/admin/health")).await.unwrap().json().await.unwrap();
+        let p = &v["people"];
+        assert_eq!((p["tried"].as_u64(), p["in_readme"].as_u64()), (Some(1), Some(1)), "{p}");
+        assert_eq!(p["no_login"], serde_json::json!({"decorations": 2, "in_readme": 1}));
+        let ana = &p["list"][0];
+        assert_eq!((ana["login"].as_str(), ana["stats"]["followers"].as_u64()), (Some("ana"), Some(7)));
+        let cards: Vec<(&str, bool)> = ana["cards"].as_array().unwrap().iter().map(|c| (c["address"].as_str().unwrap(), c["readme"] == true)).collect();
+        assert_eq!(cards.len(), 2, "{cards:?}");
+        assert!(cards.contains(&("/ana/stats/forest", false)) && cards.contains(&("/streak?user=ana", true)), "{cards:?}");
+
+        // removing at the person's request: only from the admin page, then the data is gone and the cards say so
+        let client = reqwest::Client::new();
+        let post = |path: &str, headers: &[(&str, &str)]| {
+            let mut r = client.post(format!("{base}{path}"));
+            for (k, v) in headers {
+                r = r.header(*k, *v);
+            }
+            r.send()
+        };
+        for (why, headers) in [("no admin header", &[][..]), ("through Cloudflare without a login", &[("x-questlog-admin", "1"), ("cf-ray", "x")][..])] {
+            assert_eq!(post("/admin/people/ana/remove", headers).await.unwrap().status(), 404, "{why}");
+        }
+        assert!(app.store.saved("ana").is_some());
+        assert_eq!(post("/admin/people/ana/remove", &[("x-questlog-admin", "1")]).await.unwrap().status(), 200);
+        assert!(app.store.saved("ana").is_none() && app.store.get("ana", now_secs()).is_none(), "saved stats deleted");
+        let (kind, ..) = get(&format!("{base}/ana/stats"), &[("user-agent", browser)]).await;
+        assert_eq!(kind, "removed");
+        assert_eq!(app.queue.len(), 0, "a removed login is never fetched again");
+        let v: serde_json::Value = reqwest::get(format!("{base}/admin/health")).await.unwrap().json().await.unwrap();
+        assert_eq!((v["people"]["tried"].as_u64(), &v["people"]["removed"]), (Some(0), &serde_json::json!(["ana"])));
+        assert_eq!(post("/admin/people/ana/allow", &[("x-questlog-admin", "1")]).await.unwrap().status(), 200);
+        assert!(!app.store.people.is_blocked("ana"));
     }
 
     #[tokio::test]
