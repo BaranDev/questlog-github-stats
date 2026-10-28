@@ -186,6 +186,7 @@ export const builderParts = {
     fieldHelp: "Example: octocat. Letters, digits and hyphens.",
     footOther: "Your text stays in this browser until you copy it.",
     footProfile: "Already have a profile README? We'll find it, and you can start from it.",
+    privacy: "Only public GitHub data is used. <a>What questlog keeps</a>.",
     cancel: "Cancel",
     checking: "Looking you up",
     next: "Next",

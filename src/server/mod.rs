@@ -5,7 +5,7 @@ mod cards;
 mod pages;
 
 pub use admin::Access;
-use admin::{Outcome, admin_allow, admin_health, admin_remove, admin_status};
+use admin::{Outcome, admin_allow, admin_health, admin_people, admin_remove, admin_status};
 
 use cards::*;
 use pages::*;
@@ -121,6 +121,7 @@ pub fn router<F: Fetcher>(app: Arc<App<F>>) -> Router {
         .route("/sitemap.xml", get(|| async { static_file("sitemap.xml", PAGE) }))
         .route("/admin/status", get(admin_status::<F>))
         .route("/admin/health", get(admin_health::<F>))
+        .route("/admin/people", get(admin_people::<F>))
         .route("/admin/people/{login}/remove", axum::routing::post(admin_remove::<F>))
         .route("/admin/people/{login}/allow", axum::routing::post(admin_allow::<F>))
         // the admin page's shell is only served through its guarded address
@@ -529,7 +530,7 @@ mod tests {
         assert_eq!(full["new_users"]["per_hour"], 600);
         assert!(full["traffic"].as_array().is_some_and(|t| t.len() == 60) && full["recent"].is_array(), "{full}");
         let client = reqwest::Client::new();
-        for path in ["/admin/health", "/admin/status", "/static/admin/status.html"] {
+        for path in ["/admin/health", "/admin/people", "/admin/status", "/static/admin/status.html"] {
             let r = client.get(format!("{base}{path}")).header("cf-ray", "x").send().await.unwrap();
             assert_eq!(r.status(), 404, "{path} through Cloudflare without a login");
         }
@@ -559,7 +560,11 @@ mod tests {
         let p = &v["people"];
         assert_eq!((p["tried"].as_u64(), p["in_readme"].as_u64()), (Some(1), Some(1)), "{p}");
         assert_eq!(p["no_login"], serde_json::json!({"decorations": 2, "in_readme": 1}));
-        let ana = &p["list"][0];
+        let page: serde_json::Value = reqwest::get(format!("{base}/admin/people?q=AN&page=9")).await.unwrap().json().await.unwrap();
+        assert_eq!((page["page"].as_u64(), page["pages"].as_u64(), page["total"].as_u64()), (Some(1), Some(1), Some(1)), "{page}");
+        let none: serde_json::Value = reqwest::get(format!("{base}/admin/people?q=zz")).await.unwrap().json().await.unwrap();
+        assert_eq!((none["total"].as_u64(), none["list"].as_array().map(Vec::len)), (Some(0), Some(0)));
+        let ana = &page["list"][0];
         assert_eq!((ana["login"].as_str(), ana["stats"]["followers"].as_u64()), (Some("ana"), Some(7)));
         let cards: Vec<(&str, bool)> = ana["cards"].as_array().unwrap().iter().map(|c| (c["address"].as_str().unwrap(), c["readme"] == true)).collect();
         assert_eq!(cards.len(), 2, "{cards:?}");

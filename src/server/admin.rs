@@ -14,8 +14,8 @@ use tokio::sync::RwLock;
 
 /// Never kept by a browser or an edge: it is behind a login.
 const ADMIN: &str = "private, no-store";
-/// People listed on the admin page, the most recent first.
-const PEOPLE_SHOWN: usize = 200;
+/// People on one page of the admin page's list.
+const PEOPLE_PER_PAGE: usize = 5;
 /// Access's signing keys are kept this long, and fetched again at most this often for an unknown key id.
 const KEYS_FOR: Duration = Duration::from_secs(3600);
 const REFETCH_AFTER: Duration = Duration::from_secs(60);
@@ -159,17 +159,43 @@ pub(super) async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, req
     }
     let a = app.clone();
     let disk = tokio::task::spawn_blocking(move || (a.cache.disk_bytes(), a.store.saved_count())).await.unwrap_or((None, None));
-    let a = app.clone();
-    let people = tokio::task::spawn_blocking(move || people(&a.store)).await.unwrap_or_default();
+    let p = app.store.people.summary();
     let Json(mut v) = full_health(&app, disk);
-    v["people"] = people;
+    v["people"] = serde_json::json!({
+        "since": p.since, "tried": p.tried, "in_readme": p.in_readme, "removed": p.removed,
+        "no_login": {"decorations": p.decorations, "in_readme": p.decorations_in_readme},
+    });
     private(Json(v).into_response())
 }
 
-/// Everyone who tried it, newest first, with the cards they made and the GitHub stats saved for them (null once
-/// the 30-day sweep removed them); and the decorations made without a login, as numbers only.
-fn people(store: &Store) -> serde_json::Value {
-    let ((since, list, tried, in_readme, (decorations, decorations_in_readme)), blocked) = store.people.report_all(PEOPLE_SHOWN);
+#[derive(serde::Deserialize)]
+pub(super) struct PeopleQuery {
+    page: Option<usize>,
+    q: Option<String>,
+}
+
+/// /admin/people?page=N&q=text: one page of the people list, newest first, filtered by a part of the login.
+pub(super) async fn admin_people<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Query(q): Query<PeopleQuery>,
+    req: axum::extract::Request,
+) -> Response {
+    if !allowed(&app, req).await {
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
+    }
+    let find: String = q.q.unwrap_or_default().trim().to_ascii_lowercase().chars().take(39).collect();
+    let a = app.clone();
+    let v = tokio::task::spawn_blocking(move || people_page(&a.store, &find, q.page.unwrap_or(1).max(1))).await.unwrap_or_default();
+    private(Json(v).into_response())
+}
+
+/// A page of people, with the cards they made and the GitHub stats saved for them (null once the 30-day sweep
+/// removed them). A page past the end is clamped to the last one.
+fn people_page(store: &Store, find: &str, page: usize) -> serde_json::Value {
+    let (total, list) = store.people.page(find, page, PEOPLE_PER_PAGE);
+    let pages = total.div_ceil(PEOPLE_PER_PAGE).max(1);
+    let (page, list) = if page > pages { (pages, store.people.page(find, pages, PEOPLE_PER_PAGE).1) } else { (page, list) };
+
     let list: Vec<serde_json::Value> = list
         .into_iter()
         .map(|(login, p)| {
@@ -183,10 +209,7 @@ fn people(store: &Store) -> serde_json::Value {
             serde_json::json!({"login": login, "first": p.first, "last": p.last, "cards": cards, "stats": stats})
         })
         .collect();
-    serde_json::json!({
-        "since": since, "tried": tried, "in_readme": in_readme, "list": list, "removed": blocked,
-        "no_login": {"decorations": decorations, "in_readme": decorations_in_readme},
-    })
+    serde_json::json!({"page": page, "pages": pages, "per": PEOPLE_PER_PAGE, "total": total, "list": list})
 }
 
 /// A change from the admin page: a logged-in admin, and a header a form on another site can't send, so a page
