@@ -20,7 +20,7 @@ use crate::stats::UserStats;
 use crate::store::Store;
 use crate::widgets::{self, Look, Widget};
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, HeaderName, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -219,6 +219,17 @@ fn client_kind(ua: &str) -> String {
     } else {
         ua.chars().take(40).collect()
     }
+}
+
+/// Whether a person asked, for the admin page's people: Some(true) for GitHub's image proxy (the card is in a
+/// README), Some(false) for a browser, None for bots and scripts, and for the admin page's own previews.
+fn person_asking(h: &HeaderMap) -> Option<bool> {
+    let hv = |k: header::HeaderName| h.get(k).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    if hv(header::REFERER).contains("/admin") {
+        return None;
+    }
+    let client = client_kind(&hv(header::USER_AGENT));
+    if client == "GitHub image proxy" { Some(true) } else { client.starts_with("browser").then_some(false) }
 }
 
 /// A status line every 15 minutes, so the log shows the service's state without opening /health.
@@ -520,6 +531,34 @@ mod tests {
         let scenes = v["scenes"].as_array().unwrap();
         assert!(scenes.contains(&serde_json::json!("forest")), "{scenes:?}");
         assert!(!scenes.contains(&serde_json::json!("_shared")), "shared art is not a scene");
+    }
+
+    #[tokio::test]
+    async fn admin_health_lists_the_people_who_used_it() {
+        let (base, app) = serve(QueueConfig { workers: 0, ..Default::default() }).await;
+        app.store.put(derive(&RawUser { login: "ana".into(), followers: 7, ..Default::default() }, 0, now_secs())).unwrap();
+        let browser = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0";
+        let asks: [(&str, &[(&str, &str)]); 7] = [
+            ("/ana/stats/forest", &[("user-agent", browser)]),
+            ("/streak?user=ana", &[("user-agent", "github-camo (abc)")]),
+            ("/ana/languages", &[("user-agent", "Mozilla/5.0 (compatible; Googlebot/2.1)")]), // a bot
+            ("/ana/streak", &[("user-agent", browser), ("referer", "https://questlog.cc/admin/status")]), // the admin page
+            ("/decorations/reading-nook?title=Hi", &[("user-agent", browser), ("referer", "https://questlog.cc/builder")]),
+            ("/decorations/reading-nook", &[("user-agent", browser), ("referer", "https://questlog.cc/wiki")]), // the site's own page
+            ("/decorations/workbench", &[("user-agent", "github-camo (abc)")]),
+        ];
+        for (path, headers) in asks {
+            get(&format!("{base}{path}"), headers).await;
+        }
+        let v: serde_json::Value = reqwest::get(format!("{base}/admin/health")).await.unwrap().json().await.unwrap();
+        let p = &v["people"];
+        assert_eq!((p["tried"].as_u64(), p["in_readme"].as_u64()), (Some(1), Some(1)), "{p}");
+        assert_eq!(p["no_login"], serde_json::json!({"decorations": 2, "in_readme": 1}));
+        let ana = &p["list"][0];
+        assert_eq!((ana["login"].as_str(), ana["stats"]["followers"].as_u64()), (Some("ana"), Some(7)));
+        let cards: Vec<(&str, bool)> = ana["cards"].as_array().unwrap().iter().map(|c| (c["address"].as_str().unwrap(), c["readme"] == true)).collect();
+        assert_eq!(cards.len(), 2, "{cards:?}");
+        assert!(cards.contains(&("/ana/stats/forest", false)) && cards.contains(&("/streak?user=ana", true)), "{cards:?}");
     }
 
     #[tokio::test]

@@ -14,6 +14,8 @@ use tokio::sync::RwLock;
 
 /// Never kept by a browser or an edge: it is behind a login.
 const ADMIN: &str = "private, no-store";
+/// People listed on the admin page, the most recent first.
+const PEOPLE_SHOWN: usize = 200;
 /// Access's signing keys are kept this long, and fetched again at most this often for an unknown key id.
 const KEYS_FOR: Duration = Duration::from_secs(3600);
 const REFETCH_AFTER: Duration = Duration::from_secs(60);
@@ -157,7 +159,34 @@ pub(super) async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, req
     }
     let a = app.clone();
     let disk = tokio::task::spawn_blocking(move || (a.cache.disk_bytes(), a.store.saved_count())).await.unwrap_or((None, None));
-    private(full_health(&app, disk).into_response())
+    let a = app.clone();
+    let people = tokio::task::spawn_blocking(move || people(&a.store)).await.unwrap_or_default();
+    let Json(mut v) = full_health(&app, disk);
+    v["people"] = people;
+    private(Json(v).into_response())
+}
+
+/// Everyone who tried it, newest first, with the cards they made and the GitHub stats saved for them (null once
+/// the 30-day sweep removed them); and the decorations made without a login, as numbers only.
+fn people(store: &Store) -> serde_json::Value {
+    let (since, list, tried, in_readme, (decorations, decorations_in_readme)) = store.people.report(PEOPLE_SHOWN);
+    let list: Vec<serde_json::Value> = list
+        .into_iter()
+        .map(|(login, p)| {
+            let mut cards: Vec<_> = p.cards.into_iter().collect();
+            cards.sort_by(|a, b| b.1.last.cmp(&a.1.last).then_with(|| a.0.cmp(&b.0)));
+            let cards: Vec<_> = cards
+                .into_iter()
+                .map(|(address, u)| serde_json::json!({"address": address, "first": u.first, "last": u.last, "readme": u.readme}))
+                .collect();
+            let stats = store.saved(&login);
+            serde_json::json!({"login": login, "first": p.first, "last": p.last, "cards": cards, "stats": stats})
+        })
+        .collect();
+    serde_json::json!({
+        "since": since, "tried": tried, "in_readme": in_readme, "list": list,
+        "no_login": {"decorations": decorations, "in_readme": decorations_in_readme},
+    })
 }
 
 fn private(mut r: Response) -> Response {

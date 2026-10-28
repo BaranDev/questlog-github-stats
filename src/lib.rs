@@ -3,6 +3,7 @@ pub mod cache;
 pub mod canvas;
 pub mod card;
 pub mod params;
+pub mod people;
 pub mod dates;
 pub mod decorations;
 pub mod encode;

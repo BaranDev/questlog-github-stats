@@ -32,6 +32,34 @@ type HealthData = {
   github: { remaining: number | null; limit: number; resets_at: number | null; paused_secs: number };
   new_users: { this_hour: number; per_hour: number; oldest_frees_in_secs: number | null };
   waiting: { new: number; new_capacity: number; refresh: number; refresh_capacity: number };
+  people: PeopleData;
+};
+
+type PeopleData = {
+  since: number;
+  tried: number;
+  in_readme: number;
+  list: Person[];
+  no_login: { decorations: number; in_readme: number };
+};
+
+/** first is 0 for someone saved before the counting began. */
+type Person = {
+  login: string;
+  first: number;
+  last: number;
+  cards: { address: string; first: number; last: number; readme: boolean }[];
+  stats: {
+    level: number;
+    class: string;
+    commits: number;
+    stars: number;
+    followers: number;
+    current_streak: number;
+    best_streak: number;
+    languages: [string, number][];
+    fetched_at: number;
+  } | null;
 };
 
 type Minute = { minute: number; cache: number; drawn: number; busy: number; error: number; other: number };
@@ -386,9 +414,104 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
       </Panel>
     </div>
 
+    {d.people && <People p={d.people} />}
     <Traffic minutes={d.traffic} />
     <Log lines={d.recent} />
     </>
+  );
+}
+
+const P = H.people;
+const day = (secs: number) => H.utc(new Date(secs * 1000).toISOString().slice(0, 16).replace("T", " "));
+
+/** Everyone who tried it, newest first: their GitHub profile, the stats saved for them, and the cards they made. */
+function People({ p }: { p: PeopleData }) {
+  return (
+    <section className={`${s.panel} ${s.wide}`} aria-label={P.aria}>
+      <header className={s.panelHead}>
+        <h2>{P.title}</h2>
+        <span className={s.peak}>{P.since(day(p.since))}</span>
+      </header>
+      <div className={s.counts}>
+        <p className={s.value}>
+          {num(p.tried)}
+          <span className={s.of}> {P.tried}</span>
+        </p>
+        <p className={s.value}>
+          {num(p.in_readme)}
+          <span className={s.of}> {P.inReadme(p.in_readme)}</span>
+        </p>
+        <p className={s.value}>
+          {num(p.no_login.decorations)}
+          <span className={s.of}> {P.noLogin(p.no_login.decorations)}</span>
+        </p>
+      </div>
+      <div className={s.notes}>
+        <p>{rich(P.noLoginNote(num(p.no_login.in_readme)), { strong: (c) => <strong>{c}</strong> })}</p>
+        <p>{P.rules}</p>
+        {p.list.length < p.tried && <p>{P.shown(num(p.list.length), num(p.tried))}</p>}
+      </div>
+      {p.list.length ? (
+        <ul className={s.people}>
+          {p.list.map((u) => (
+            <PersonRow key={u.login} u={u} />
+          ))}
+        </ul>
+      ) : (
+        <p className={s.notes}>{P.empty}</p>
+      )}
+    </section>
+  );
+}
+
+function PersonRow({ u }: { u: Person }) {
+  const st = u.stats;
+  const readme = u.cards.some((c) => c.readme);
+  const profile = `https://github.com/${encodeURIComponent(u.login)}`;
+  // addresses come from requests: only same-site paths become images and links
+  const cards = u.cards.filter((c) => c.address.startsWith("/") && !c.address.startsWith("//"));
+  return (
+    <li className={s.person}>
+      <header className={s.personHead}>
+        <a href={profile} target="_blank" rel="noopener noreferrer" className={s.who} aria-label={P.profile(u.login)}>
+          <img src={`${profile}.png?size=80`} width={40} height={40} alt="" loading="lazy" />
+          <b>{u.login}</b>
+        </a>
+        {u.first > 0 && (
+          <span className={s.chip} data-tone={readme ? "good" : "watch"}>
+            {readme ? P.readme : P.tried1}
+          </span>
+        )}
+      </header>
+      <div className={s.notes}>
+        {st ? (
+          <p>
+            <strong>{P.level(st.level, st.class)}</strong>. {P.facts(num(st.commits), num(st.stars), num(st.followers))}.{" "}
+            {P.streak(st.current_streak, st.best_streak)}.
+            {st.languages.length > 0 && <> {st.languages.slice(0, 3).map(([l]) => l).join(", ")}.</>} {P.fetched(day(st.fetched_at))}.
+          </p>
+        ) : (
+          <p>{P.noStats}</p>
+        )}
+        <p>{u.first > 0 ? P.seen(day(u.first), day(u.last)) : P.before(u.last > 0 ? day(u.last) : null)}</p>
+      </div>
+      {cards.length > 0 && (
+        <details className={s.made} open>
+          <summary>{P.cardsTitle(cards.length)}</summary>
+          <ul className={s.cards}>
+            {cards.map((c) => (
+              <li key={c.address}>
+                <a href={c.address} target="_blank" rel="noopener noreferrer">
+                  <img src={c.address} alt={P.cardAlt(c.address)} loading="lazy" decoding="async" />
+                </a>
+                <code>{c.address}</code>
+                <span className={s.where}>{c.readme ? P.inReadmeShort : P.inBrowser}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </li>
   );
 }
 
