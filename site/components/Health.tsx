@@ -39,7 +39,6 @@ type PeopleData = {
   since: number;
   tried: number;
   in_readme: number;
-  list: Person[];
   removed: string[];
   no_login: { decorations: number; in_readme: number };
 };
@@ -415,7 +414,7 @@ function Panels({ d, now, reload }: { d: HealthData; now: number; reload: () => 
       </Panel>
     </div>
 
-    {d.people && <People p={d.people} reload={reload} />}
+    {d.people && <People p={d.people} stamp={d.now} reload={reload} />}
     <Traffic minutes={d.traffic} />
     <Log lines={d.recent} />
     </>
@@ -432,9 +431,58 @@ async function change(login: string, what: "remove" | "allow") {
 }
 
 /** Everyone who tried it, newest first: their GitHub profile, the stats saved for them, and the cards they made. */
-function People({ p, reload }: { p: PeopleData; reload: () => Promise<void> }) {
+/** What /admin/people answers: one page of the list, newest first. */
+type PeoplePage = { page: number; pages: number; per: number; total: number; list: Person[] };
+
+function People({ p, stamp, reload }: { p: PeopleData; stamp: number; reload: () => Promise<void> }) {
+  const [page, setPage] = useState(1);
+  const [find, setFind] = useState("");
+  const [query, setQuery] = useState("");
+  const [data, setData] = useState<PeoplePage | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const top = useRef<HTMLElement>(null);
+
+  // search after a short pause in typing, from the first page
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setQuery(find.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [find]);
+
+  // the page asked for, again with every health check so it stays current; a failed ask keeps the last list
+  useEffect(() => {
+    let live = true;
+    setAsking(true);
+    fetch(`/admin/people?page=${page}&q=${encodeURIComponent(query)}`, { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((v: PeoplePage) => {
+        if (live) {
+          setData(v);
+          setFailed(false);
+        }
+      })
+      .catch(() => live && setFailed(true))
+      .finally(() => live && setAsking(false));
+    return () => {
+      live = false;
+    };
+  }, [page, query, stamp]);
+
+  const go = (to: number) => {
+    setPage(to);
+    top.current?.scrollIntoView({ block: "start" });
+  };
+  const list = data?.list ?? [];
+  const from = data && data.total ? (data.page - 1) * data.per + 1 : 0;
+
   return (
-    <section className={`${s.panel} ${s.wide}`} aria-label={P.aria}>
+    <section ref={top} className={`${s.panel} ${s.wide}`} aria-label={P.aria}>
       <header className={s.panelHead}>
         <h2>{P.title}</h2>
         <span className={s.peak}>{P.since(day(p.since))}</span>
@@ -456,16 +504,41 @@ function People({ p, reload }: { p: PeopleData; reload: () => Promise<void> }) {
       <div className={s.notes}>
         <p>{rich(P.noLoginNote(num(p.no_login.in_readme)), { strong: (c) => <strong>{c}</strong> })}</p>
         <p>{P.rules}</p>
-        {p.list.length < p.tried && <p>{P.shown(num(p.list.length), num(p.tried))}</p>}
       </div>
-      {p.list.length ? (
-        <ul className={s.people}>
-          {p.list.map((u) => (
-            <PersonRow key={u.login} u={u} reload={reload} />
-          ))}
-        </ul>
+      {p.tried > 0 && (
+        <label className={s.search}>
+          <span className="visually-hidden">{P.findLabel}</span>
+          <input id="people-search" type="search" placeholder={P.findPlaceholder} value={find} onChange={(e) => setFind(e.target.value)} />
+        </label>
+      )}
+      {failed && (
+        <p className={s.warn} role="status">
+          {P.pageFailed(!!data)}
+        </p>
+      )}
+      {!data ? (
+        !failed && <div className={`${s.person} ${s.shimmer} ${s.personShimmer}`} aria-busy="true" aria-label={H.loading} />
+      ) : list.length ? (
+        <>
+          <ul className={s.people} aria-busy={asking}>
+            {list.map((u) => (
+              <PersonRow key={u.login} u={u} reload={reload} />
+            ))}
+          </ul>
+          {data.pages > 1 && (
+            <nav className={s.pager} aria-label={P.pagesLabel}>
+              <button type="button" className={s.toggle} onClick={() => go(data.page - 1)} disabled={data.page <= 1}>
+                {P.newer}
+              </button>
+              <span aria-live="polite">{P.showing(num(from), num(from + list.length - 1), num(data.total), data.page, data.pages)}</span>
+              <button type="button" className={s.toggle} onClick={() => go(data.page + 1)} disabled={data.page >= data.pages}>
+                {P.older}
+              </button>
+            </nav>
+          )}
+        </>
       ) : (
-        <p className={s.notes}>{P.empty}</p>
+        <p className={s.notes}>{query ? P.noMatch(query) : P.empty}</p>
       )}
       {(p.removed ?? []).length > 0 && (
         <div className={s.notes}>
@@ -583,7 +656,7 @@ function PersonRow({ u, reload }: { u: Person; reload: () => Promise<void> }) {
         <p>{u.first > 0 ? P.seen(day(u.first), day(u.last)) : P.before(u.last > 0 ? day(u.last) : null)}</p>
       </div>
       {cards.length > 0 && (
-        <details className={s.made} open>
+        <details className={s.made}>
           <summary>{P.cardsTitle(cards.length)}</summary>
           <ul className={s.cards}>
             {cards.map((c) => (

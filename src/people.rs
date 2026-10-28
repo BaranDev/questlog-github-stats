@@ -46,6 +46,17 @@ struct Seen {
     blocked: BTreeSet<String>,
 }
 
+/// The numbers at the top of the admin page's people section.
+pub struct Summary {
+    pub since: u64,
+    pub tried: usize,
+    pub in_readme: usize,
+    pub decorations: usize,
+    pub decorations_in_readme: usize,
+    /// Logins removed at the person's request.
+    pub removed: Vec<String>,
+}
+
 pub struct People {
     path: PathBuf,
     seen: Mutex<Seen>,
@@ -137,22 +148,28 @@ impl People {
         touch(&mut self.seen.lock().unwrap().decorations, address, readme, now, MAX_DECORATIONS);
     }
 
-    /// For the admin page: when the tracking began, the `shown` most recent people (newest first), how many tried
-    /// it and how many have a card in a README, and the decorations (made, in a README).
-    pub fn report(&self, shown: usize) -> (u64, Vec<(String, Person)>, usize, usize, (usize, usize)) {
-        self.report_all(shown).0
+    /// The numbers at the top of the admin page's people section.
+    pub fn summary(&self) -> Summary {
+        let s = self.seen.lock().unwrap();
+        Summary {
+            since: s.since,
+            tried: s.people.len(),
+            in_readme: s.people.values().filter(|p| p.cards.values().any(|u| u.readme)).count(),
+            decorations: s.decorations.len(),
+            decorations_in_readme: s.decorations.values().filter(|u| u.readme).count(),
+            removed: s.blocked.iter().cloned().collect(),
+        }
     }
 
-    /// `report`, plus the blocked logins.
-    #[allow(clippy::type_complexity)]
-    pub fn report_all(&self, shown: usize) -> ((u64, Vec<(String, Person)>, usize, usize, (usize, usize)), Vec<String>) {
+    /// One page of people whose login contains `find`, newest first: how many match, and the `per` people on page
+    /// `page` (counted from 1).
+    pub fn page(&self, find: &str, page: usize, per: usize) -> (usize, Vec<(String, Person)>) {
         let s = self.seen.lock().unwrap();
-        let in_readme = s.people.values().filter(|p| p.cards.values().any(|u| u.readme)).count();
-        let decorations = (s.decorations.len(), s.decorations.values().filter(|u| u.readme).count());
-        let mut list: Vec<(String, Person)> = s.people.iter().map(|(l, p)| (l.clone(), p.clone())).collect();
-        list.sort_by(|a, b| b.1.last.cmp(&a.1.last).then_with(|| a.0.cmp(&b.0)));
-        list.truncate(shown);
-        ((s.since, list, s.people.len(), in_readme, decorations), s.blocked.iter().cloned().collect())
+        // ponytail: sorts the matches on every request; fine up to MAX_PEOPLE, an ordered index if that grows
+        let mut hits: Vec<(&String, u64)> = s.people.iter().filter(|(l, _)| l.contains(find)).map(|(l, p)| (l, p.last)).collect();
+        hits.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        let list = hits.iter().skip(page.saturating_sub(1) * per).take(per).map(|&(l, _)| (l.clone(), s.people[l].clone())).collect();
+        (hits.len(), list)
     }
 
     pub fn save(&self) -> Result<(), BoxError> {
@@ -183,8 +200,10 @@ mod tests {
         p.decoration("/decorations/reading-nook?title=Hi", true, 700);
         p.save().unwrap();
 
-        let (since, list, tried, in_readme, decorations) = People::open(&dir, Vec::new, 999).report(10);
-        assert_eq!((since, tried, in_readme, decorations), (100, 2, 1, (1, 1)));
+        let p = People::open(&dir, Vec::new, 999);
+        let s = p.summary();
+        assert_eq!((s.since, s.tried, s.in_readme, s.decorations, s.decorations_in_readme), (100, 2, 1, 1, 1));
+        let (_, list) = p.page("", 1, 10);
         let logins: Vec<&str> = list.iter().map(|(l, _)| l.as_str()).collect();
         assert_eq!(logins, ["ana", "sudi"], "newest first");
         let ana = &list[0].1;
@@ -203,16 +222,16 @@ mod tests {
         p.decoration("/decorations/workbench", true, 1000);
         assert_eq!(p.sweep(1000 + KEEP_SECS), 0, "a year to the second is kept");
         assert_eq!(p.sweep(1001 + KEEP_SECS), 2, "ana, and old counted from when the tracking began");
-        let (_, list, tried, _, decorations) = p.report(10);
-        assert_eq!((list[0].0.as_str(), tried, decorations), ("bo", 1, (0, 0)));
+        let (tried, list) = p.page("", 1, 10);
+        assert_eq!((list[0].0.as_str(), tried, p.summary().decorations), ("bo", 1, 0));
 
         p.block("bo");
         p.card("bo", "/bo/stats", false, 2000 + KEEP_SECS);
         p.save().unwrap();
         let p = People::open(&dir, Vec::new, 0);
         assert!(p.is_blocked("bo"));
-        let ((_, _, tried, ..), blocked) = p.report_all(10);
-        assert_eq!((tried, blocked), (0, vec!["bo".to_string()]), "a blocked login is not listed again");
+        let s = p.summary();
+        assert_eq!((s.tried, s.removed), (0, vec!["bo".to_string()]), "a blocked login is not listed again");
         p.allow("bo");
         assert!(!p.is_blocked("bo"));
     }
@@ -225,12 +244,29 @@ mod tests {
         for i in 0..CARDS_EACH + 5 {
             p.card("ana", &format!("/ana/stats?n={i}"), false, i as u64);
         }
-        let (_, list, ..) = p.report(1);
+        let (_, list) = p.page("", 1, 1);
         assert_eq!((list[0].1.cards.len(), list[0].1.last), (CARDS_EACH, (CARDS_EACH + 4) as u64));
 
         std::fs::write(dir.join("people.json"), b"not json").unwrap();
-        let (since, _, tried, ..) = People::open(&dir, Vec::new, 5).report(1);
-        assert_eq!((since, tried), (5, 0));
+        let s = People::open(&dir, Vec::new, 5).summary();
+        assert_eq!((s.since, s.tried), (5, 0));
         assert!(dir.join("people.json.bad").exists());
+    }
+
+    #[test]
+    fn pages_newest_first_and_finds_by_login() {
+        let dir = temp_dir("people-page");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = People::open(&dir, Vec::new, 0);
+        for i in 0..45u64 {
+            p.card(&format!("user{i:02}"), "/stats", false, 100 + i);
+        }
+        let logins = |list: Vec<(String, Person)>| list.into_iter().map(|(l, _)| l).collect::<Vec<_>>();
+        let (n, first) = p.page("", 1, 20);
+        assert_eq!((n, first.len(), first[0].0.as_str()), (45, 20, "user44"));
+        assert_eq!(logins(p.page("", 3, 20).1), ["user04", "user03", "user02", "user01", "user00"]);
+        assert!(p.page("", 4, 20).1.is_empty(), "past the last page");
+        let (n, found) = p.page("er1", 1, 20);
+        assert_eq!((n, logins(found).first().cloned()), (10, Some("user19".to_string())));
     }
 }

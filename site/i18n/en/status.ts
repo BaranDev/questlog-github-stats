@@ -157,7 +157,16 @@ export const health = {
     rules:
       "Counted when a browser or GitHub's image proxy gets one of their cards. Bots, the example logins, your own login and this page's previews are left out.",
     empty: "Nobody has tried it yet. The first person to make a card shows up here.",
-    shown: (shown: string, all: string) => `The ${shown} most recent of ${all} people are listed.`,
+    findLabel: "Find a person by their GitHub login",
+    findPlaceholder: "Find a login",
+    noMatch: (q: string) => `No login contains "${q}". Clear the search to see everyone.`,
+    pageFailed: (hasList: boolean) =>
+      `This page of people did not load${hasList ? ", so the last list stays on screen" : ""}. It tries again with the next check.`,
+    pagesLabel: "Pages of people",
+    newer: "Newer",
+    older: "Older",
+    showing: (from: string, to: string, total: string, page: number, pages: number) =>
+      `${from} to ${to} of ${total}, page ${page} of ${pages}`,
     profile: (login: string) => `${login} on GitHub`,
     readme: "In a README",
     tried1: "Only tried",
