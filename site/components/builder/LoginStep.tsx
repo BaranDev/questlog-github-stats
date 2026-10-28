@@ -173,7 +173,8 @@ export default function LoginStep({
             />
             <div className={s.soloFoot}>
               <p className={s.help}>
-                {other ? tx.footOther : tx.footProfile}
+                {other ? tx.footOther : tx.footProfile}{" "}
+                {rich(tx.privacy, { a: (c) => <a href="/privacy" target="_blank" rel="noopener">{c}</a> })}
               </p>
               <div className={s.soloButtons}>
                 {onCancel && (
