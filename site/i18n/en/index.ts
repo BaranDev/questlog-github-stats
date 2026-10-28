@@ -4,5 +4,6 @@ import { wiki } from "./wiki";
 import { builder } from "./builder";
 import { builderParts } from "./builderParts";
 import { health, allCards, attributions } from "./status";
+import { privacy } from "./privacy";
 
-export const en = { site, meta, home, catalog, wiki, builder, builderParts, health, allCards, attributions };
+export const en = { site, meta, home, catalog, wiki, builder, builderParts, health, allCards, attributions, privacy };

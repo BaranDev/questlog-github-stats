@@ -40,6 +40,7 @@ type PeopleData = {
   tried: number;
   in_readme: number;
   list: Person[];
+  removed: string[];
   no_login: { decorations: number; in_readme: number };
 };
 
@@ -242,7 +243,7 @@ export default function Health({ full = false }: { full?: boolean }) {
       ) : "fetching" in data ? (
         <PublicPanels d={data} now={now} />
       ) : (
-        <Panels d={data} now={now} />
+        <Panels d={data} now={now} reload={load} />
       )}
 
       <p className={s.raw}>
@@ -291,7 +292,7 @@ function PublicPanels({ d, now }: { d: PublicData; now: number }) {
   );
 }
 
-function Panels({ d, now }: { d: HealthData; now: number }) {
+function Panels({ d, now, reload }: { d: HealthData; now: number; reload: () => Promise<void> }) {
   const g = d.github;
   const left = g.remaining;
   const resetIn = g.resets_at ? g.resets_at - now : null;
@@ -414,7 +415,7 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
       </Panel>
     </div>
 
-    {d.people && <People p={d.people} />}
+    {d.people && <People p={d.people} reload={reload} />}
     <Traffic minutes={d.traffic} />
     <Log lines={d.recent} />
     </>
@@ -424,8 +425,14 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
 const P = H.people;
 const day = (secs: number) => H.utc(new Date(secs * 1000).toISOString().slice(0, 16).replace("T", " "));
 
+/** A change to the people list; the header is one a form on another site can't send. */
+async function change(login: string, what: "remove" | "allow") {
+  const r = await fetch(`/admin/people/${encodeURIComponent(login)}/${what}`, { method: "POST", headers: { "x-questlog-admin": "1" } });
+  if (!r.ok) throw new Error(String(r.status));
+}
+
 /** Everyone who tried it, newest first: their GitHub profile, the stats saved for them, and the cards they made. */
-function People({ p }: { p: PeopleData }) {
+function People({ p, reload }: { p: PeopleData; reload: () => Promise<void> }) {
   return (
     <section className={`${s.panel} ${s.wide}`} aria-label={P.aria}>
       <header className={s.panelHead}>
@@ -454,17 +461,72 @@ function People({ p }: { p: PeopleData }) {
       {p.list.length ? (
         <ul className={s.people}>
           {p.list.map((u) => (
-            <PersonRow key={u.login} u={u} />
+            <PersonRow key={u.login} u={u} reload={reload} />
           ))}
         </ul>
       ) : (
         <p className={s.notes}>{P.empty}</p>
       )}
+      {(p.removed ?? []).length > 0 && (
+        <div className={s.notes}>
+          <h3 className={s.subhead}>{P.removedTitle}</h3>
+          <p>{P.removedNote}</p>
+          <ul className={s.removed}>
+            {p.removed.map((login) => (
+              <Allow key={login} login={login} reload={reload} />
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
 
-function PersonRow({ u }: { u: Person }) {
+function Allow({ login, reload }: { login: string; reload: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const allow = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await change(login, "allow");
+      await reload();
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <li>
+      <b>{login}</b>
+      <button type="button" className={s.toggle} onClick={allow} disabled={busy}>
+        {busy ? P.allowing : P.allow(login)}
+      </button>
+      {failed && (
+        <span className={s.warn} role="alert">
+          {P.allowFailed}
+        </span>
+      )}
+    </li>
+  );
+}
+
+function PersonRow({ u, reload }: { u: Person; reload: () => Promise<void> }) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await change(u.login, "remove");
+      await reload();
+    } catch {
+      setFailed(true);
+      setBusy(false);
+    }
+  };
   const st = u.stats;
   const readme = u.cards.some((c) => c.readme);
   const profile = `https://github.com/${encodeURIComponent(u.login)}`;
@@ -477,12 +539,37 @@ function PersonRow({ u }: { u: Person }) {
           <img src={`${profile}.png?size=80`} width={40} height={40} alt="" loading="lazy" />
           <b>{u.login}</b>
         </a>
-        {u.first > 0 && (
-          <span className={s.chip} data-tone={readme ? "good" : "watch"}>
-            {readme ? P.readme : P.tried1}
-          </span>
-        )}
+        <div className={s.tools}>
+          {u.first > 0 && (
+            <span className={s.chip} data-tone={readme ? "good" : "watch"}>
+              {readme ? P.readme : P.tried1}
+            </span>
+          )}
+          {!ask && (
+            <button type="button" className={s.toggle} onClick={() => setAsk(true)}>
+              {P.remove}
+            </button>
+          )}
+        </div>
       </header>
+      {ask && (
+        <div className={s.confirm} role="group" aria-label={P.remove}>
+          <p>{P.removeAsk(u.login)}</p>
+          <div className={s.tools}>
+            <button type="button" className={`${s.toggle} ${s.danger}`} onClick={remove} disabled={busy}>
+              {busy ? P.removing : P.removeYes}
+            </button>
+            <button type="button" className={s.toggle} onClick={() => setAsk(false)} disabled={busy}>
+              {P.cancel}
+            </button>
+          </div>
+          {failed && (
+            <p className={s.warn} role="alert">
+              {P.removeFailed}
+            </p>
+          )}
+        </div>
+      )}
       <div className={s.notes}>
         {st ? (
           <p>

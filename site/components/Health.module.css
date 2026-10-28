@@ -492,3 +492,37 @@
   text-transform: uppercase;
   color: var(--faint);
 }
+
+.confirm {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #f0a08f;
+  border-radius: 10px;
+  color: var(--parchment);
+  font-size: 0.95rem;
+}
+
+.danger {
+  color: #f0a08f;
+  border-color: currentColor;
+}
+
+.subhead {
+  font-size: 1rem;
+  color: var(--gold);
+}
+
+.removed {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.removed li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}

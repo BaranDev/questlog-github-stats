@@ -15,6 +15,7 @@ export default function Footer() {
           <a href="/cards">{m.site.footer.allCards}</a>
           <a href="/wiki">{m.site.footer.wiki}</a>
           <a href="/status">{m.site.footer.health}</a>
+          <a href="/privacy">{m.site.footer.privacy}</a>
           <a href={REPO}>{m.site.footer.github}</a>
         </nav>
       </div>

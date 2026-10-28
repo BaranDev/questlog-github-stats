@@ -169,7 +169,7 @@ pub(super) async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, req
 /// Everyone who tried it, newest first, with the cards they made and the GitHub stats saved for them (null once
 /// the 30-day sweep removed them); and the decorations made without a login, as numbers only.
 fn people(store: &Store) -> serde_json::Value {
-    let (since, list, tried, in_readme, (decorations, decorations_in_readme)) = store.people.report(PEOPLE_SHOWN);
+    let ((since, list, tried, in_readme, (decorations, decorations_in_readme)), blocked) = store.people.report_all(PEOPLE_SHOWN);
     let list: Vec<serde_json::Value> = list
         .into_iter()
         .map(|(login, p)| {
@@ -184,9 +184,60 @@ fn people(store: &Store) -> serde_json::Value {
         })
         .collect();
     serde_json::json!({
-        "since": since, "tried": tried, "in_readme": in_readme, "list": list,
+        "since": since, "tried": tried, "in_readme": in_readme, "list": list, "removed": blocked,
         "no_login": {"decorations": decorations, "in_readme": decorations_in_readme},
     })
+}
+
+/// A change from the admin page: a logged-in admin, and a header a form on another site can't send, so a page
+/// elsewhere can't make the admin's browser do it.
+async fn change_allowed<F: Fetcher>(app: &App<F>, req: axum::extract::Request) -> bool {
+    req.headers().get("x-questlog-admin").is_some_and(|v| v == "1") && allowed(app, req).await
+}
+
+/// Removes everything kept about a login and stops drawing its cards, at the person's request.
+pub(super) async fn admin_remove<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(login): Path<String>,
+    req: axum::extract::Request,
+) -> Response {
+    let login = login.trim().to_ascii_lowercase();
+    if !change_allowed(&app, req).await || !params::valid_login(&login) {
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
+    }
+    let a = app.clone();
+    let l = login.clone();
+    let saved = tokio::task::spawn_blocking(move || {
+        a.store.people.block(&l); // first, so a fetch still running can't save the stats again
+        a.store.forget(&l);
+        a.store.people.save()
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.into()));
+    if let Err(e) = saved {
+        crate::error!("admin", "removed {login} but saving the people list failed: {e}");
+    }
+    crate::info!("admin", "removed {login} at their request: saved stats deleted, cards no longer drawn");
+    private(Json(serde_json::json!({"ok": true})).into_response())
+}
+
+/// Draws a removed login's cards again.
+pub(super) async fn admin_allow<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(login): Path<String>,
+    req: axum::extract::Request,
+) -> Response {
+    let login = login.trim().to_ascii_lowercase();
+    if !change_allowed(&app, req).await || !params::valid_login(&login) {
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
+    }
+    app.store.people.allow(&login);
+    let a = app.clone();
+    if let Err(e) = tokio::task::spawn_blocking(move || a.store.people.save()).await.unwrap_or_else(|e| Err(e.into())) {
+        crate::error!("admin", "allowed {login} again but saving the people list failed: {e}");
+    }
+    crate::info!("admin", "allowed {login} again: their cards are drawn again");
+    private(Json(serde_json::json!({"ok": true})).into_response())
 }
 
 fn private(mut r: Response) -> Response {

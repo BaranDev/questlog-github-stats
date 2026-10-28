@@ -48,6 +48,9 @@ pub(super) async fn serve_card<F: Fetcher>(
         Err(e) => return message_cached(&app, w, e.look, e.message, "error", DEMO, ip).await,
     };
     let now = now_secs();
+    if app.store.people.is_blocked(&req.user) {
+        return message_cached(&app, w, req.look, REMOVED.into(), "removed", PAGE, ip).await;
+    }
     if let Some((stats, fresh)) = app.store.get(&req.user, now) {
         if !fresh {
             app.queue.refresh(&req.user); // its own lane: never counts against an IP or the new-login cap

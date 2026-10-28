@@ -35,6 +35,10 @@ async fn main() -> Result<(), questlog::BoxError> {
                 Ok(n) => questlog::info!("cache", "hourly sweep removed {n} users nobody asked for in a long time"),
                 Err(e) => questlog::error!("cache", "hourly sweep of saved users failed: {e}"),
             }
+            let n = sweeper.people.sweep(now_secs());
+            if n > 0 {
+                questlog::info!("people", "hourly sweep forgot {n} people not seen for 12 months");
+            }
             if let Err(e) = sweeper.people.save() {
                 questlog::error!("people", "could not save the people list: {e}");
             }

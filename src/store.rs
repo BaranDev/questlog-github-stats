@@ -94,6 +94,9 @@ impl Store {
         if !safe(&stats.login) {
             return Err(format!("unsafe login {:?}", stats.login).into());
         }
+        if self.people.is_blocked(&stats.login) {
+            return Err(format!("{} was removed at the person's request", stats.login).into());
+        }
         let path = self.path(&stats.login);
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, serde_json::to_vec(&stats)?)?;
@@ -114,6 +117,8 @@ impl Store {
         let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // the past years github.rs keeps
         m.users.remove(login);
         m.touched.remove(login);
+        drop(m);
+        self.people.remove(login);
     }
 
     /// (users in memory, logins remembered as not on GitHub), for the admin page.

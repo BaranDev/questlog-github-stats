@@ -19,6 +19,7 @@ export const site = {
     allCards: "All cards",
     wiki: "Wiki",
     health: "Health",
+    privacy: "Privacy",
     github: "GitHub",
     fine: "<home>questlog</home> by Cevdet Baran Oral. Code under the <mit>MIT license</mit>, paintings under <cc>CC BY-NC 4.0</cc> (commercial use needs permission).",
   },

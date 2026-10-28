@@ -173,6 +173,18 @@ export const health = {
     cardAlt: (address: string) => `The card at ${address}`,
     inReadmeShort: "README",
     inBrowser: "browser",
+    remove: "Remove",
+    removeAsk: (login: string) =>
+      `Remove ${login}? Their saved GitHub data and their entry here are deleted, and their cards show a "not shown" notice from now on. Use this when they ask to be removed.`,
+    removeYes: "Remove and stop their cards",
+    cancel: "Cancel",
+    removing: "Removing",
+    removeFailed: "Removing did not work. Check that you are still signed in, then try again.",
+    removedTitle: "Removed at their request",
+    removedNote: "Their cards show a notice instead. Allow one again if they ask for their cards back.",
+    allow: (login: string) => `Allow ${login} again`,
+    allowing: "Allowing",
+    allowFailed: "Allowing did not work. Check that you are still signed in, then try again.",
   },
   log: {
     aria: "Recent log lines",

@@ -1,10 +1,11 @@
 //! Who has used questlog, for the admin page: the GitHub logins people asked cards for, the card addresses each
 //! one made, and the decorations made without a login. Only a person's browser or GitHub's image proxy counts;
 //! bots, the owner and the example logins don't, and no IPs are kept. Kept in memory and written to people.json
-//! by the hourly sweep and at shutdown.
+//! by the hourly sweep and at shutdown, and dropped 12 months after a person's last visit. A login removed at the
+//! person's request stays blocked: its stats are not fetched or saved again and its cards say so.
 use crate::BoxError;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -15,6 +16,8 @@ const CARDS_EACH: usize = 50;
 const MAX_PEOPLE: usize = 20_000;
 const MAX_DECORATIONS: usize = 20_000;
 const ADDRESS_CHARS: usize = 300;
+/// People and decorations nobody asked for in this long are forgotten.
+pub const KEEP_SECS: u64 = 365 * 86400;
 
 /// One card or decoration address: when it was first and last asked for, and whether it is in a README.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -38,6 +41,9 @@ struct Seen {
     since: u64,
     people: HashMap<String, Person>,
     decorations: HashMap<String, Use>,
+    /// Logins removed at the person's request.
+    #[serde(default)]
+    blocked: BTreeSet<String>,
 }
 
 pub struct People {
@@ -75,7 +81,7 @@ impl People {
             Err(_) => Seen {
                 since: now,
                 people: saved().into_iter().filter(|l| !NOT_PEOPLE.contains(&l.as_str())).map(|l| (l, Person::default())).collect(),
-                decorations: HashMap::new(),
+                ..Default::default()
             },
         };
         People { path, seen: Mutex::new(seen) }
@@ -87,12 +93,43 @@ impl People {
             return;
         }
         let mut s = self.seen.lock().unwrap();
-        if s.people.len() >= MAX_PEOPLE && !s.people.contains_key(login) {
+        if s.blocked.contains(login) || (s.people.len() >= MAX_PEOPLE && !s.people.contains_key(login)) {
             return;
         }
         let p = s.people.entry(login.to_string()).or_insert_with(|| Person { first: now, ..Default::default() });
         p.last = now;
         touch(&mut p.cards, address, readme, now, CARDS_EACH);
+    }
+
+    /// Removes a login from the list (its account is gone, or the person asked).
+    pub fn remove(&self, login: &str) {
+        self.seen.lock().unwrap().people.remove(login);
+    }
+
+    /// Removes a login and blocks it, at the person's request; `allow` undoes the block.
+    pub fn block(&self, login: &str) {
+        let mut s = self.seen.lock().unwrap();
+        s.people.remove(login);
+        s.blocked.insert(login.to_string());
+    }
+
+    pub fn allow(&self, login: &str) {
+        self.seen.lock().unwrap().blocked.remove(login);
+    }
+
+    pub fn is_blocked(&self, login: &str) -> bool {
+        self.seen.lock().unwrap().blocked.contains(login)
+    }
+
+    /// Forgets people and decorations not asked for in KEEP_SECS; someone saved before the tracking counts from
+    /// when it began. Returns how many people were forgotten.
+    pub fn sweep(&self, now: u64) -> usize {
+        let mut s = self.seen.lock().unwrap();
+        let since = s.since;
+        let before = s.people.len();
+        s.people.retain(|_, p| now.saturating_sub(p.last.max(since)) <= KEEP_SECS);
+        s.decorations.retain(|_, u| now.saturating_sub(u.last) <= KEEP_SECS);
+        before - s.people.len()
     }
 
     /// A decoration made without a login: from the builder, or in a README when `readme`.
@@ -103,13 +140,19 @@ impl People {
     /// For the admin page: when the tracking began, the `shown` most recent people (newest first), how many tried
     /// it and how many have a card in a README, and the decorations (made, in a README).
     pub fn report(&self, shown: usize) -> (u64, Vec<(String, Person)>, usize, usize, (usize, usize)) {
+        self.report_all(shown).0
+    }
+
+    /// `report`, plus the blocked logins.
+    #[allow(clippy::type_complexity)]
+    pub fn report_all(&self, shown: usize) -> ((u64, Vec<(String, Person)>, usize, usize, (usize, usize)), Vec<String>) {
         let s = self.seen.lock().unwrap();
         let in_readme = s.people.values().filter(|p| p.cards.values().any(|u| u.readme)).count();
         let decorations = (s.decorations.len(), s.decorations.values().filter(|u| u.readme).count());
         let mut list: Vec<(String, Person)> = s.people.iter().map(|(l, p)| (l.clone(), p.clone())).collect();
         list.sort_by(|a, b| b.1.last.cmp(&a.1.last).then_with(|| a.0.cmp(&b.0)));
         list.truncate(shown);
-        (s.since, list, s.people.len(), in_readme, decorations)
+        ((s.since, list, s.people.len(), in_readme, decorations), s.blocked.iter().cloned().collect())
     }
 
     pub fn save(&self) -> Result<(), BoxError> {
@@ -148,6 +191,30 @@ mod tests {
         assert_eq!((ana.first, ana.last, ana.cards.len()), (200, 400, 2));
         assert_eq!(ana.cards["/ana/stats"], Use { first: 200, last: 300, readme: true });
         assert_eq!(list[1].1.first, 0, "saved before the tracking");
+    }
+
+    #[test]
+    fn forgets_after_a_year_and_blocks_on_request() {
+        let dir = temp_dir("people-keep");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = People::open(&dir, || vec!["old".into()], 1000);
+        p.card("ana", "/ana/stats", false, 1000);
+        p.card("bo", "/bo/stats", false, 1000 + KEEP_SECS);
+        p.decoration("/decorations/workbench", true, 1000);
+        assert_eq!(p.sweep(1000 + KEEP_SECS), 0, "a year to the second is kept");
+        assert_eq!(p.sweep(1001 + KEEP_SECS), 2, "ana, and old counted from when the tracking began");
+        let (_, list, tried, _, decorations) = p.report(10);
+        assert_eq!((list[0].0.as_str(), tried, decorations), ("bo", 1, (0, 0)));
+
+        p.block("bo");
+        p.card("bo", "/bo/stats", false, 2000 + KEEP_SECS);
+        p.save().unwrap();
+        let p = People::open(&dir, Vec::new, 0);
+        assert!(p.is_blocked("bo"));
+        let ((_, _, tried, ..), blocked) = p.report_all(10);
+        assert_eq!((tried, blocked), (0, vec!["bo".to_string()]), "a blocked login is not listed again");
+        p.allow("bo");
+        assert!(!p.is_blocked("bo"));
     }
 
     #[test]
