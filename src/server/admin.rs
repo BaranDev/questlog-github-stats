@@ -14,6 +14,8 @@ use tokio::sync::RwLock;
 
 /// Never kept by a browser or an edge: it is behind a login.
 const ADMIN: &str = "private, no-store";
+/// People listed on the admin page, the most recent first.
+const PEOPLE_SHOWN: usize = 200;
 /// Access's signing keys are kept this long, and fetched again at most this often for an unknown key id.
 const KEYS_FOR: Duration = Duration::from_secs(3600);
 const REFETCH_AFTER: Duration = Duration::from_secs(60);
@@ -157,7 +159,85 @@ pub(super) async fn admin_health<F: Fetcher>(State(app): State<Arc<App<F>>>, req
     }
     let a = app.clone();
     let disk = tokio::task::spawn_blocking(move || (a.cache.disk_bytes(), a.store.saved_count())).await.unwrap_or((None, None));
-    private(full_health(&app, disk).into_response())
+    let a = app.clone();
+    let people = tokio::task::spawn_blocking(move || people(&a.store)).await.unwrap_or_default();
+    let Json(mut v) = full_health(&app, disk);
+    v["people"] = people;
+    private(Json(v).into_response())
+}
+
+/// Everyone who tried it, newest first, with the cards they made and the GitHub stats saved for them (null once
+/// the 30-day sweep removed them); and the decorations made without a login, as numbers only.
+fn people(store: &Store) -> serde_json::Value {
+    let ((since, list, tried, in_readme, (decorations, decorations_in_readme)), blocked) = store.people.report_all(PEOPLE_SHOWN);
+    let list: Vec<serde_json::Value> = list
+        .into_iter()
+        .map(|(login, p)| {
+            let mut cards: Vec<_> = p.cards.into_iter().collect();
+            cards.sort_by(|a, b| b.1.last.cmp(&a.1.last).then_with(|| a.0.cmp(&b.0)));
+            let cards: Vec<_> = cards
+                .into_iter()
+                .map(|(address, u)| serde_json::json!({"address": address, "first": u.first, "last": u.last, "readme": u.readme}))
+                .collect();
+            let stats = store.saved(&login);
+            serde_json::json!({"login": login, "first": p.first, "last": p.last, "cards": cards, "stats": stats})
+        })
+        .collect();
+    serde_json::json!({
+        "since": since, "tried": tried, "in_readme": in_readme, "list": list, "removed": blocked,
+        "no_login": {"decorations": decorations, "in_readme": decorations_in_readme},
+    })
+}
+
+/// A change from the admin page: a logged-in admin, and a header a form on another site can't send, so a page
+/// elsewhere can't make the admin's browser do it.
+async fn change_allowed<F: Fetcher>(app: &App<F>, req: axum::extract::Request) -> bool {
+    req.headers().get("x-questlog-admin").is_some_and(|v| v == "1") && allowed(app, req).await
+}
+
+/// Removes everything kept about a login and stops drawing its cards, at the person's request.
+pub(super) async fn admin_remove<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(login): Path<String>,
+    req: axum::extract::Request,
+) -> Response {
+    let login = login.trim().to_ascii_lowercase();
+    if !change_allowed(&app, req).await || !params::valid_login(&login) {
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
+    }
+    let a = app.clone();
+    let l = login.clone();
+    let saved = tokio::task::spawn_blocking(move || {
+        a.store.people.block(&l); // first, so a fetch still running can't save the stats again
+        a.store.forget(&l);
+        a.store.people.save()
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.into()));
+    if let Err(e) = saved {
+        crate::error!("admin", "removed {login} but saving the people list failed: {e}");
+    }
+    crate::info!("admin", "removed {login} at their request: saved stats deleted, cards no longer drawn");
+    private(Json(serde_json::json!({"ok": true})).into_response())
+}
+
+/// Draws a removed login's cards again.
+pub(super) async fn admin_allow<F: Fetcher>(
+    State(app): State<Arc<App<F>>>,
+    Path(login): Path<String>,
+    req: axum::extract::Request,
+) -> Response {
+    let login = login.trim().to_ascii_lowercase();
+    if !change_allowed(&app, req).await || !params::valid_login(&login) {
+        return private((StatusCode::NOT_FOUND, "not found").into_response());
+    }
+    app.store.people.allow(&login);
+    let a = app.clone();
+    if let Err(e) = tokio::task::spawn_blocking(move || a.store.people.save()).await.unwrap_or_else(|e| Err(e.into())) {
+        crate::error!("admin", "allowed {login} again but saving the people list failed: {e}");
+    }
+    crate::info!("admin", "allowed {login} again: their cards are drawn again");
+    private(Json(serde_json::json!({"ok": true})).into_response())
 }
 
 fn private(mut r: Response) -> Response {

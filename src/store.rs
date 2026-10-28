@@ -1,6 +1,7 @@
 //! Per-user stats cache: one small JSON file per login under <dir>/users/, mirrored in memory, plus a short
 //! memory of logins GitHub doesn't know (so typos don't cost API calls).
 use crate::BoxError;
+use crate::people::People;
 use crate::stats::UserStats;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -13,6 +14,8 @@ pub const EVICT_SECS: u64 = 30 * 86400;
 pub struct Store {
     dir: PathBuf,
     mem: Mutex<Mem>,
+    /// Who has used it, for the admin page.
+    pub people: People,
 }
 
 #[derive(Default)]
@@ -35,7 +38,14 @@ impl Store {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_default();
-        Ok(Store { dir, mem: Mutex::new(Mem { touched, ..Default::default() }) })
+        let users = dir.join("users");
+        let saved = || {
+            let names = std::fs::read_dir(&users).into_iter().flatten().flatten();
+            let paths = names.map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json"));
+            paths.filter_map(|p| p.file_stem()?.to_str().map(str::to_string)).collect()
+        };
+        let people = People::open(&dir, saved, crate::dates::now_secs());
+        Ok(Store { dir, mem: Mutex::new(Mem { touched, ..Default::default() }), people })
     }
 
     fn path(&self, login: &str) -> PathBuf {
@@ -69,9 +79,23 @@ impl Store {
         Some((s, fresh))
     }
 
+    /// A user's saved stats for the admin page, without counting as a request.
+    pub fn saved(&self, login: &str) -> Option<UserStats> {
+        if !safe(login) {
+            return None;
+        }
+        if let Some(s) = self.mem.lock().unwrap().users.get(login) {
+            return Some(s.clone());
+        }
+        serde_json::from_slice(&std::fs::read(self.path(login)).ok()?).ok()
+    }
+
     pub fn put(&self, stats: UserStats) -> Result<(), BoxError> {
         if !safe(&stats.login) {
             return Err(format!("unsafe login {:?}", stats.login).into());
+        }
+        if self.people.is_blocked(&stats.login) {
+            return Err(format!("{} was removed at the person's request", stats.login).into());
         }
         let path = self.path(&stats.login);
         let tmp = path.with_extension("json.tmp");
@@ -93,6 +117,8 @@ impl Store {
         let _ = std::fs::remove_file(self.dir.join("years").join(format!("{login}.json"))); // the past years github.rs keeps
         m.users.remove(login);
         m.touched.remove(login);
+        drop(m);
+        self.people.remove(login);
     }
 
     /// (users in memory, logins remembered as not on GitHub), for the admin page.

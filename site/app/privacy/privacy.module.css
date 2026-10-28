@@ -1,0 +1,50 @@
+.page {
+  width: min(100% - 2 * var(--gutter), 46rem);
+  margin: 0 auto;
+  padding-block: clamp(7rem, 12vw, 9rem) clamp(4rem, 8vw, 6rem);
+  display: grid;
+  gap: 2.5rem;
+}
+
+.head {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.head h1 {
+  font-size: clamp(2.6rem, 6vw, 4rem);
+  color: var(--gold);
+}
+
+.updated {
+  color: var(--faint);
+  font-size: 0.95rem;
+}
+
+.part {
+  display: grid;
+  gap: 0.9rem;
+  scroll-margin-top: 6rem;
+}
+
+.part h2 {
+  font-size: 1.3rem;
+  color: var(--gold);
+  text-wrap: balance;
+}
+
+.part p {
+  color: var(--muted);
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.part strong {
+  color: var(--parchment);
+}
+
+.part a {
+  color: var(--gold);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

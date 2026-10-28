@@ -35,6 +35,13 @@ async fn main() -> Result<(), questlog::BoxError> {
                 Ok(n) => questlog::info!("cache", "hourly sweep removed {n} users nobody asked for in a long time"),
                 Err(e) => questlog::error!("cache", "hourly sweep of saved users failed: {e}"),
             }
+            let n = sweeper.people.sweep(now_secs());
+            if n > 0 {
+                questlog::info!("people", "hourly sweep forgot {n} people not seen for 12 months");
+            }
+            if let Err(e) = sweeper.people.save() {
+                questlog::error!("people", "could not save the people list: {e}");
+            }
         }
     });
 
@@ -42,6 +49,7 @@ async fn main() -> Result<(), questlog::BoxError> {
         .with_disk(std::path::Path::new(&data).join("renders"), env!("RENDER_VERSION"));
     let access = questlog::server::Access::from_env();
     let admin = if access.is_some() { "admin pages open to ADMIN_EMAILS through Cloudflare Access" } else { "admin pages local only" };
+    let people = store.clone();
     let app = Arc::new(App::with_cache(Arc::new(Assets::embedded()?), store, queue, cache).with_access(access));
     let trim = app.clone();
     tokio::spawn(async move {
@@ -75,6 +83,9 @@ async fn main() -> Result<(), questlog::BoxError> {
     );
     let service = router(app).into_make_service_with_connect_info::<std::net::SocketAddr>();
     axum::serve(listener, service).with_graceful_shutdown(shutdown()).await?;
+    if let Err(e) = people.people.save() {
+        questlog::error!("people", "could not save the people list at shutdown: {e}");
+    }
     Ok(())
 }
 

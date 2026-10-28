@@ -32,6 +32,35 @@ type HealthData = {
   github: { remaining: number | null; limit: number; resets_at: number | null; paused_secs: number };
   new_users: { this_hour: number; per_hour: number; oldest_frees_in_secs: number | null };
   waiting: { new: number; new_capacity: number; refresh: number; refresh_capacity: number };
+  people: PeopleData;
+};
+
+type PeopleData = {
+  since: number;
+  tried: number;
+  in_readme: number;
+  list: Person[];
+  removed: string[];
+  no_login: { decorations: number; in_readme: number };
+};
+
+/** first is 0 for someone saved before the counting began. */
+type Person = {
+  login: string;
+  first: number;
+  last: number;
+  cards: { address: string; first: number; last: number; readme: boolean }[];
+  stats: {
+    level: number;
+    class: string;
+    commits: number;
+    stars: number;
+    followers: number;
+    current_streak: number;
+    best_streak: number;
+    languages: [string, number][];
+    fetched_at: number;
+  } | null;
 };
 
 type Minute = { minute: number; cache: number; drawn: number; busy: number; error: number; other: number };
@@ -214,7 +243,7 @@ export default function Health({ full = false }: { full?: boolean }) {
       ) : "fetching" in data ? (
         <PublicPanels d={data} now={now} />
       ) : (
-        <Panels d={data} now={now} />
+        <Panels d={data} now={now} reload={load} />
       )}
 
       <p className={s.raw}>
@@ -263,7 +292,7 @@ function PublicPanels({ d, now }: { d: PublicData; now: number }) {
   );
 }
 
-function Panels({ d, now }: { d: HealthData; now: number }) {
+function Panels({ d, now, reload }: { d: HealthData; now: number; reload: () => Promise<void> }) {
   const g = d.github;
   const left = g.remaining;
   const resetIn = g.resets_at ? g.resets_at - now : null;
@@ -386,9 +415,190 @@ function Panels({ d, now }: { d: HealthData; now: number }) {
       </Panel>
     </div>
 
+    {d.people && <People p={d.people} reload={reload} />}
     <Traffic minutes={d.traffic} />
     <Log lines={d.recent} />
     </>
+  );
+}
+
+const P = H.people;
+const day = (secs: number) => H.utc(new Date(secs * 1000).toISOString().slice(0, 16).replace("T", " "));
+
+/** A change to the people list; the header is one a form on another site can't send. */
+async function change(login: string, what: "remove" | "allow") {
+  const r = await fetch(`/admin/people/${encodeURIComponent(login)}/${what}`, { method: "POST", headers: { "x-questlog-admin": "1" } });
+  if (!r.ok) throw new Error(String(r.status));
+}
+
+/** Everyone who tried it, newest first: their GitHub profile, the stats saved for them, and the cards they made. */
+function People({ p, reload }: { p: PeopleData; reload: () => Promise<void> }) {
+  return (
+    <section className={`${s.panel} ${s.wide}`} aria-label={P.aria}>
+      <header className={s.panelHead}>
+        <h2>{P.title}</h2>
+        <span className={s.peak}>{P.since(day(p.since))}</span>
+      </header>
+      <div className={s.counts}>
+        <p className={s.value}>
+          {num(p.tried)}
+          <span className={s.of}> {P.tried}</span>
+        </p>
+        <p className={s.value}>
+          {num(p.in_readme)}
+          <span className={s.of}> {P.inReadme(p.in_readme)}</span>
+        </p>
+        <p className={s.value}>
+          {num(p.no_login.decorations)}
+          <span className={s.of}> {P.noLogin(p.no_login.decorations)}</span>
+        </p>
+      </div>
+      <div className={s.notes}>
+        <p>{rich(P.noLoginNote(num(p.no_login.in_readme)), { strong: (c) => <strong>{c}</strong> })}</p>
+        <p>{P.rules}</p>
+        {p.list.length < p.tried && <p>{P.shown(num(p.list.length), num(p.tried))}</p>}
+      </div>
+      {p.list.length ? (
+        <ul className={s.people}>
+          {p.list.map((u) => (
+            <PersonRow key={u.login} u={u} reload={reload} />
+          ))}
+        </ul>
+      ) : (
+        <p className={s.notes}>{P.empty}</p>
+      )}
+      {(p.removed ?? []).length > 0 && (
+        <div className={s.notes}>
+          <h3 className={s.subhead}>{P.removedTitle}</h3>
+          <p>{P.removedNote}</p>
+          <ul className={s.removed}>
+            {p.removed.map((login) => (
+              <Allow key={login} login={login} reload={reload} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Allow({ login, reload }: { login: string; reload: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const allow = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await change(login, "allow");
+      await reload();
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <li>
+      <b>{login}</b>
+      <button type="button" className={s.toggle} onClick={allow} disabled={busy}>
+        {busy ? P.allowing : P.allow(login)}
+      </button>
+      {failed && (
+        <span className={s.warn} role="alert">
+          {P.allowFailed}
+        </span>
+      )}
+    </li>
+  );
+}
+
+function PersonRow({ u, reload }: { u: Person; reload: () => Promise<void> }) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await change(u.login, "remove");
+      await reload();
+    } catch {
+      setFailed(true);
+      setBusy(false);
+    }
+  };
+  const st = u.stats;
+  const readme = u.cards.some((c) => c.readme);
+  const profile = `https://github.com/${encodeURIComponent(u.login)}`;
+  // addresses come from requests: only same-site paths become images and links
+  const cards = u.cards.filter((c) => c.address.startsWith("/") && !c.address.startsWith("//"));
+  return (
+    <li className={s.person}>
+      <header className={s.personHead}>
+        <a href={profile} target="_blank" rel="noopener noreferrer" className={s.who} aria-label={P.profile(u.login)}>
+          <img src={`${profile}.png?size=80`} width={40} height={40} alt="" loading="lazy" />
+          <b>{u.login}</b>
+        </a>
+        <div className={s.tools}>
+          {u.first > 0 && (
+            <span className={s.chip} data-tone={readme ? "good" : "watch"}>
+              {readme ? P.readme : P.tried1}
+            </span>
+          )}
+          {!ask && (
+            <button type="button" className={s.toggle} onClick={() => setAsk(true)}>
+              {P.remove}
+            </button>
+          )}
+        </div>
+      </header>
+      {ask && (
+        <div className={s.confirm} role="group" aria-label={P.remove}>
+          <p>{P.removeAsk(u.login)}</p>
+          <div className={s.tools}>
+            <button type="button" className={`${s.toggle} ${s.danger}`} onClick={remove} disabled={busy}>
+              {busy ? P.removing : P.removeYes}
+            </button>
+            <button type="button" className={s.toggle} onClick={() => setAsk(false)} disabled={busy}>
+              {P.cancel}
+            </button>
+          </div>
+          {failed && (
+            <p className={s.warn} role="alert">
+              {P.removeFailed}
+            </p>
+          )}
+        </div>
+      )}
+      <div className={s.notes}>
+        {st ? (
+          <p>
+            <strong>{P.level(st.level, st.class)}</strong>. {P.facts(num(st.commits), num(st.stars), num(st.followers))}.{" "}
+            {P.streak(st.current_streak, st.best_streak)}.
+            {st.languages.length > 0 && <> {st.languages.slice(0, 3).map(([l]) => l).join(", ")}.</>} {P.fetched(day(st.fetched_at))}.
+          </p>
+        ) : (
+          <p>{P.noStats}</p>
+        )}
+        <p>{u.first > 0 ? P.seen(day(u.first), day(u.last)) : P.before(u.last > 0 ? day(u.last) : null)}</p>
+      </div>
+      {cards.length > 0 && (
+        <details className={s.made} open>
+          <summary>{P.cardsTitle(cards.length)}</summary>
+          <ul className={s.cards}>
+            {cards.map((c) => (
+              <li key={c.address}>
+                <a href={c.address} target="_blank" rel="noopener noreferrer">
+                  <img src={c.address} alt={P.cardAlt(c.address)} loading="lazy" decoding="async" />
+                </a>
+                <code>{c.address}</code>
+                <span className={s.where}>{c.readme ? P.inReadmeShort : P.inBrowser}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </li>
   );
 }
 

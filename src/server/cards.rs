@@ -7,6 +7,7 @@ pub(super) async fn card_at<F: Fetcher>(
     State(app): State<Arc<App<F>>>,
     Path(parts): Path<Vec<String>>,
     Query(mut q): Query<HashMap<String, String>>,
+    uri: Uri,
     headers: HeaderMap,
 ) -> Response {
     let mut parts = parts.into_iter();
@@ -19,22 +20,24 @@ pub(super) async fn card_at<F: Fetcher>(
             q.insert(key.into(), v);
         }
     }
-    serve_card(app, widget, q, headers).await
+    serve_card(app, widget, q, &uri, headers).await
 }
 
 pub(super) async fn card<F: Fetcher>(
     State(app): State<Arc<App<F>>>,
     Path(path): Path<String>,
     Query(q): Query<HashMap<String, String>>,
+    uri: Uri,
     headers: HeaderMap,
 ) -> Response {
-    serve_card(app, path, q, headers).await
+    serve_card(app, path, q, &uri, headers).await
 }
 
 pub(super) async fn serve_card<F: Fetcher>(
     app: Arc<App<F>>,
     path: String,
     q: HashMap<String, String>,
+    uri: &Uri,
     headers: HeaderMap,
 ) -> Response {
     let Some(w) = Widget::from_path(&path) else { return (StatusCode::NOT_FOUND, "not found").into_response() };
@@ -45,9 +48,15 @@ pub(super) async fn serve_card<F: Fetcher>(
         Err(e) => return message_cached(&app, w, e.look, e.message, "error", DEMO, ip).await,
     };
     let now = now_secs();
+    if app.store.people.is_blocked(&req.user) {
+        return message_cached(&app, w, req.look, REMOVED.into(), "removed", PAGE, ip).await;
+    }
     if let Some((stats, fresh)) = app.store.get(&req.user, now) {
         if !fresh {
             app.queue.refresh(&req.user); // its own lane: never counts against an IP or the new-login cap
+        }
+        if let Some(readme) = person_asking(&headers) {
+            app.store.people.card(&req.user, &uri.to_string(), readme, now);
         }
         return draw(&app, req, stats, fresh, ip).await;
     }
@@ -290,6 +299,7 @@ pub(super) async fn decoration<F: Fetcher>(
     State(app): State<Arc<App<F>>>,
     Path(name): Path<String>,
     Query(q): Query<HashMap<String, String>>,
+    uri: Uri,
     headers: HeaderMap,
 ) -> Response {
     let ip = client_ip(&headers);
@@ -303,6 +313,11 @@ pub(super) async fn decoration<F: Fetcher>(
         let mut names: Vec<&str> = app.assets.decorations.keys().map(String::as_str).collect();
         names.sort();
         return error(format!("Unknown decoration '{}' (use {})", params::clip(&name), names.join(", "))).await;
+    }
+    // the site's own pages show decorations too: only the builder and READMEs are someone making one
+    let from_builder = headers.get(header::REFERER).and_then(|v| v.to_str().ok()).is_some_and(|r| r.contains("/builder"));
+    if let Some(readme) = person_asking(&headers).filter(|&readme| readme || from_builder) {
+        app.store.people.decoration(&uri.to_string(), readme, now_secs());
     }
     let key = cache::key(&["decoration", &name, &format!("{opts:?}")]);
     let assets = app.assets.clone();
