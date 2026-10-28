@@ -526,3 +526,7 @@
   align-items: center;
   gap: 0.75rem;
 }
+
+.personHead .tools {
+  align-items: center;
+}
