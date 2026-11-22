@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0
+
+- **All cards** at [questlog.cc/cards](https://questlog.cc/cards): every card in every scene, every fire size in classic and themed fire, and every decoration, by day and night in fine and chunky pixels. Clicking one opens a preview with copy and open actions.
+- **Profile builder:**
+  - The first step asks whether it's for a GitHub profile or something else (a website, a blog, any Markdown file). Something else needs no login and offers the decorations.
+  - Templates: Simple, Some details and The most detailed. Back to my README restores the README you started from.
+  - Start over, next to Undo.
+  - "Profile builder" in the nav and footer.
+- **Previews on the wiki:** every card and decoration image opens the same preview as the builder.
+- **Fine-pixel fires and decorations:** fine cards draw the fire at full detail, and `reading-nook`, `workbench`, `raven-moon` and `enchanted-clearing` are repainted at full detail, by day and by night.
+- **Share images** for every page, plus `robots.txt` and a sitemap.
+- **Privacy page** at [questlog.cc/privacy](https://questlog.cc/privacy): what is kept, why, for how long, and how to have it removed. It is linked from the footer and the builder.
+- **Removal on request:** a removed login's saved stats are deleted, it is never fetched again, and its cards say they're not shown.
+- **People on the admin page:** who has used the instance, with their saved stats and card addresses, 5 per page with search. No IPs are kept, and entries are forgotten after 12 months.
+- **No credit line needed** on your own profile when you use the cards from questlog.cc.
+- Dependency updates: Next.js 16.4.5, tokio, rustls, skrifa, lucide-react, gsap and marked.
+
 ## 1.1.0
 
 - **Cards are WebP:** lossless, animated where they move, about a third of the size of the PNGs before, pixel for pixel the same.
