@@ -247,7 +247,7 @@ export const attributions = {
   art: {
     what: "Paintings and sprites",
     credit:
-      "© Cevdet Baran Oral, under <ccbync>CC BY-NC 4.0</ccbync>. Credit as \"questlog-github-stats art by Cevdet Baran Oral\"; linking the cards to the repository counts. Commercial use needs written permission: contact@cevdetbaran.com.",
+      "© Cevdet Baran Oral, under <ccbync>CC BY-NC 4.0</ccbync>. Cards from questlog.cc on your own profile need no credit line. Commercial use needs written permission: contact@cevdetbaran.com.",
   },
   code: {
     what: "Code",

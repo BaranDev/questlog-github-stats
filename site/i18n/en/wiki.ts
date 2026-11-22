@@ -211,7 +211,7 @@ export const wiki = {
       },
       {
         q: "Is it free?",
-        a: "Yes, for noncommercial use such as your own profile. The code is MIT. The paintings are © Cevdet Baran Oral under CC BY-NC 4.0, so commercial use needs written permission: contact@cevdetbaran.com.",
+        a: "Yes, for noncommercial use such as your own profile, and you do not need to add a credit line. The code is MIT. The paintings are © Cevdet Baran Oral under CC BY-NC 4.0, so commercial use needs written permission: contact@cevdetbaran.com.",
       },
     ],
   },
