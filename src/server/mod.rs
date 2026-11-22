@@ -471,13 +471,13 @@ mod tests {
     #[tokio::test]
     async fn art_serves_scene_paintings_only() {
         let (base, _) = serve(QueueConfig::default()).await;
-        for f in ["stats.png", "languages-night.png", "streak.png", "streak-night.png"] {
+        for f in ["stats.webp", "languages-night.webp", "streak.webp", "streak-night.webp"] {
             let (st, ct, cc, body) = raw(&format!("{base}/art/castle-aurora/{f}")).await;
-            assert_eq!((st, ct.as_str(), cc.as_str()), (200, "image/png", ASSET), "{f}");
+            assert_eq!((st, ct.as_str(), cc.as_str()), (200, "image/webp", ASSET), "{f}");
             assert_eq!(dims(&body), (320, 128), "{f}");
         }
-        for bad in ["/art/_shared/stats.png", "/art/_shared/sprites/x.png", "/art/castle/scene.json", "/art/castle/stats.json",
-            "/art/castle/nope.png", "/art/nowhere/stats.png", "/art/castle/sprites/a.png", "/art/castle"] {
+        for bad in ["/art/_shared/stats.webp", "/art/_shared/sprites/x.webp", "/art/castle/stats.png", "/art/castle/scene.json", "/art/castle/stats.json",
+            "/art/castle/nope.webp", "/art/nowhere/stats.webp", "/art/castle/sprites/a.webp", "/art/castle"] {
             assert_eq!(raw(&format!("{base}{bad}")).await.0, 404, "{bad}");
         }
     }

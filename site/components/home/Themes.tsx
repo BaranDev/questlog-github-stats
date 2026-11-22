@@ -15,7 +15,7 @@ export default function Themes() {
       <div className={s.accordion}>
         {THEMES.map((t) => (
           <article key={t.name} className={s.slice} aria-label={m.home.themes.label(t.name)}>
-            <div className={`${s.bg} pix`} style={{ backgroundImage: `url(/art/${t.cover}/streak.png)` }} />
+            <div className={`${s.bg} pix`} style={{ backgroundImage: `url(/art/${t.cover}/streak.webp)` }} />
             <h3 className={s.spine} aria-hidden="true">
               {t.name}
             </h3>

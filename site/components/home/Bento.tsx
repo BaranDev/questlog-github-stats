@@ -18,7 +18,7 @@ export default function Bento() {
         <article className={`${s.card} ${s.scenes}`}>
           <div className={`${s.mosaic} pix`} aria-hidden="true">
             {SCENES.map((scene) => (
-              <img key={scene} src={`/art/${scene}/streak.png`} width={320} height={128} alt="" loading="lazy" />
+              <img key={scene} src={`/art/${scene}/streak.webp`} width={320} height={128} alt="" loading="lazy" />
             ))}
           </div>
           <div className={s.copy}>
@@ -37,8 +37,8 @@ export default function Bento() {
 
         <article className={`${s.card} ${s.daynight}`}>
           <div className={`${s.sky} pix`} aria-hidden="true">
-            <img src="/art/rose-garden/streak.png" width={320} height={128} alt="" loading="lazy" />
-            <img className={s.night} src="/art/rose-garden/streak-night.png" width={320} height={128} alt="" loading="lazy" />
+            <img src="/art/rose-garden/streak.webp" width={320} height={128} alt="" loading="lazy" />
+            <img className={s.night} src="/art/rose-garden/streak-night.webp" width={320} height={128} alt="" loading="lazy" />
           </div>
           <div className={s.copy}>
             <h3 className={s.title}>{m.home.bento.dayNightTitle}</h3>

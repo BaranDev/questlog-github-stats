@@ -15,7 +15,16 @@ impl Image {
         Image { w, h, px: vec![[0; 4]; w * h] }
     }
 
+    /// A WebP (the art) or PNG image.
     pub fn decode(bytes: &[u8]) -> Result<Image, BoxError> {
+        if bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+            let img = webp::Decoder::new(bytes).decode().ok_or("unreadable webp")?;
+            let px = match img.is_alpha() {
+                true => img.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect(),
+                false => img.chunks_exact(3).map(|c| [c[0], c[1], c[2], 255]).collect(),
+            };
+            return Ok(Image { w: img.width() as usize, h: img.height() as usize, px });
+        }
         let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
         decoder.set_transformations(png::Transformations::normalize_to_color8());
         let mut reader = decoder.read_info()?;

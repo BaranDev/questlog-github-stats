@@ -40,7 +40,7 @@ pub struct Look {
     /// fire=themed: the scene's own fire colors (sprites-themed/), where the scene has them; else the classic fire.
     pub themed: bool,
     /// langs=3|5: how many languages the languages card lists. A scene may paint a smaller board for 3
-    /// (<scene>/languages-3.png), used then instead of its usual one.
+    /// (<scene>/languages-3.webp), used then instead of its usual one.
     pub langs: u8,
     /// truncate=false: draw a subtitle whole even when it runs past its room (trimmed by default).
     pub truncate: bool,
