@@ -34,7 +34,7 @@ html {
 }
 
 body {
-  --backdrop: url("/art/castle-sky/streak-night.png");
+  --backdrop: url("/art/castle-sky/streak-night.webp");
   margin: 0;
   min-height: 100vh;
   background-color: var(--night);
@@ -68,7 +68,7 @@ body::before {
 /* A day sky behind the page for readers on a light system theme; the night one otherwise. */
 @media (prefers-color-scheme: light) {
   body {
-    --backdrop: url("/art/castle-sky/streak.png");
+    --backdrop: url("/art/castle-sky/streak.webp");
   }
 }
 

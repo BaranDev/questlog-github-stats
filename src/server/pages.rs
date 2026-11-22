@@ -33,9 +33,9 @@ pub(super) fn static_file(path: &str, cache: &'static str) -> Response {
     }
 }
 
-/// The scene paintings, for the pages: `<scene>/<widget>[-night].png` of a real scene, nothing else from art/.
+/// The scene paintings, for the pages: `<scene>/<widget>[-night].webp` of a real scene, nothing else from art/.
 pub(super) async fn art<F: Fetcher>(State(app): State<Arc<App<F>>>, Path((scene, file)): Path<(String, String)>) -> Response {
-    let ok = file.strip_suffix(".png").is_some_and(|f| {
+    let ok = file.strip_suffix(".webp").is_some_and(|f| {
         let f = f.strip_suffix("-night").unwrap_or(f);
         Widget::from_path(f).is_some()
     });
@@ -44,7 +44,7 @@ pub(super) async fn art<F: Fetcher>(State(app): State<Arc<App<F>>>, Path((scene,
     }
     match crate::scene::embedded::FILES.iter().find(|(n, _)| *n == format!("{scene}/{file}")) {
         Some((_, bytes)) => {
-            ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, ASSET)], *bytes).into_response()
+            ([(header::CONTENT_TYPE, "image/webp"), (header::CACHE_CONTROL, ASSET)], *bytes).into_response()
         }
         None => (StatusCode::NOT_FOUND, "not found").into_response(),
     }

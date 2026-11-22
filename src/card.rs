@@ -293,9 +293,9 @@ mod tests {
     #[test]
     fn night_painting_is_used_when_present_and_the_tint_when_absent() {
         let night_png = solid(OW, OH, [0xAA, 0xBB, 0xCC]);
-        let with_night = with(scene("t"), vec![("t/stats-night.png", Some(night_png))]).unwrap();
+        let with_night = with(scene("t"), vec![("t/stats-night.webp", Some(night_png))]).unwrap();
         let t = with_night.scene("t").unwrap();
-        assert_eq!(t.paintings.len(), 3, "-night.png is not a widget");
+        assert_eq!(t.paintings.len(), 3, "-night.webp is not a widget");
         let day = Card::new(&with_night, t, "stats", false).unwrap().frame();
         let night = Card::new(&with_night, t, "stats", true).unwrap().frame();
         assert_eq!([day.px[0][0], day.px[0][1], day.px[0][2]], COLOR);

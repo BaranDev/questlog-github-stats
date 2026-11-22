@@ -98,7 +98,7 @@ struct DecorationFile {
 /// A README banner: its animation frames (320 wide, as tall as painted), title placement and title inks.
 pub struct Decoration {
     pub frames: Vec<Image>,
-    /// `<i>-night.png`, the same frames at night; empty when the decoration has no night painting yet.
+    /// `<i>-night.webp`, the same frames at night; empty when the decoration has no night painting yet.
     pub night: Vec<Image>,
     pub frame_ms: u16,
     pub title: DecorationTitle,
@@ -108,7 +108,7 @@ pub struct Decoration {
 
 pub struct Painting {
     pub image: Image,
-    /// `<widget>-night.png`, when the scene paints its own night version; otherwise the night table tints `image`.
+    /// `<widget>-night.webp`, when the scene paints its own night version; otherwise the night table tints `image`.
     pub night: Option<Image>,
     pub anchors: Anchors,
 }
@@ -131,7 +131,7 @@ pub struct Scene {
     pub labels: HashMap<String, String>,
     pub paintings: HashMap<String, Painting>,
     pub sprites: HashMap<String, Image>,
-    /// <scene>/sprites-night/<name>.png: drawn instead of the sprite of the same name at night (a fire's glow is
+    /// <scene>/sprites-night/<name>.webp: drawn instead of the sprite of the same name at night (a fire's glow is
     /// copied from the painting it lights, and the night painting differs).
     pub night_sprites: HashMap<String, Image>,
     /// fire=themed: <scene>/sprites-themed/ and sprites-themed-night/, the scene's own fire colors. A scene without
@@ -186,7 +186,7 @@ const REQUIRED_SPRITES: [&str; 5] = ["flame-small-0", "flame-steady-0", "flame-b
 fn validate(scene: &Scene) -> Result<(), BoxError> {
     let name = &scene.name;
     for (w, boxes) in WIDGET_BOXES {
-        let painting = scene.paintings.get(w).ok_or(format!("{name}: painting {w:?} missing ({w}.png and {w}.json)"))?;
+        let painting = scene.paintings.get(w).ok_or(format!("{name}: painting {w:?} missing ({w}.webp and {w}.json)"))?;
         for b in boxes {
             if !painting.anchors.boxes.contains_key(*b) {
                 return Err(format!("{name}: {w} box {b:?} missing").into());
@@ -237,8 +237,8 @@ fn painting_image(path: &str, png: &[u8]) -> Result<Image, BoxError> {
     }
 }
 
-/// decorations/<name>/decoration.json with its frames decorations/<name>/0.png, 1.png and so on, and the night
-/// frames 0-night.png, 1-night.png, one for each day frame.
+/// decorations/<name>/decoration.json with its frames decorations/<name>/0.webp, 1.webp and so on, and the night
+/// frames 0-night.webp, 1-night.webp, one for each day frame.
 fn decorations(files: &[(&str, &'static [u8])]) -> Result<HashMap<String, Decoration>, BoxError> {
     let mut out = HashMap::new();
     for (path, bytes) in files {
@@ -247,7 +247,7 @@ fn decorations(files: &[(&str, &'static [u8])]) -> Result<HashMap<String, Decora
         let ink = |k: &str| df.ink.get(k).ok_or(format!("{path}: ink {k:?} missing")).map(|v| hex(v));
         let load = |suffix: &str| -> Result<Vec<Image>, BoxError> {
             let mut frames = Vec::new();
-            while let Some((_, b)) = files.iter().find(|(p, _)| *p == format!("decorations/{name}/{}{suffix}.png", frames.len())) {
+            while let Some((_, b)) = files.iter().find(|(p, _)| *p == format!("decorations/{name}/{}{suffix}.webp", frames.len())) {
                 let img = Image::decode(b)?;
                 if img.w != OW || frames.first().is_some_and(|f: &Image| f.h != img.h) {
                     return Err(format!("{path}: frames must be {OW} wide and all the same height").into());
@@ -258,7 +258,7 @@ fn decorations(files: &[(&str, &'static [u8])]) -> Result<HashMap<String, Decora
         };
         let (frames, night) = (load("")?, load("-night")?);
         if frames.is_empty() {
-            return Err(format!("{path}: no frames (0.png)").into());
+            return Err(format!("{path}: no frames (0.webp)").into());
         }
         if !night.is_empty() && (night.len() != frames.len() || night[0].h != frames[0].h) {
             return Err(format!("{path}: night frames must match the day frames in number and size").into());
@@ -274,9 +274,9 @@ impl Assets {
         Assets::from_files(embedded::FILES)
     }
 
-    /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.png + .json (+ <widget>-night.png),
-    /// <scene>/sprites/<name>.png (+ sprites-night/, sprites-themed/, sprites-themed-night/), plus
-    /// _shared/sprites/<name>.png for all scenes.
+    /// `files` are (path under art/, bytes). Layout: <scene>/scene.json, <scene>/<widget>.webp + .json (+ <widget>-night.webp),
+    /// <scene>/sprites/<name>.webp (+ sprites-night/, sprites-themed/, sprites-themed-night/), plus
+    /// _shared/sprites/<name>.webp for all scenes.
     pub fn from_files(files: &[(&str, &'static [u8])]) -> Result<Assets, BoxError> {
         let file = |p: &str| files.iter().find(|(n, _)| *n == p).map(|(_, b)| *b);
         let mut scenes = HashMap::new();
@@ -300,29 +300,29 @@ impl Assets {
                 return Err(format!("{name}: ink {missing:?} missing").into());
             }
             for (p, b) in files.iter().filter(|(p, _)| p.starts_with(SHARED_SPRITES)) {
-                if let Some(sprite) = p[SHARED_SPRITES.len()..].strip_suffix(".png") {
+                if let Some(sprite) = p[SHARED_SPRITES.len()..].strip_suffix(".webp") {
                     scene.sprites.insert(sprite.to_string(), Image::decode(b)?);
                 }
             }
             let prefix = format!("{name}/");
             for (p, b) in files.iter().filter(|(p, _)| p.starts_with(&prefix)) {
                 let rest = &p[prefix.len()..];
-                if let Some(sprite) = rest.strip_prefix("sprites/").and_then(|s| s.strip_suffix(".png")) {
+                if let Some(sprite) = rest.strip_prefix("sprites/").and_then(|s| s.strip_suffix(".webp")) {
                     scene.sprites.insert(sprite.to_string(), Image::decode(b)?);
-                } else if let Some(sprite) = rest.strip_prefix("sprites-night/").and_then(|s| s.strip_suffix(".png")) {
+                } else if let Some(sprite) = rest.strip_prefix("sprites-night/").and_then(|s| s.strip_suffix(".webp")) {
                     scene.night_sprites.insert(sprite.to_string(), Image::decode(b)?);
-                } else if let Some(sprite) = rest.strip_prefix("sprites-themed/").and_then(|s| s.strip_suffix(".png")) {
+                } else if let Some(sprite) = rest.strip_prefix("sprites-themed/").and_then(|s| s.strip_suffix(".webp")) {
                     scene.themed_sprites.insert(sprite.to_string(), Image::decode(b)?);
                 } else if let Some(sprite) =
-                    rest.strip_prefix("sprites-themed-night/").and_then(|s| s.strip_suffix(".png"))
+                    rest.strip_prefix("sprites-themed-night/").and_then(|s| s.strip_suffix(".webp"))
                 {
                     scene.themed_night_sprites.insert(sprite.to_string(), Image::decode(b)?);
                 } else if let Some(widget) = rest.strip_suffix(".json").filter(|w| *w != "scene" && !w.contains('/')) {
-                    let png_path = format!("{prefix}{widget}.png");
+                    let png_path = format!("{prefix}{widget}.webp");
                     let png = file(&png_path).ok_or(format!("{p}: painting missing"))?;
                     let anchors: Anchors = serde_json::from_slice(b)?;
                     let image = painting_image(&png_path, png)?;
-                    let night_path = format!("{prefix}{widget}-night.png");
+                    let night_path = format!("{prefix}{widget}-night.webp");
                     let night = file(&night_path).map(|b| painting_image(&night_path, b)).transpose()?;
                     if ![TITLE_SIZE, TITLE_SMALL_SIZE].contains(&anchors.title.size) {
                         return Err(format!("{p}: title size must be {TITLE_SIZE} or {TITLE_SMALL_SIZE}").into());
@@ -387,10 +387,10 @@ pub(crate) mod fixture {
         let mut files: Files = vec![(format!("{name}/scene.json"), leak(json.into_bytes()))];
         for w in ["stats", "languages", "streak"] {
             files.push((format!("{name}/{w}.json"), ANCHORS.as_bytes()));
-            files.push((format!("{name}/{w}.png"), solid(PAINT_W, PAINT_H, COLOR)));
+            files.push((format!("{name}/{w}.webp"), solid(PAINT_W, PAINT_H, COLOR)));
         }
         for s in REQUIRED_SPRITES {
-            files.push((format!("{name}/sprites/{s}.png"), solid(2, 2, COLOR)));
+            files.push((format!("{name}/sprites/{s}.webp"), solid(2, 2, COLOR)));
         }
         files
     }
@@ -486,9 +486,9 @@ mod tests {
         let assets = with(
             [scene("one"), scene("two")].concat(),
             vec![
-                ("_shared/sprites/lit.png", Some(solid(2, 2, a))),
-                ("_shared/sprites/both.png", Some(solid(2, 2, a))),
-                ("one/sprites/both.png", Some(solid(2, 2, c))),
+                ("_shared/sprites/lit.webp", Some(solid(2, 2, a))),
+                ("_shared/sprites/both.webp", Some(solid(2, 2, a))),
+                ("one/sprites/both.webp", Some(solid(2, 2, c))),
             ],
         )
         .unwrap();
@@ -505,7 +505,7 @@ mod tests {
         let (a, c) = ([1, 1, 1], [3, 3, 3]);
         let assets = with(
             scene("one"),
-            vec![("one/sprites/glow.png", Some(solid(2, 2, a))), ("one/sprites-night/glow.png", Some(solid(2, 2, c)))],
+            vec![("one/sprites/glow.webp", Some(solid(2, 2, a))), ("one/sprites-night/glow.webp", Some(solid(2, 2, c)))],
         )
         .unwrap();
         let one = assets.scene("one").unwrap();
@@ -522,11 +522,11 @@ mod tests {
         let assets = with(
             [scene("one"), scene("two")].concat(),
             vec![
-                ("one/sprites/glow.png", Some(solid(2, 2, a))),
-                ("one/sprites-night/glow.png", Some(solid(2, 2, c))),
-                ("one/sprites-themed/glow.png", Some(solid(2, 2, t))),
-                ("one/sprites-themed-night/glow.png", Some(solid(2, 2, tn))),
-                ("two/sprites/glow.png", Some(solid(2, 2, a))),
+                ("one/sprites/glow.webp", Some(solid(2, 2, a))),
+                ("one/sprites-night/glow.webp", Some(solid(2, 2, c))),
+                ("one/sprites-themed/glow.webp", Some(solid(2, 2, t))),
+                ("one/sprites-themed-night/glow.webp", Some(solid(2, 2, tn))),
+                ("two/sprites/glow.webp", Some(solid(2, 2, a))),
             ],
         )
         .unwrap();
@@ -541,7 +541,7 @@ mod tests {
     fn shared_sprites_can_complete_a_scene() {
         let a = with(
             scene("t"),
-            vec![("t/sprites/rune-othala.png", None), ("_shared/sprites/rune-othala.png", Some(solid(5, 9, [255; 3])))],
+            vec![("t/sprites/rune-othala.webp", None), ("_shared/sprites/rune-othala.webp", Some(solid(5, 9, [255; 3])))],
         )
         .unwrap();
         assert!(a.scene("t").unwrap().sprites.contains_key("rune-othala"));
@@ -551,13 +551,13 @@ mod tests {
     fn paintings_come_in_two_sizes() {
         let red = [200, 0, 0];
         for (w, h) in [(PAINT_W, PAINT_H), (OW, OH)] {
-            let a = with(scene("t"), vec![("t/stats.png", Some(solid(w, h, red)))]).unwrap_or_else(|e| panic!("{w}x{h}: {e}"));
+            let a = with(scene("t"), vec![("t/stats.webp", Some(solid(w, h, red)))]).unwrap_or_else(|e| panic!("{w}x{h}: {e}"));
             let img = &a.scene("t").unwrap().paintings["stats"].image;
             assert_eq!((img.w, img.h), (OW, OH), "{w}x{h}");
             assert_eq!(img.px[OW * OH - 1], [200, 0, 0, 255]);
         }
-        let err = with(scene("t"), vec![("t/stats.png", Some(solid(100, 50, red)))]).err().expect("100x50 is rejected");
-        assert!(err.to_string().contains("t/stats.png"), "{err}");
+        let err = with(scene("t"), vec![("t/stats.webp", Some(solid(100, 50, red)))]).err().expect("100x50 is rejected");
+        assert!(err.to_string().contains("t/stats.webp"), "{err}");
     }
 
     #[test]
@@ -569,7 +569,7 @@ mod tests {
             cases.push((vec![(format!("t/{w}.json"), None)], w.to_string()));
         }
         for s in REQUIRED_SPRITES {
-            cases.push((vec![(format!("t/sprites/{s}.png"), None)], s.to_string()));
+            cases.push((vec![(format!("t/sprites/{s}.webp"), None)], s.to_string()));
         }
         cases.push((vec![("t/scene.json".to_string(), Some(no_title.as_bytes()))], "streak".to_string()));
         for (w, b) in [("stats", "right"), ("languages", "list"), ("streak", "notches")] {
