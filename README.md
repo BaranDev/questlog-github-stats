@@ -6,7 +6,7 @@ Pixel art GitHub profile cards with a medieval feel: a character sheet, a spellb
 
 **[Website](https://questlog.cc)** · **[Profile builder](https://questlog.cc/builder)** · **[All cards](https://questlog.cc/cards)** · **[Wiki](https://questlog.cc/wiki)** · **[Status](https://questlog.cc/status)** · **[Privacy](https://questlog.cc/privacy)**
 
-![The forest scene: Character Sheet, Spellbook and Campfire, by day and by night](assets/readme/hero.png)
+![The forest scene: Character Sheet, Spellbook and Campfire, by day and by night](assets/readme/hero.webp)
 
 | Card | Shows |
 |---|---|
@@ -48,7 +48,7 @@ The first time a card is requested you'll see a "the scribe is inking your sheet
 
 Sixteen scenes in four themes. Every scene has all three cards, by day and by night, painted to match each other, so a profile that uses one scene throughout looks like one place.
 
-![All sixteen scenes](assets/readme/scenes.png)
+![All sixteen scenes](assets/readme/scenes.webp)
 
 | Theme | `scene=` |
 |---|---|
@@ -63,7 +63,7 @@ The gallery shows each scene's Character Sheet in the order of the table.
 
 Painted banners to head a section of your README or divide two, with an optional title in the card title style. They show no stats, so they need no login. Like the cards, each one is painted by day and by night.
 
-![The seven decorations, by day on the left and by night on the right](assets/readme/decorations.png)
+![The seven decorations, by day on the left and by night on the right](assets/readme/decorations.webp)
 
 ```md
 ![About Me](https://questlog.cc/decorations/reading-nook?title=About%20Me)
